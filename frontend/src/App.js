@@ -94,7 +94,7 @@ function App() {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      const addedConnection = await response.json();
+      // const addedConnection = await response.json(); // Removed unused variable
       // To ensure all nested data (hops, pc, server) is fully populated after add
       // we re-fetch all connections. For a real app, you might parse `addedConnection` more deeply.
       fetchData('connections', setConnections);
@@ -119,7 +119,7 @@ function App() {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      const updatedConn = await response.json();
+      // const updatedConn = await response.json(); // Removed unused variable
       // Re-fetch all connections to ensure UI is fully consistent with backend after update
       fetchData('connections', setConnections);
       showMessage('Connection updated successfully!');

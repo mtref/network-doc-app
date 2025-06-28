@@ -40,7 +40,8 @@ services:
     # This allows for live code changes during development.
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Exclude node_modules from the volume mount to prevent issues
+      # Removed the line below to ensure node_modules from build are available at runtime:
+      # - /app/node_modules # Exclude node_modules from the volume mount to prevent issues
     # Ensure the frontend starts only after the backend is ready.
     depends_on:
       - backend
