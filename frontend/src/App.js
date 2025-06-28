@@ -62,15 +62,23 @@ function App() {
   // Effect to filter connections whenever connections or searchTerm changes
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = connections.filter(connection =>
-      // Search across PC name, Patch Panel name, Patch Panel Port, Server name, Server Port, and PC IP Address
-      (connection.pc?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
-      (connection.pc?.ip_address || '').toLowerCase().includes(lowerCaseSearchTerm) || // Added PC IP address to search
-      (connection.patch_panel?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
-      (connection.patch_panel_port || '').toLowerCase().includes(lowerCaseSearchTerm) ||
-      (connection.server?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
-      (connection.server_port || '').toLowerCase().includes(lowerCaseSearchTerm)
-    );
+    const filtered = connections.filter(connection => {
+      // Search across PC name, PC IP Address, Server name, Server Port
+      const matchesMainConnection =
+        (connection.pc?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
+        (connection.pc?.ip_address || '').toLowerCase().includes(lowerCaseSearchTerm) ||
+        (connection.server?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
+        (connection.server_port || '').toLowerCase().includes(lowerCaseSearchTerm);
+
+      // Search through each hop's patch panel name and port
+      const matchesHops = connection.hops.some(hop =>
+        (hop.patch_panel?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
+        (hop.patch_panel?.location || '').toLowerCase().includes(lowerCaseSearchTerm) ||
+        (hop.patch_panel_port || '').toLowerCase().includes(lowerCaseSearchTerm)
+      );
+
+      return matchesMainConnection || matchesHops;
+    });
     setFilteredConnections(filtered);
   }, [connections, searchTerm]);
 
@@ -87,7 +95,9 @@ function App() {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const addedConnection = await response.json();
-      setConnections(prev => [...prev, addedConnection]); // Add to connections state
+      // To ensure all nested data (hops, pc, server) is fully populated after add
+      // we re-fetch all connections. For a real app, you might parse `addedConnection` more deeply.
+      fetchData('connections', setConnections);
       showMessage('Connection added successfully!');
     }
     catch (error) {
@@ -110,7 +120,8 @@ function App() {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const updatedConn = await response.json();
-      setConnections(prev => prev.map(conn => (conn.id === id ? updatedConn : conn)));
+      // Re-fetch all connections to ensure UI is fully consistent with backend after update
+      fetchData('connections', setConnections);
       showMessage('Connection updated successfully!');
     } catch (error) {
       console.error('Error updating connection:', error);
@@ -145,7 +156,17 @@ function App() {
 
   // Handle editing a connection (set the connection to be edited in state)
   const handleEditConnection = (connection) => {
-    setEditingConnection(connection);
+    // When editing, transform the hops array back into a format expected by ConnectionForm
+    const formattedHops = connection.hops.map(hop => ({
+      patch_panel_id: hop.patch_panel.id,
+      patch_panel_port: hop.patch_panel_port
+    }));
+    setEditingConnection({
+      ...connection,
+      pc_id: connection.pc.id,
+      server_id: connection.server.id,
+      hops: formattedHops // Set formatted hops for the form
+    });
   };
 
   // Function to add a new PC (simplified for demo, typically a separate form)

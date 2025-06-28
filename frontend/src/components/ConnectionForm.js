@@ -6,14 +6,14 @@ import React, { useState, useEffect } from 'react';
 
 function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateConnection, editingConnection, setEditingConnection, onAddEntity }) {
   const [pcId, setPcId] = useState('');
-  const [patchPanelId, setPatchPanelId] = useState('');
-  const [patchPanelPort, setPatchPanelPort] = useState('');
-  const [serverId, setServerId] = useState('');
   const [serverPort, setServerPort] = useState('');
+  const [serverId, setServerId] = useState('');
+  // State to manage multiple patch panel hops
+  const [hops, setHops] = useState([]); // Array of { patch_panel_id, patch_panel_port }
 
   // State for new entity forms (PC, Patch Panel, Server)
   const [newPcName, setNewPcName] = useState('');
-  const [newPcIp, setNewPcIp] = useState(''); // New state for PC IP address
+  const [newPcIp, setNewPcIp] = useState('');
   const [newPcDesc, setNewPcDesc] = useState('');
   const [newPpName, setNewPpName] = useState('');
   const [newPpLocation, setNewPpLocation] = useState('');
@@ -24,29 +24,61 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
   // Populate form fields if editing an existing connection
   useEffect(() => {
     if (editingConnection) {
-      setPcId(editingConnection.pc?.id || '');
-      setPatchPanelId(editingConnection.patch_panel?.id || '');
-      setPatchPanelPort(editingConnection.patch_panel_port || '');
-      setServerId(editingConnection.server?.id || '');
+      setPcId(editingConnection.pc_id || '');
+      setServerId(editingConnection.server_id || '');
       setServerPort(editingConnection.server_port || '');
+      // When editing, populate hops
+      setHops(editingConnection.hops || []);
     } else {
       // Clear form if not editing
       setPcId('');
-      setPatchPanelId('');
-      setPatchPanelPort('');
       setServerId('');
       setServerPort('');
+      setHops([]); // Clear hops
     }
   }, [editingConnection]);
 
+  // Handle changes for a specific hop's patch panel ID
+  const handleHopPatchPanelChange = (index, value) => {
+    const updatedHops = [...hops];
+    updatedHops[index].patch_panel_id = parseInt(value);
+    setHops(updatedHops);
+  };
+
+  // Handle changes for a specific hop's patch panel port
+  const handleHopPortChange = (index, value) => {
+    const updatedHops = [...hops];
+    updatedHops[index].patch_panel_port = value;
+    setHops(updatedHops);
+  };
+
+  // Add a new empty hop to the list
+  const addHop = () => {
+    setHops([...hops, { patch_panel_id: '', patch_panel_port: '' }]);
+  };
+
+  // Remove a hop by index
+  const removeHop = (index) => {
+    setHops(hops.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Validate that all hops have selections
+    const allHopsValid = hops.every(hop => hop.patch_panel_id && hop.patch_panel_port.trim());
+    if (!allHopsValid) {
+      alert('Please fill out all patch panel details for each hop.');
+      return;
+    }
+
     const connectionData = {
       pc_id: parseInt(pcId),
-      patch_panel_id: parseInt(patchPanelId),
-      patch_panel_port: patchPanelPort,
       server_id: parseInt(serverId),
       server_port: serverPort,
+      hops: hops.map(hop => ({ // Send hops as an array of objects
+        patch_panel_id: hop.patch_panel_id,
+        patch_panel_port: hop.patch_panel_port
+      })),
     };
 
     if (editingConnection) {
@@ -56,10 +88,9 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
     }
     // Clear form fields after submission
     setPcId('');
-    setPatchPanelId('');
-    setPatchPanelPort('');
     setServerId('');
     setServerPort('');
+    setHops([]); // Clear hops
     setEditingConnection(null); // Ensure editing state is cleared
   };
 
@@ -67,18 +98,17 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
     setEditingConnection(null);
     // Also clear the form fields
     setPcId('');
-    setPatchPanelId('');
-    setPatchPanelPort('');
     setServerId('');
     setServerPort('');
+    setHops([]); // Clear hops
   };
 
   const handleAddPc = (e) => {
     e.preventDefault();
     if (newPcName.trim()) {
-      onAddEntity('pcs', { name: newPcName, ip_address: newPcIp, description: newPcDesc }); // Pass newPcIp
+      onAddEntity('pcs', { name: newPcName, ip_address: newPcIp, description: newPcDesc });
       setNewPcName('');
-      setNewPcIp(''); // Clear IP field
+      setNewPcIp('');
       setNewPcDesc('');
     }
   };
@@ -231,40 +261,6 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
             {pcs.length === 0 && <p className="text-sm text-red-500 mt-1">Please add a PC first.</p>}
           </div>
 
-          {/* Patch Panel Selection */}
-          <div>
-            <label htmlFor="patch-panel-select" className="block text-sm font-medium text-gray-700 mb-1">Select Patch Panel:</label>
-            <select
-              id="patch-panel-select"
-              value={patchPanelId}
-              onChange={(e) => setPatchPanelId(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">-- Select a Patch Panel --</option>
-              {patchPanels.map((pp) => (
-                <option key={pp.id} value={pp.id}>
-                  {pp.name} ({pp.location})
-                </option>
-              ))}
-            </select>
-            {patchPanels.length === 0 && <p className="text-sm text-red-500 mt-1">Please add a Patch Panel first.</p>}
-          </div>
-
-          {/* Patch Panel Port Input */}
-          <div>
-            <label htmlFor="pp-port" className="block text-sm font-medium text-gray-700 mb-1">Patch Panel Port:</label>
-            <input
-              id="pp-port"
-              type="text"
-              placeholder="e.g., Port 1, A12"
-              value={patchPanelPort}
-              onChange={(e) => setPatchPanelPort(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-
           {/* Server Selection */}
           <div>
             <label htmlFor="server-select" className="block text-sm font-medium text-gray-700 mb-1">Select Server:</label>
@@ -298,6 +294,60 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
               required
             />
           </div>
+        </div>
+
+        {/* Dynamic Patch Panel Hops Section */}
+        <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
+          <h4 className="text-lg font-semibold text-gray-700 mb-3">Patch Panel Hops (in sequence)</h4>
+          {hops.map((hop, index) => (
+            <div key={index} className="flex items-end space-x-3 mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm">
+              <div className="flex-grow">
+                <label htmlFor={`pp-select-${index}`} className="block text-xs font-medium text-gray-600 mb-1">Patch Panel {index + 1}:</label>
+                <select
+                  id={`pp-select-${index}`}
+                  value={hop.patch_panel_id}
+                  onChange={(e) => handleHopPatchPanelChange(index, e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  required
+                >
+                  <option value="">-- Select Patch Panel --</option>
+                  {patchPanels.map((pp) => (
+                    <option key={pp.id} value={pp.id}>
+                      {pp.name} ({pp.location})
+                    </option>
+                  ))}
+                </select>
+                {patchPanels.length === 0 && <p className="text-xs text-red-500 mt-1">Please add a Patch Panel first.</p>}
+              </div>
+              <div className="flex-grow">
+                <label htmlFor={`pp-port-${index}`} className="block text-xs font-medium text-gray-600 mb-1">Port:</label>
+                <input
+                  id={`pp-port-${index}`}
+                  type="text"
+                  placeholder="Port"
+                  value={hop.patch_panel_port}
+                  onChange={(e) => handleHopPortChange(index, e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  required
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeHop(index)}
+                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addHop}
+            className="w-full mt-2 py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Add Patch Panel Hop
+          </button>
+          {hops.length === 0 && <p className="text-sm text-gray-500 mt-2 text-center">Add at least one patch panel hop.</p>}
         </div>
 
         {/* Action Buttons for Connection Form */}

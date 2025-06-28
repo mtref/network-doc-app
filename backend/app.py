@@ -27,16 +27,15 @@ class PC(db.Model):
     __tablename__ = 'pcs'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    ip_address = db.Column(db.String(100), nullable=True) # Added IP address field
+    ip_address = db.Column(db.String(100), nullable=True)
     description = db.Column(db.String(255))
-    # Relationship to connections (one-to-many)
-    connections = db.relationship('Connection', backref='pc', lazy=True, cascade="all, delete-orphan")
+    # No direct relationship to connections anymore, as connections are now defined via ConnectionHops
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
-            'ip_address': self.ip_address, # Include IP address in dictionary representation
+            'ip_address': self.ip_address,
             'description': self.description
         }
 
@@ -45,8 +44,7 @@ class PatchPanel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     location = db.Column(db.String(255))
-    # Relationship to connections (one-to-many)
-    connections = db.relationship('Connection', backref='patch_panel', lazy=True, cascade="all, delete-orphan")
+    # No direct relationship to connections anymore
 
     def to_dict(self):
         return {
@@ -61,8 +59,7 @@ class Server(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     ip_address = db.Column(db.String(100))
     location = db.Column(db.String(255))
-    # Relationship to connections (one-to-many)
-    connections = db.relationship('Connection', backref='server', lazy=True, cascade="all, delete-orphan")
+    # No direct relationship to connections anymore
 
     def to_dict(self):
         return {
@@ -75,20 +72,42 @@ class Server(db.Model):
 class Connection(db.Model):
     __tablename__ = 'connections'
     id = db.Column(db.Integer, primary_key=True)
+    # The connection now has a PC and a Server directly
     pc_id = db.Column(db.Integer, db.ForeignKey('pcs.id'), nullable=False)
-    patch_panel_id = db.Column(db.Integer, db.ForeignKey('patch_panels.id'), nullable=False)
-    patch_panel_port = db.Column(db.String(50), nullable=False)
     server_id = db.Column(db.Integer, db.ForeignKey('servers.id'), nullable=False)
     server_port = db.Column(db.String(50), nullable=False)
+
+    pc = db.relationship('PC', backref='connections_as_pc', lazy=True)
+    server = db.relationship('Server', backref='connections_as_server', lazy=True)
+    # Relationship to ConnectionHops (one-to-many) - ordered by sequence
+    hops = db.relationship('ConnectionHop', backref='connection', lazy=True, cascade="all, delete-orphan", order_by="ConnectionHop.sequence")
+
 
     def to_dict(self):
         return {
             'id': self.id,
             'pc': self.pc.to_dict() if self.pc else None,
-            'patch_panel': self.patch_panel.to_dict() if self.patch_panel else None,
-            'patch_panel_port': self.patch_panel_port,
+            'hops': [hop.to_dict() for hop in self.hops], # Include ordered hops
             'server': self.server.to_dict() if self.server else None,
             'server_port': self.server_port
+        }
+
+class ConnectionHop(db.Model):
+    __tablename__ = 'connection_hops'
+    id = db.Column(db.Integer, primary_key=True)
+    connection_id = db.Column(db.Integer, db.ForeignKey('connections.id'), nullable=False)
+    patch_panel_id = db.Column(db.Integer, db.ForeignKey('patch_panels.id'), nullable=False)
+    patch_panel_port = db.Column(db.String(50), nullable=False)
+    sequence = db.Column(db.Integer, nullable=False) # To maintain order of patch panels
+
+    patch_panel = db.relationship('PatchPanel', backref='connection_hops', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'patch_panel': self.patch_panel.to_dict() if self.patch_panel else None,
+            'patch_panel_port': self.patch_panel_port,
+            'sequence': self.sequence
         }
 
 # --- API Endpoints ---
@@ -105,7 +124,7 @@ def handle_pcs():
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'PC name is required'}), 400
-        new_pc = PC(name=data['name'], ip_address=data.get('ip_address'), description=data.get('description')) # Accept ip_address
+        new_pc = PC(name=data['name'], ip_address=data.get('ip_address'), description=data.get('description'))
         try:
             db.session.add(new_pc)
             db.session.commit()
@@ -127,7 +146,7 @@ def handle_pc_by_id(pc_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
         pc.name = data.get('name', pc.name)
-        pc.ip_address = data.get('ip_address', pc.ip_address) # Allow updating ip_address
+        pc.ip_address = data.get('ip_address', pc.ip_address)
         pc.description = data.get('description', pc.description)
         try:
             db.session.commit()
@@ -240,22 +259,34 @@ def handle_server_by_id(server_id):
 def handle_connections():
     if request.method == 'POST':
         data = request.json
-        required_fields = ['pc_id', 'patch_panel_id', 'patch_panel_port', 'server_id', 'server_port']
+        required_fields = ['pc_id', 'server_id', 'server_port', 'hops']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields for connection'}), 400
 
         new_connection = Connection(
             pc_id=data['pc_id'],
-            patch_panel_id=data['patch_panel_id'],
-            patch_panel_port=data['patch_panel_port'],
             server_id=data['server_id'],
             server_port=data['server_port']
         )
+        db.session.add(new_connection)
+        db.session.flush() # Flush to get new_connection.id for hops
+
+        # Add hops
+        for idx, hop_data in enumerate(data['hops']):
+            if not all(f in hop_data for f in ['patch_panel_id', 'patch_panel_port']):
+                db.session.rollback()
+                return jsonify({'error': f'Missing fields for hop {idx}'}), 400
+            new_hop = ConnectionHop(
+                connection_id=new_connection.id,
+                patch_panel_id=hop_data['patch_panel_id'],
+                patch_panel_port=hop_data['patch_panel_port'],
+                sequence=idx # Store sequence for order
+            )
+            db.session.add(new_hop)
+
         try:
-            db.session.add(new_connection)
             db.session.commit()
-            # Reload the connection to include related objects (PC, PatchPanel, Server)
-            db.session.refresh(new_connection)
+            db.session.refresh(new_connection) # Refresh to load related hops and objects
             return jsonify(new_connection.to_dict()), 201
         except Exception as e:
             db.session.rollback()
@@ -273,11 +304,31 @@ def handle_connection_by_id(conn_id):
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
+
         connection.pc_id = data.get('pc_id', connection.pc_id)
-        connection.patch_panel_id = data.get('patch_panel_id', connection.patch_panel_id)
-        connection.patch_panel_port = data.get('patch_panel_port', connection.patch_panel_port)
         connection.server_id = data.get('server_id', connection.server_id)
         connection.server_port = data.get('server_port', connection.server_port)
+
+        # Handle hops update: delete existing and re-add
+        if 'hops' in data:
+            # Delete existing hops
+            for hop in connection.hops:
+                db.session.delete(hop)
+            db.session.flush() # Ensure deletions are processed before adding new
+
+            # Add new hops
+            for idx, hop_data in enumerate(data['hops']):
+                if not all(f in hop_data for f in ['patch_panel_id', 'patch_panel_port']):
+                    db.session.rollback()
+                    return jsonify({'error': f'Missing fields for hop {idx}'}), 400
+                new_hop = ConnectionHop(
+                    connection_id=connection.id,
+                    patch_panel_id=hop_data['patch_panel_id'],
+                    patch_panel_port=hop_data['patch_panel_port'],
+                    sequence=idx
+                )
+                db.session.add(new_hop)
+
         try:
             db.session.commit()
             db.session.refresh(connection) # Refresh to get updated related objects

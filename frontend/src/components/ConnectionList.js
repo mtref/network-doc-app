@@ -58,14 +58,22 @@ function ConnectionList({ connections, onDelete, onEdit }) {
               <div className="flex flex-col items-center flex-1">
                 <PcIcon />
                 <span className="text-sm font-medium text-indigo-700 mt-1 truncate max-w-[80%]">{connection.pc?.name || 'N/A'}</span>
-                <span className="text-xs text-gray-500">IP: {connection.pc?.ip_address || 'N/A'}</span> {/* Display PC IP address */}
+                <span className="text-xs text-gray-500">IP: {connection.pc?.ip_address || 'N/A'}</span>
               </div>
-              <ArrowRightIcon />
-              <div className="flex flex-col items-center flex-1">
-                <PatchPanelIcon />
-                <span className="text-sm font-medium text-green-700 mt-1 truncate max-w-[80%]">{connection.patch_panel?.name || 'N/A'}</span>
-                <span className="text-xs text-gray-500">Port: {connection.patch_panel_port}</span>
-              </div>
+
+              {/* Dynamically render multiple patch panel hops */}
+              {connection.hops.map((hop, index) => (
+                <React.Fragment key={index}>
+                  <ArrowRightIcon />
+                  <div className="flex flex-col items-center flex-1">
+                    <PatchPanelIcon />
+                    <span className="text-sm font-medium text-green-700 mt-1 truncate max-w-[80%]">{hop.patch_panel?.name || 'N/A'}</span>
+                    <span className="text-xs text-gray-500">Port: {hop.patch_panel_port}</span>
+                    <span className="text-xs text-gray-500">{hop.patch_panel?.location || 'N/A'}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+
               <ArrowRightIcon />
               <div className="flex flex-col items-center flex-1">
                 <ServerIcon />
@@ -78,9 +86,6 @@ function ConnectionList({ connections, onDelete, onEdit }) {
             <div className="space-y-2 text-gray-700 text-sm">
               <p>
                 <span className="font-medium">PC Description:</span> {connection.pc?.description || 'No description'}
-              </p>
-              <p>
-                <span className="font-medium">Patch Panel Location:</span> {connection.patch_panel?.location || 'N/A'}
               </p>
               <p>
                 <span className="font-medium">Server IP:</span> {connection.server?.ip_address || 'N/A'}
