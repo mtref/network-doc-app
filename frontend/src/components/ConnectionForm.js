@@ -4,22 +4,27 @@
 
 import React, { useState, useEffect } from 'react';
 
-function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateConnection, editingConnection, setEditingConnection, onAddEntity }) {
+function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateConnection, editingConnection, setEditingConnection, onAddEntity, onShowPortStatus }) {
   const [pcId, setPcId] = useState('');
   const [serverPort, setServerPort] = useState('');
+  const [isServerPortUp, setIsServerPortUp] = useState(true); // New: Server port status
   const [serverId, setServerId] = useState('');
   // State to manage multiple patch panel hops
-  const [hops, setHops] = useState([]); // Array of { patch_panel_id, patch_panel_port }
+  const [hops, setHops] = useState([]); // Array of { patch_panel_id, patch_panel_port, is_port_up }
 
   // State for new entity forms (PC, Patch Panel, Server)
   const [newPcName, setNewPcName] = useState('');
   const [newPcIp, setNewPcIp] = useState('');
   const [newPcDesc, setNewPcDesc] = useState('');
+
   const [newPpName, setNewPpName] = useState('');
   const [newPpLocation, setNewPpLocation] = useState('');
+  const [newPpTotalPorts, setNewPpTotalPorts] = useState(1); // New: Total ports for Patch Panel
+
   const [newServerName, setNewServerName] = useState('');
   const [newServerIp, setNewServerIp] = useState('');
   const [newServerLocation, setNewServerLocation] = useState('');
+  const [newServerTotalPorts, setNewServerTotalPorts] = useState(1); // New: Total ports for Server
 
   // Populate form fields if editing an existing connection
   useEffect(() => {
@@ -27,6 +32,7 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
       setPcId(editingConnection.pc_id || '');
       setServerId(editingConnection.server_id || '');
       setServerPort(editingConnection.server_port || '');
+      setIsServerPortUp(editingConnection.is_server_port_up !== undefined ? editingConnection.is_server_port_up : true);
       // When editing, populate hops
       setHops(editingConnection.hops || []);
     } else {
@@ -34,7 +40,8 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
       setPcId('');
       setServerId('');
       setServerPort('');
-      setHops([]); // Clear hops
+      setIsServerPortUp(true);
+      setHops([]);
     }
   }, [editingConnection]);
 
@@ -52,9 +59,16 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
     setHops(updatedHops);
   };
 
+  // Handle changes for a specific hop's port status
+  const handleHopPortStatusChange = (index, value) => {
+    const updatedHops = [...hops];
+    updatedHops[index].is_port_up = value;
+    setHops(updatedHops);
+  };
+
   // Add a new empty hop to the list
   const addHop = () => {
-    setHops([...hops, { patch_panel_id: '', patch_panel_port: '' }]);
+    setHops([...hops, { patch_panel_id: '', patch_panel_port: '', is_port_up: true }]);
   };
 
   // Remove a hop by index
@@ -62,7 +76,7 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
     setHops(hops.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // Validate that all hops have selections
     const allHopsValid = hops.every(hop => hop.patch_panel_id && hop.patch_panel_port.trim());
@@ -75,22 +89,25 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
       pc_id: parseInt(pcId),
       server_id: parseInt(serverId),
       server_port: serverPort,
+      is_server_port_up: isServerPortUp, // Include server port status
       hops: hops.map(hop => ({ // Send hops as an array of objects
         patch_panel_id: hop.patch_panel_id,
-        patch_panel_port: hop.patch_panel_port
+        patch_panel_port: hop.patch_panel_port,
+        is_port_up: hop.is_port_up // Include hop port status
       })),
     };
 
     if (editingConnection) {
-      onUpdateConnection(editingConnection.id, connectionData);
+      await onUpdateConnection(editingConnection.id, connectionData);
     } else {
-      onAddConnection(connectionData);
+      await onAddConnection(connectionData);
     }
     // Clear form fields after submission
     setPcId('');
     setServerId('');
     setServerPort('');
-    setHops([]); // Clear hops
+    setIsServerPortUp(true);
+    setHops([]);
     setEditingConnection(null); // Ensure editing state is cleared
   };
 
@@ -100,35 +117,38 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
     setPcId('');
     setServerId('');
     setServerPort('');
-    setHops([]); // Clear hops
+    setIsServerPortUp(true);
+    setHops([]);
   };
 
-  const handleAddPc = (e) => {
+  const handleAddPc = async (e) => {
     e.preventDefault();
     if (newPcName.trim()) {
-      onAddEntity('pcs', { name: newPcName, ip_address: newPcIp, description: newPcDesc });
+      await onAddEntity('pcs', { name: newPcName, ip_address: newPcIp, description: newPcDesc });
       setNewPcName('');
       setNewPcIp('');
       setNewPcDesc('');
     }
   };
 
-  const handleAddPp = (e) => {
+  const handleAddPp = async (e) => {
     e.preventDefault();
     if (newPpName.trim()) {
-      onAddEntity('patch_panels', { name: newPpName, location: newPpLocation });
+      await onAddEntity('patch_panels', { name: newPpName, location: newPpLocation, total_ports: parseInt(newPpTotalPorts) });
       setNewPpName('');
       setNewPpLocation('');
+      setNewPpTotalPorts(1);
     }
   };
 
-  const handleAddServer = (e) => {
+  const handleAddServer = async (e) => {
     e.preventDefault();
     if (newServerName.trim()) {
-      onAddEntity('servers', { name: newServerName, ip_address: newServerIp, location: newServerLocation });
+      await onAddEntity('servers', { name: newServerName, ip_address: newServerIp, location: newServerLocation, total_ports: parseInt(newServerTotalPorts) });
       setNewServerName('');
       setNewServerIp('');
       setNewServerLocation('');
+      setNewServerTotalPorts(1);
     }
   };
 
@@ -190,12 +210,35 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
               onChange={(e) => setNewPpLocation(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+            <input
+              type="number"
+              placeholder="Total Ports (e.g., 24)"
+              value={newPpTotalPorts}
+              onChange={(e) => setNewPpTotalPorts(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              required
+            />
             <button
               type="submit"
               className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               Add Patch Panel
             </button>
+            {patchPanels.length > 0 && ( /* Only show if existing PPs */
+              <select
+                onChange={(e) => onShowPortStatus('patch_panels', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
+                defaultValue=""
+              >
+                <option value="" disabled>View Port Status for Existing PP</option>
+                {patchPanels.map((pp) => (
+                  <option key={pp.id} value={pp.id}>
+                    {pp.name} ({pp.location})
+                  </option>
+                ))}
+              </select>
+            )}
           </form>
         </div>
 
@@ -225,12 +268,35 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
               onChange={(e) => setNewServerLocation(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+            <input
+              type="number"
+              placeholder="Total Ports (e.g., 4)"
+              value={newServerTotalPorts}
+              onChange={(e) => setNewServerTotalPorts(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              required
+            />
             <button
               type="submit"
               className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
               Add Server
             </button>
+            {servers.length > 0 && ( /* Only show if existing Servers */
+              <select
+                onChange={(e) => onShowPortStatus('servers', e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
+                defaultValue=""
+              >
+                <option value="" disabled>View Port Status for Existing Server</option>
+                {servers.map((server) => (
+                  <option key={server.id} value={server.id}>
+                    {server.name} ({server.ip_address})
+                  </option>
+                ))}
+              </select>
+            )}
           </form>
         </div>
       </div>
@@ -281,27 +347,53 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
             {servers.length === 0 && <p className="text-sm text-red-500 mt-1">Please add a Server first.</p>}
           </div>
 
-          {/* Server Port Input */}
-          <div>
-            <label htmlFor="server-port" className="block text-sm font-medium text-gray-700 mb-1">Server Port:</label>
-            <input
-              id="server-port"
-              type="text"
-              placeholder="e.g., Eth0/1, GigaPort-03"
-              value={serverPort}
-              onChange={(e) => setServerPort(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
+          {/* Server Port Input and Status */}
+          <div className="md:col-span-2 grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="server-port" className="block text-sm font-medium text-gray-700 mb-1">Server Port:</label>
+              <input
+                id="server-port"
+                type="text"
+                placeholder="e.g., Eth0/1, GigaPort-03"
+                value={serverPort}
+                onChange={(e) => setServerPort(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div className="flex items-center pt-5">
+              <input
+                id="is-server-port-up"
+                type="checkbox"
+                checked={isServerPortUp}
+                onChange={(e) => setIsServerPortUp(e.target.checked)}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="is-server-port-up" className="ml-2 block text-sm text-gray-900">
+                Port Up
+              </label>
+            </div>
+            {serverId && servers.find(s => s.id === parseInt(serverId)) && (
+              <button
+                type="button"
+                onClick={() => onShowPortStatus('servers', serverId)}
+                className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-2"
+              >
+                View Server Port Status ({servers.find(s => s.id === parseInt(serverId))?.name})
+              </button>
+            )}
           </div>
         </div>
 
         {/* Dynamic Patch Panel Hops Section */}
         <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
           <h4 className="text-lg font-semibold text-gray-700 mb-3">Patch Panel Hops (in sequence)</h4>
+          {hops.length === 0 && (
+            <p className="text-sm text-gray-500 mt-2 text-center mb-4">Click "Add Patch Panel Hop" to start building the path.</p>
+          )}
           {hops.map((hop, index) => (
-            <div key={index} className="flex items-end space-x-3 mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm">
-              <div className="flex-grow">
+            <div key={index} className="flex flex-col md:flex-row items-end md:items-center space-y-3 md:space-y-0 md:space-x-3 mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm">
+              <div className="flex-grow w-full md:w-auto">
                 <label htmlFor={`pp-select-${index}`} className="block text-xs font-medium text-gray-600 mb-1">Patch Panel {index + 1}:</label>
                 <select
                   id={`pp-select-${index}`}
@@ -319,7 +411,7 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
                 </select>
                 {patchPanels.length === 0 && <p className="text-xs text-red-500 mt-1">Please add a Patch Panel first.</p>}
               </div>
-              <div className="flex-grow">
+              <div className="flex-grow w-full md:w-auto">
                 <label htmlFor={`pp-port-${index}`} className="block text-xs font-medium text-gray-600 mb-1">Port:</label>
                 <input
                   id={`pp-port-${index}`}
@@ -331,13 +423,34 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
                   required
                 />
               </div>
+              <div className="flex items-center w-full md:w-auto md:pt-5">
+                <input
+                  id={`is-pp-port-up-${index}`}
+                  type="checkbox"
+                  checked={hop.is_port_up}
+                  onChange={(e) => handleHopPortStatusChange(index, e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor={`is-pp-port-up-${index}`} className="ml-2 block text-sm text-gray-900">
+                  Port Up
+                </label>
+              </div>
               <button
                 type="button"
                 onClick={() => removeHop(index)}
-                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm"
+                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm flex-shrink-0"
               >
                 Remove
               </button>
+              {hop.patch_panel_id && patchPanels.find(pp => pp.id === parseInt(hop.patch_panel_id)) && (
+                <button
+                  type="button"
+                  onClick={() => onShowPortStatus('patch_panels', hop.patch_panel_id)}
+                  className="w-full md:w-auto mt-2 md:mt-0 px-3 py-2 bg-blue-500 text-white text-xs font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-shrink-0"
+                >
+                  View Ports ({patchPanels.find(pp => pp.id === parseInt(hop.patch_panel_id))?.name})
+                </button>
+              )}
             </div>
           ))}
           <button
@@ -347,7 +460,6 @@ function ConnectionForm({ pcs, patchPanels, servers, onAddConnection, onUpdateCo
           >
             Add Patch Panel Hop
           </button>
-          {hops.length === 0 && <p className="text-sm text-gray-500 mt-2 text-center">Add at least one patch panel hop.</p>}
         </div>
 
         {/* Action Buttons for Connection Form */}

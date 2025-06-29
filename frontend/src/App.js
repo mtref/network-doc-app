@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ConnectionList from './components/ConnectionList';
 import ConnectionForm from './components/ConnectionForm';
 import SearchBar from './components/SearchBar';
+import PortStatusModal from './components/PortStatusModal'; // New component for port status display
 
 // Base URL for the backend API. When running in Docker Compose,
 // 'backend' is the service name and resolves to the backend container's IP.
@@ -26,6 +27,12 @@ function App() {
   const [message, setMessage] = useState(''); // General message for success/error
   const [isMessageVisible, setIsMessageVisible] = useState(false); // Controls message visibility
 
+  // State for Port Status Modal
+  const [showPortStatusModal, setShowPortStatusModal] = useState(false);
+  const [portStatusData, setPortStatusData] = useState(null); // Data for the modal
+  const [modalEntityType, setModalEntityType] = useState(null); // 'patch_panel' or 'server'
+  const [modalEntityId, setModalEntityId] = useState(null); // ID of the entity to fetch ports for
+
   // Function to show a message temporarily
   const showMessage = (msg, duration = 3000) => {
     setMessage(msg);
@@ -41,7 +48,9 @@ function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/${endpoint}`);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Attempt to parse JSON error message if available
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       setter(data);
@@ -70,7 +79,7 @@ function App() {
         (connection.server?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
         (connection.server_port || '').toLowerCase().includes(lowerCaseSearchTerm);
 
-      // Search through each hop's patch panel name and port
+      // Search through each hop's patch panel name, location, and port
       const matchesHops = connection.hops.some(hop =>
         (hop.patch_panel?.name || '').toLowerCase().includes(lowerCaseSearchTerm) ||
         (hop.patch_panel?.location || '').toLowerCase().includes(lowerCaseSearchTerm) ||
@@ -94,15 +103,12 @@ function App() {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      // const addedConnection = await response.json(); // Removed unused variable
-      // To ensure all nested data (hops, pc, server) is fully populated after add
-      // we re-fetch all connections. For a real app, you might parse `addedConnection` more deeply.
-      fetchData('connections', setConnections);
+      fetchData('connections', setConnections); // Re-fetch all connections to update UI
       showMessage('Connection added successfully!');
     }
     catch (error) {
       console.error('Error adding connection:', error);
-      showMessage(`Error adding connection: ${error.message}`, 5000);
+      showMessage(`Error adding connection: ${error.message}`, 8000); // Display error longer
     }
     setEditingConnection(null); // Clear editing state after add
   };
@@ -119,13 +125,11 @@ function App() {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      // const updatedConn = await response.json(); // Removed unused variable
-      // Re-fetch all connections to ensure UI is fully consistent with backend after update
-      fetchData('connections', setConnections);
+      fetchData('connections', setConnections); // Re-fetch all connections to update UI
       showMessage('Connection updated successfully!');
     } catch (error) {
       console.error('Error updating connection:', error);
-      showMessage(`Error updating connection: ${error.message}`, 5000);
+      showMessage(`Error updating connection: ${error.message}`, 8000); // Display error longer
     }
     setEditingConnection(null); // Clear editing state after update
   };
@@ -159,17 +163,19 @@ function App() {
     // When editing, transform the hops array back into a format expected by ConnectionForm
     const formattedHops = connection.hops.map(hop => ({
       patch_panel_id: hop.patch_panel.id,
-      patch_panel_port: hop.patch_panel_port
+      patch_panel_port: hop.patch_panel_port,
+      is_port_up: hop.is_port_up // Include status for editing
     }));
     setEditingConnection({
       ...connection,
       pc_id: connection.pc.id,
       server_id: connection.server.id,
+      is_server_port_up: connection.is_server_port_up, // Include status for editing
       hops: formattedHops // Set formatted hops for the form
     });
   };
 
-  // Function to add a new PC (simplified for demo, typically a separate form)
+  // Function to add a new PC, Patch Panel, or Server
   const handleAddEntity = async (type, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}`, {
@@ -186,12 +192,41 @@ function App() {
       if (type === 'patch_panels') setPatchPanels(prev => [...prev, newEntity]);
       if (type === 'servers') setServers(prev => [...prev, newEntity]);
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
+      // Re-fetch data relevant to selection dropdowns
+      if (type === 'patch_panels') fetchData('patch_panels', setPatchPanels);
+      if (type === 'servers') fetchData('servers', setServers);
+      if (type === 'pcs') fetchData('pcs', setPcs);
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
     }
   };
 
+  // Function to open the port status modal
+  const handleShowPortStatus = async (entityType, entityId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/${entityType}/${entityId}/ports`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setPortStatusData(data);
+      setModalEntityType(entityType);
+      setModalEntityId(entityId); // Store ID for potential re-fetch if modal stays open
+      setShowPortStatusModal(true);
+    } catch (error) {
+      console.error(`Failed to fetch ${entityType} port status:`, error);
+      showMessage(`Error fetching port status: ${error.message}`, 5000);
+    }
+  };
+
+  const handleClosePortStatusModal = () => {
+    setShowPortStatusModal(false);
+    setPortStatusData(null);
+    setModalEntityType(null);
+    setModalEntityId(null);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-200 font-inter p-4 sm:p-8">
@@ -200,6 +235,18 @@ function App() {
         <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in-down">
           {message}
         </div>
+      )}
+
+      {/* Port Status Modal */}
+      {showPortStatusModal && portStatusData && (
+        <PortStatusModal
+          isOpen={showPortStatusModal}
+          onClose={handleClosePortStatusModal}
+          data={portStatusData}
+          entityType={modalEntityType}
+          entityId={modalEntityId}
+          // Optionally, add a re-fetch mechanism if the modal supports dynamic updates
+        />
       )}
 
       {/* Header Section */}
@@ -231,8 +278,9 @@ function App() {
             onAddConnection={handleAddConnection}
             onUpdateConnection={handleUpdateConnection}
             editingConnection={editingConnection}
-            setEditingConnection={setEditingConnection} // Allow form to clear editing state
-            onAddEntity={handleAddEntity} // Pass the add entity function
+            setEditingConnection={setEditingConnection}
+            onAddEntity={handleAddEntity}
+            onShowPortStatus={handleShowPortStatus} // Pass down new handler
           />
         </section>
 
