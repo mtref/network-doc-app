@@ -3,7 +3,14 @@
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
-import { Laptop, Router, MapPin, Info } from "lucide-react"; // Icons for PC details
+import {
+  Laptop,
+  Router,
+  Info,
+  PlusCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -12,6 +19,8 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [pcFormName, setPcFormName] = useState("");
   const [pcFormIp, setPcFormIp] = useState("");
   const [pcFormDesc, setPcFormDesc] = useState("");
+
+  const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false); // State for collapsible add form
 
   // Filter PCs based on search term
   useEffect(() => {
@@ -31,6 +40,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormName(pc.name);
     setPcFormIp(pc.ip_address || "");
     setPcFormDesc(pc.description || "");
+    setIsAddPcFormExpanded(true); // Expand form when editing
   };
 
   // Handle form submission for Add/Update PC
@@ -51,6 +61,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormName(""); // Clear form fields
     setPcFormIp("");
     setPcFormDesc("");
+    setIsAddPcFormExpanded(false); // Collapse form after submission
   };
 
   return (
@@ -58,57 +69,75 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      {/* Add/Edit PC Form */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200">
-        <h3 className="text-xl font-bold text-blue-700 mb-4">
-          {editingPc ? "Edit PC" : "Add New PC"}
-        </h3>
-        <form onSubmit={handlePcFormSubmit} className="space-y-3">
-          <input
-            type="text"
-            placeholder="PC Name"
-            value={pcFormName}
-            onChange={(e) => setPcFormName(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
-          <input
-            type="text"
-            placeholder="IP Address (Optional)"
-            value={pcFormIp}
-            onChange={(e) => setPcFormIp(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          />
-          <input
-            type="text"
-            placeholder="Description (Optional)"
-            value={pcFormDesc}
-            onChange={(e) => setPcFormDesc(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          />
-          <div className="flex space-x-3 justify-end">
-            {editingPc && (
+      {/* Add/Edit PC Form (Collapsible) */}
+      <div className="bg-white rounded-lg shadow-sm border border-blue-200">
+        <div
+          className="flex justify-between items-center p-5 cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors duration-200 rounded-t-lg"
+          onClick={() => setIsAddPcFormExpanded(!isAddPcFormExpanded)}
+        >
+          <h3 className="text-xl font-bold text-blue-700 flex items-center">
+            <PlusCircle size={20} className="mr-2" />{" "}
+            {editingPc ? "Edit PC" : "Add New PC"}
+          </h3>
+          {isAddPcFormExpanded ? (
+            <ChevronUp size={20} />
+          ) : (
+            <ChevronDown size={20} />
+          )}
+        </div>
+        <div
+          className={`collapsible-content ${
+            isAddPcFormExpanded ? "expanded" : ""
+          }`}
+        >
+          <form onSubmit={handlePcFormSubmit} className="p-5 space-y-3">
+            <input
+              type="text"
+              placeholder="PC Name"
+              value={pcFormName}
+              onChange={(e) => setPcFormName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+            <input
+              type="text"
+              placeholder="IP Address (Optional)"
+              value={pcFormIp}
+              onChange={(e) => setPcFormIp(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Description (Optional)"
+              value={pcFormDesc}
+              onChange={(e) => setPcFormDesc(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <div className="flex space-x-3 justify-end">
+              {editingPc && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPc(null);
+                    setPcFormName("");
+                    setPcFormIp("");
+                    setPcFormDesc("");
+                    setIsAddPcFormExpanded(false); // Collapse form on cancel
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
+                >
+                  Cancel Edit
+                </button>
+              )}
               <button
-                type="button"
-                onClick={() => {
-                  setEditingPc(null);
-                  setPcFormName("");
-                  setPcFormIp("");
-                  setPcFormDesc("");
-                }}
-                className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
+                type="submit"
+                className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors duration-200"
               >
-                Cancel Edit
+                {editingPc ? "Update PC" : "Add PC"}
               </button>
-            )}
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors duration-200"
-            >
-              {editingPc ? "Update PC" : "Add PC"}
-            </button>
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* PC List Display */}

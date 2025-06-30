@@ -1,7 +1,8 @@
 // frontend/src/components/ConnectionForm.js
 // This component provides forms to add new PCs, Patch Panels, Switches,
 // and to create or edit network connections between them.
-// Now, the "Add New" entity forms are collapsible for a cleaner UI.
+// Now, the "Add New" entity forms are collapsible for a cleaner UI, and
+// Patch Panel and Switch creation/editing use a location dropdown.
 
 import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, PlusCircle } from "lucide-react"; // Import icons for expand/collapse and add buttons
@@ -16,7 +17,9 @@ function ConnectionForm({
   setEditingConnection,
   onAddEntity,
   onShowPortStatus,
+  locations,
 }) {
+  // Added locations prop
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
@@ -34,12 +37,12 @@ function ConnectionForm({
   const [newPcDesc, setNewPcDesc] = useState("");
 
   const [newPpName, setNewPpName] = useState("");
-  const [newPpLocation, setNewPpLocation] = useState("");
+  const [newPpLocationId, setNewPpLocationId] = useState(""); // Changed to location_id
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
 
   const [newSwitchName, setNewSwitchName] = useState("");
   const [newSwitchIp, setNewSwitchIp] = useState("");
-  const [newSwitchLocation, setNewSwitchLocation] = useState("");
+  const [newSwitchLocationId, setNewSwitchLocationId] = useState(""); // Changed to location_id
   const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
 
   // Populate form fields if editing an existing connection
@@ -159,33 +162,39 @@ function ConnectionForm({
 
   const handleAddPp = async (e) => {
     e.preventDefault();
-    if (newPpName.trim()) {
+    if (newPpName.trim() && newPpLocationId) {
+      // location_id is now required
       await onAddEntity("patch_panels", {
         name: newPpName,
-        location: newPpLocation,
+        location_id: parseInt(newPpLocationId),
         total_ports: parseInt(newPpTotalPorts),
       });
       setNewPpName("");
-      setNewPpLocation("");
+      setNewPpLocationId("");
       setNewPpTotalPorts(1);
       setIsNewPpExpanded(false); // Collapse after adding
+    } else {
+      alert("Patch Panel Name and Location are required.");
     }
   };
 
   const handleAddSwitch = async (e) => {
     e.preventDefault();
-    if (newSwitchName.trim()) {
+    if (newSwitchName.trim() && newSwitchLocationId) {
+      // location_id is now required
       await onAddEntity("switches", {
         name: newSwitchName,
         ip_address: newSwitchIp,
-        location: newSwitchLocation,
+        location_id: parseInt(newSwitchLocationId),
         total_ports: parseInt(newSwitchTotalPorts),
       });
       setNewSwitchName("");
       setNewSwitchIp("");
-      setNewSwitchLocation("");
+      setNewSwitchLocationId("");
       setNewSwitchTotalPorts(1);
       setIsNewSwitchExpanded(false); // Collapse after adding
+    } else {
+      alert("Switch Name and Location are required.");
     }
   };
 
@@ -275,13 +284,24 @@ function ConnectionForm({
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 required
               />
-              <input
-                type="text"
-                placeholder="Location (Optional)"
-                value={newPpLocation}
-                onChange={(e) => setNewPpLocation(e.target.value)}
+              <select
+                value={newPpLocationId}
+                onChange={(e) => setNewPpLocationId(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
+                required
+              >
+                <option value="">-- Select Location --</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+              {locations.length === 0 && (
+                <p className="text-sm text-red-500 mt-1">
+                  Please add a location first (Go to Locations tab).
+                </p>
+              )}
               <input
                 type="number"
                 placeholder="Total Ports (e.g., 24)"
@@ -297,24 +317,7 @@ function ConnectionForm({
               >
                 Add Patch Panel
               </button>
-              {patchPanels.length > 0 && (
-                <select
-                  onChange={(e) =>
-                    onShowPortStatus("patch_panels", e.target.value)
-                  }
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    View Port Status for Existing PP
-                  </option>
-                  {patchPanels.map((pp) => (
-                    <option key={pp.id} value={pp.id}>
-                      {pp.name} ({pp.location})
-                    </option>
-                  ))}
-                </select>
-              )}
+              {/* Removed direct view port status button from this form, now handled in PatchPanelList */}
             </form>
           </div>
         </div>
@@ -355,13 +358,24 @@ function ConnectionForm({
                 onChange={(e) => setNewSwitchIp(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
-              <input
-                type="text"
-                placeholder="Location (Optional)"
-                value={newSwitchLocation}
-                onChange={(e) => setNewSwitchLocation(e.target.value)}
+              <select
+                value={newSwitchLocationId}
+                onChange={(e) => setNewSwitchLocationId(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
+                required
+              >
+                <option value="">-- Select Location --</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+              {locations.length === 0 && (
+                <p className="text-sm text-red-500 mt-1">
+                  Please add a location first (Go to Locations tab).
+                </p>
+              )}
               <input
                 type="number"
                 placeholder="Total Ports (e.g., 4)"
@@ -377,22 +391,7 @@ function ConnectionForm({
               >
                 Add Switch
               </button>
-              {switches.length > 0 && (
-                <select
-                  onChange={(e) => onShowPortStatus("switches", e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    View Port Status for Existing Switch
-                  </option>
-                  {switches.map((_switch) => (
-                    <option key={_switch.id} value={_switch.id}>
-                      {_switch.name} ({_switch.ip_address})
-                    </option>
-                  ))}
-                </select>
-              )}
+              {/* Removed direct view port status button from this form, now handled in SwitchList */}
             </form>
           </div>
         </div>
@@ -482,7 +481,7 @@ function ConnectionForm({
                 placeholder="e.g., Eth0/1, GigaPort-03"
                 value={switchPort}
                 onChange={(e) => setSwitchPort(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
@@ -548,7 +547,7 @@ function ConnectionForm({
                   <option value="">-- Select Patch Panel --</option>
                   {patchPanels.map((pp) => (
                     <option key={pp.id} value={pp.id}>
-                      {pp.name} ({pp.location})
+                      {pp.name} ({pp.location_name})
                     </option>
                   ))}
                 </select>

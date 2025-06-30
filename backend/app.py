@@ -24,6 +24,17 @@ migrate = Migrate(app, db)
 # --- Database Models ---
 # Define the structure of your data tables.
 
+class Location(db.Model): # New: Location Model
+    __tablename__ = 'locations'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False) # e.g., "Room 1", "Data Center"
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name
+        }
+
 class PC(db.Model):
     __tablename__ = 'pcs'
     id = db.Column(db.Integer, primary_key=True)
@@ -43,23 +54,28 @@ class PatchPanel(db.Model):
     __tablename__ = 'patch_panels'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    location = db.Column(db.String(255))
+    # Changed from string 'location' to ForeignKey 'location_id'
+    location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
+    location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
-            'location': self.location,
+            'location_id': self.location_id,
+            'location_name': self.location.name if self.location else None, # Include location name for frontend
             'total_ports': self.total_ports
         }
 
-class Switch(db.Model): # Renamed from Server to Switch
-    __tablename__ = 'switches' # Renamed table from 'servers' to 'switches'
+class Switch(db.Model):
+    __tablename__ = 'switches'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     ip_address = db.Column(db.String(100))
-    location = db.Column(db.String(255))
+    # Changed from string 'location' to ForeignKey 'location_id'
+    location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
+    location = db.relationship('Location', backref='switches_in_location', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
 
     def to_dict(self):
@@ -67,7 +83,8 @@ class Switch(db.Model): # Renamed from Server to Switch
             'id': self.id,
             'name': self.name,
             'ip_address': self.ip_address,
-            'location': self.location,
+            'location_id': self.location_id,
+            'location_name': self.location.name if self.location else None, # Include location name for frontend
             'total_ports': self.total_ports
         }
 
@@ -75,12 +92,12 @@ class Connection(db.Model):
     __tablename__ = 'connections'
     id = db.Column(db.Integer, primary_key=True)
     pc_id = db.Column(db.Integer, db.ForeignKey('pcs.id'), nullable=False)
-    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False) # Renamed from server_id to switch_id
-    switch_port = db.Column(db.String(50), nullable=False) # Renamed from server_port to switch_port
-    is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True) # Renamed from is_server_port_up
+    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
+    switch_port = db.Column(db.String(50), nullable=False)
+    is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
 
     pc = db.relationship('PC', backref='connections_as_pc', lazy=True)
-    switch = db.relationship('Switch', backref='connections_as_switch', lazy=True) # Renamed from server to switch
+    switch = db.relationship('Switch', backref='connections_as_switch', lazy=True)
     hops = db.relationship('ConnectionHop', backref='connection', lazy=True, cascade="all, delete-orphan", order_by="ConnectionHop.sequence")
 
 
@@ -89,9 +106,9 @@ class Connection(db.Model):
             'id': self.id,
             'pc': self.pc.to_dict() if self.pc else None,
             'hops': [hop.to_dict() for hop in self.hops],
-            'switch': self.switch.to_dict() if self.switch else None, # Renamed from server to switch
-            'switch_port': self.switch_port, # Renamed from server_port
-            'is_switch_port_up': self.is_switch_port_up # Renamed from is_server_port_up
+            'switch': self.switch.to_dict() if self.switch else None,
+            'switch_port': self.switch_port,
+            'is_switch_port_up': self.is_switch_port_up
         }
 
 class ConnectionHop(db.Model):
@@ -137,10 +154,10 @@ def validate_port_occupancy(target_id, port_number, entity_type, exclude_connect
         conflicting_hop = conflicting_hops.first()
         if conflicting_hop:
             return True, conflicting_hop.connection.pc.name if conflicting_hop.connection.pc else "Unknown PC"
-    elif entity_type == 'switch': # Renamed from 'server' to 'switch'
+    elif entity_type == 'switch':
         conflicting_connections = Connection.query.options(joinedload(Connection.pc)).filter(
-            Connection.switch_id == target_id, # Renamed from server_id
-            Connection.switch_port == port_number # Renamed from server_port
+            Connection.switch_id == target_id,
+            Connection.switch_port == port_number
         )
         if exclude_connection_id:
             conflicting_connections = conflicting_connections.filter(Connection.id != exclude_connection_id)
@@ -149,6 +166,50 @@ def validate_port_occupancy(target_id, port_number, entity_type, exclude_connect
         if conflicting_connection:
             return True, conflicting_connection.pc.name if conflicting_connection.pc else "Unknown PC"
     return False, None
+
+# Location Endpoints (New)
+@app.route('/locations', methods=['GET', 'POST'])
+def handle_locations():
+    if request.method == 'POST':
+        data = request.json
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Location name is required'}), 400
+        new_location = Location(name=data['name'])
+        try:
+            db.session.add(new_location)
+            db.session.commit()
+            return jsonify(new_location.to_dict()), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    else: # GET
+        locations = Location.query.all()
+        return jsonify([location.to_dict() for location in locations])
+
+@app.route('/locations/<int:location_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_location_by_id(location_id):
+    location = Location.query.get_or_404(location_id)
+    if request.method == 'GET':
+        return jsonify(location.to_dict())
+    elif request.method == 'PUT':
+        data = request.json
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Location name is required'}), 400
+        location.name = data.get('name', location.name)
+        try:
+            db.session.commit()
+            return jsonify(location.to_dict())
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    else: # DELETE
+        try:
+            db.session.delete(location)
+            db.session.commit()
+            return jsonify({'message': 'Location deleted successfully'}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
 
 
 # PC Endpoints
@@ -197,7 +258,7 @@ def handle_pc_by_id(pc_id):
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-# Patch Panel Endpoints
+# Patch Panel Endpoints (updated to use location_id)
 @app.route('/patch_panels', methods=['GET', 'POST'])
 def handle_patch_panels():
     if request.method == 'POST':
@@ -207,7 +268,7 @@ def handle_patch_panels():
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_pp = PatchPanel(
             name=data['name'],
-            location=data.get('location'),
+            location_id=data.get('location_id'), # Use location_id
             total_ports=total_ports
         )
         try:
@@ -218,7 +279,7 @@ def handle_patch_panels():
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # GET
-        patch_panels = PatchPanel.query.all()
+        patch_panels = PatchPanel.query.options(joinedload(PatchPanel.location)).all() # Eager load location
         return jsonify([pp.to_dict() for pp in patch_panels])
 
 @app.route('/patch_panels/<int:pp_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -231,7 +292,7 @@ def handle_patch_panel_by_id(pp_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
         pp.name = data.get('name', pp.name)
-        pp.location = data.get('location', pp.location)
+        pp.location_id = data.get('location_id', pp.location_id) # Update location_id
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
         try:
             db.session.commit()
@@ -248,82 +309,82 @@ def handle_patch_panel_by_id(pp_id):
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-# Switch Endpoints (Renamed from Server Endpoints)
-@app.route('/switches', methods=['GET', 'POST']) # Renamed endpoint
-def handle_switches(): # Renamed function
+# Switch Endpoints (updated to use location_id)
+@app.route('/switches', methods=['GET', 'POST'])
+def handle_switches():
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Switch name is required'}), 400
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
-        new_switch = Switch( # Renamed from new_server
+        new_switch = Switch(
             name=data['name'],
             ip_address=data.get('ip_address'),
-            location=data.get('location'),
+            location_id=data.get('location_id'), # Use location_id
             total_ports=total_ports
         )
         try:
-            db.session.add(new_switch) # Renamed from new_server
+            db.session.add(new_switch)
             db.session.commit()
-            return jsonify(new_switch.to_dict()), 201 # Renamed from new_server
+            return jsonify(new_switch.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # GET
-        switches = Switch.query.all() # Renamed from servers
-        return jsonify([_switch.to_dict() for _switch in switches]) # Renamed from server
+        switches = Switch.query.options(joinedload(Switch.location)).all() # Eager load location
+        return jsonify([_switch.to_dict() for _switch in switches])
 
-@app.route('/switches/<int:switch_id>', methods=['GET', 'PUT', 'DELETE']) # Renamed endpoint
-def handle_switch_by_id(switch_id): # Renamed function
-    _switch = Switch.query.get_or_404(switch_id) # Renamed from server
+@app.route('/switches/<int:switch_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_switch_by_id(switch_id):
+    _switch = Switch.query.get_or_404(switch_id)
     if request.method == 'GET':
-        return jsonify(_switch.to_dict()) # Renamed from server
+        return jsonify(_switch.to_dict())
     elif request.method == 'PUT':
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
-        _switch.name = data.get('name', _switch.name) # Renamed from server
-        _switch.ip_address = data.get('ip_address', _switch.ip_address) # Renamed from server
-        _switch.location = data.get('location', _switch.location) # Renamed from server
-        _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports # Renamed from server
+        _switch.name = data.get('name', _switch.name)
+        _switch.ip_address = data.get('ip_address', _switch.ip_address)
+        _switch.location_id = data.get('location_id', _switch.location_id) # Update location_id
+        _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports
         try:
             db.session.commit()
-            return jsonify(_switch.to_dict()) # Renamed from server
+            return jsonify(_switch.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # DELETE
         try:
-            db.session.delete(_switch) # Renamed from server
+            db.session.delete(_switch)
             db.session.commit()
             return jsonify({'message': 'Switch deleted successfully'}), 200
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-# Connection Endpoints (updated for multi-hop, port status, and validation)
+# Connection Endpoints
 @app.route('/connections', methods=['GET', 'POST'])
 def handle_connections():
     if request.method == 'POST':
         data = request.json
-        required_fields = ['pc_id', 'switch_id', 'switch_port', 'is_switch_port_up', 'hops'] # Renamed server_id, server_port, is_server_port_up
+        required_fields = ['pc_id', 'switch_id', 'switch_port', 'is_switch_port_up', 'hops']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields for connection'}), 400
 
-        # Validate Switch Port occupancy (Renamed from Server Port)
+        # Validate Switch Port occupancy
         is_occupied, conflicting_pc = validate_port_occupancy(
-            target_id=data['switch_id'], # Renamed from server_id
-            port_number=data['switch_port'], # Renamed from server_port
-            entity_type='switch' # Renamed from 'server'
+            target_id=data['switch_id'],
+            port_number=data['switch_port'],
+            entity_type='switch'
         )
         if is_occupied:
             return jsonify({'error': f'Switch port {data["switch_port"]} is already in use by PC: {conflicting_pc}'}), 409 # Conflict
 
         new_connection = Connection(
             pc_id=data['pc_id'],
-            switch_id=data['switch_id'], # Renamed from server_id
-            switch_port=data['switch_port'], # Renamed from server_port
-            is_switch_port_up=data['is_switch_port_up'] # Renamed from is_server_port_up
+            switch_id=data['switch_id'],
+            switch_port=data['switch_port'],
+            is_switch_port_up=data['is_switch_port_up']
         )
         db.session.add(new_connection)
         db.session.flush() # Flush to get new_connection.id for hops
@@ -364,8 +425,8 @@ def handle_connections():
         # Eager load related data to avoid N+1 queries when converting to dicts
         connections = Connection.query.options(
             joinedload(Connection.pc),
-            joinedload(Connection.switch), # Renamed from Connection.server
-            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel)
+            joinedload(Connection.switch),
+            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location) # Load location for PP
         ).all()
         return jsonify([conn.to_dict() for conn in connections])
 
@@ -379,21 +440,21 @@ def handle_connection_by_id(conn_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
 
-        # Validate Switch Port occupancy (excluding current connection) (Renamed from Server Port)
-        if 'switch_id' in data and 'switch_port' in data: # Renamed
+        # Validate Switch Port occupancy (excluding current connection)
+        if 'switch_id' in data and 'switch_port' in data:
             is_occupied, conflicting_pc = validate_port_occupancy(
-                target_id=data['switch_id'], # Renamed
-                port_number=data['switch_port'], # Renamed
-                entity_type='switch', # Renamed
-                exclude_connection_id=conn_id # Exclude current connection from conflict check
+                target_id=data['switch_id'],
+                port_number=data['switch_port'],
+                entity_type='switch',
+                exclude_connection_id=conn_id
             )
             if is_occupied:
                 return jsonify({'error': f'Switch port {data["switch_port"]} is already in use by PC: {conflicting_pc}'}), 409
 
         connection.pc_id = data.get('pc_id', connection.pc_id)
-        connection.switch_id = data.get('switch_id', connection.switch_id) # Renamed
-        connection.switch_port = data.get('switch_port', connection.switch_port) # Renamed
-        connection.is_switch_port_up = data.get('is_switch_port_up', connection.is_switch_port_up) # Renamed
+        connection.switch_id = data.get('switch_id', connection.switch_id)
+        connection.switch_port = data.get('switch_port', connection.switch_port)
+        connection.is_switch_port_up = data.get('is_switch_port_up', connection.is_switch_port_up)
 
         # Handle hops update: delete existing and re-add
         if 'hops' in data:
@@ -413,7 +474,7 @@ def handle_connection_by_id(conn_id):
                     target_id=hop_data['patch_panel_id'],
                     port_number=hop_data['patch_panel_port'],
                     entity_type='patch_panel',
-                    exclude_connection_id=conn_id # Exclude current connection from conflict check
+                    exclude_connection_id=conn_id
                 )
                 if is_occupied:
                     db.session.rollback()
@@ -447,7 +508,7 @@ def handle_connection_by_id(conn_id):
 # New API Endpoints for Port Availability
 @app.route('/patch_panels/<int:pp_id>/ports', methods=['GET'])
 def get_patch_panel_ports(pp_id):
-    patch_panel = PatchPanel.query.get_or_404(pp_id)
+    patch_panel = PatchPanel.query.options(joinedload(PatchPanel.location)).get_or_404(pp_id) # Load location
     
     try:
         total_ports_int = int(patch_panel.total_ports)
@@ -487,34 +548,35 @@ def get_patch_panel_ports(pp_id):
     return jsonify({
         'patch_panel_id': pp_id,
         'patch_panel_name': patch_panel.name,
+        'patch_panel_location': patch_panel.location.name if patch_panel.location else None, # Include location name
         'total_ports': patch_panel.total_ports,
         'ports': port_status
     })
 
-@app.route('/switches/<int:switch_id>/ports', methods=['GET']) # Renamed endpoint
-def get_switch_ports(switch_id): # Renamed function
-    _switch = Switch.query.get_or_404(switch_id) # Renamed from server
+@app.route('/switches/<int:switch_id>/ports', methods=['GET'])
+def get_switch_ports(switch_id):
+    _switch = Switch.query.options(joinedload(Switch.location)).get_or_404(switch_id) # Load location
     
     try:
-        total_ports_int = int(_switch.total_ports) # Renamed from server
+        total_ports_int = int(_switch.total_ports)
     except (ValueError, TypeError):
         total_ports_int = 0
 
     all_ports = list(range(1, total_ports_int + 1))
 
     used_connections = Connection.query.options(joinedload(Connection.pc)).filter(
-        Connection.switch_id == switch_id # Renamed from server_id
+        Connection.switch_id == switch_id
     ).all()
 
     connected_ports_info = {}
     for conn in used_connections:
         try:
-            port_num = int(conn.switch_port) # Renamed from server_port
+            port_num = int(conn.switch_port)
             if 1 <= port_num <= total_ports_int:
                 connected_ports_info[port_num] = {
                     'connected_by_pc': conn.pc.name if conn.pc else "Unknown PC",
                     'connection_id': conn.id,
-                    'is_up': conn.is_switch_port_up # Renamed from is_server_port_up
+                    'is_up': conn.is_switch_port_up
                 }
         except (ValueError, TypeError):
             continue
@@ -531,9 +593,10 @@ def get_switch_ports(switch_id): # Renamed function
         })
 
     return jsonify({
-        'switch_id': switch_id, # Renamed from server_id
-        'switch_name': _switch.name, # Renamed from server_name
-        'total_ports': _switch.total_ports, # Renamed from total_ports
+        'switch_id': switch_id,
+        'switch_name': _switch.name,
+        'switch_location': _switch.location.name if _switch.location else None, # Include location name
+        'total_ports': _switch.total_ports,
         'ports': port_status
     })
 

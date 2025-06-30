@@ -3,7 +3,16 @@
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
-import { Server, Router, MapPin, Info, HardDrive } from "lucide-react"; // Icons for Switch details
+import {
+  Server,
+  Router,
+  MapPin,
+  Info,
+  PlusCircle,
+  ChevronDown,
+  ChevronUp,
+  HardDrive,
+} from "lucide-react"; // Icons for Switch details and collapse/expand
 
 function SwitchList({
   switches,
@@ -11,14 +20,18 @@ function SwitchList({
   onUpdateEntity,
   onDeleteEntity,
   onShowPortStatus,
+  locations,
 }) {
+  // Added locations prop
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSwitches, setFilteredSwitches] = useState([]);
   const [editingSwitch, setEditingSwitch] = useState(null); // State for editing a Switch
   const [switchFormName, setSwitchFormName] = useState("");
   const [switchFormIp, setSwitchFormIp] = useState("");
-  const [switchFormLocation, setSwitchFormLocation] = useState("");
+  const [switchFormLocationId, setSwitchFormLocationId] = useState(""); // Changed to location_id
   const [switchFormTotalPorts, setSwitchFormTotalPorts] = useState(1);
+
+  const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false); // State for collapsible add form
 
   // Filter Switches based on search term
   useEffect(() => {
@@ -29,7 +42,9 @@ function SwitchList({
         (_switch.ip_address || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
-        (_switch.location || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (_switch.location_name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // Search by location_name
         String(_switch.total_ports).includes(lowerCaseSearchTerm)
     );
     setFilteredSwitches(filtered);
@@ -40,8 +55,9 @@ function SwitchList({
     setEditingSwitch(_switch);
     setSwitchFormName(_switch.name);
     setSwitchFormIp(_switch.ip_address || "");
-    setSwitchFormLocation(_switch.location || "");
+    setSwitchFormLocationId(_switch.location_id || ""); // Set location_id for editing
     setSwitchFormTotalPorts(_switch.total_ports);
+    setIsAddSwitchFormExpanded(true); // Expand form when editing
   };
 
   // Handle form submission for Add/Update Switch
@@ -50,7 +66,7 @@ function SwitchList({
     const switchData = {
       name: switchFormName,
       ip_address: switchFormIp,
-      location: switchFormLocation,
+      location_id: parseInt(switchFormLocationId), // Send location_id
       total_ports: parseInt(switchFormTotalPorts),
     };
 
@@ -62,8 +78,9 @@ function SwitchList({
     setEditingSwitch(null); // Clear editing state
     setSwitchFormName(""); // Clear form fields
     setSwitchFormIp("");
-    setSwitchFormLocation("");
+    setSwitchFormLocationId(""); // Clear location_id
     setSwitchFormTotalPorts(1);
+    setIsAddSwitchFormExpanded(false); // Collapse form after submission
   };
 
   return (
@@ -71,67 +88,96 @@ function SwitchList({
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      {/* Add/Edit Switch Form */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200">
-        <h3 className="text-xl font-bold text-blue-700 mb-4">
-          {editingSwitch ? "Edit Switch" : "Add New Switch"}
-        </h3>
-        <form onSubmit={handleSwitchFormSubmit} className="space-y-3">
-          <input
-            type="text"
-            placeholder="Switch Name"
-            value={switchFormName}
-            onChange={(e) => setSwitchFormName(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
-          <input
-            type="text"
-            placeholder="IP Address (Optional)"
-            value={switchFormIp}
-            onChange={(e) => setSwitchFormIp(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          />
-          <input
-            type="text"
-            placeholder="Location (Optional)"
-            value={switchFormLocation}
-            onChange={(e) => setSwitchFormLocation(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          />
-          <input
-            type="number"
-            placeholder="Total Ports (e.g., 4)"
-            value={switchFormTotalPorts}
-            onChange={(e) => setSwitchFormTotalPorts(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            min="1"
-            required
-          />
-          <div className="flex space-x-3 justify-end">
-            {editingSwitch && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingSwitch(null);
-                  setSwitchFormName("");
-                  setSwitchFormIp("");
-                  setSwitchFormLocation("");
-                  setSwitchFormTotalPorts(1);
-                }}
-                className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
-              >
-                Cancel Edit
-              </button>
-            )}
-            <button
-              type="submit"
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200"
+      {/* Add/Edit Switch Form (Collapsible) */}
+      <div className="bg-white rounded-lg shadow-sm border border-blue-200">
+        <div
+          className="flex justify-between items-center p-5 cursor-pointer bg-red-50 hover:bg-red-100 transition-colors duration-200 rounded-t-lg"
+          onClick={() => setIsAddSwitchFormExpanded(!isAddSwitchFormExpanded)}
+        >
+          <h3 className="text-xl font-bold text-red-700 flex items-center">
+            <PlusCircle size={20} className="mr-2" />{" "}
+            {editingSwitch ? "Edit Switch" : "Add New Switch"}
+          </h3>
+          {isAddSwitchFormExpanded ? (
+            <ChevronUp size={20} />
+          ) : (
+            <ChevronDown size={20} />
+          )}
+        </div>
+        <div
+          className={`collapsible-content ${
+            isAddSwitchFormExpanded ? "expanded" : ""
+          }`}
+        >
+          <form onSubmit={handleSwitchFormSubmit} className="p-5 space-y-3">
+            <input
+              type="text"
+              placeholder="Switch Name"
+              value={switchFormName}
+              onChange={(e) => setSwitchFormName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+            <input
+              type="text"
+              placeholder="IP Address (Optional)"
+              value={switchFormIp}
+              onChange={(e) => setSwitchFormIp(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <select
+              value={switchFormLocationId}
+              onChange={(e) => setSwitchFormLocationId(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              required
             >
-              {editingSwitch ? "Update Switch" : "Add Switch"}
-            </button>
-          </div>
-        </form>
+              <option value="">-- Select Location --</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            {locations.length === 0 && (
+              <p className="text-sm text-red-500 mt-1">
+                Please add a location first (Go to Locations tab).
+              </p>
+            )}
+            <input
+              type="number"
+              placeholder="Total Ports (e.g., 4)"
+              value={switchFormTotalPorts}
+              onChange={(e) => setSwitchFormTotalPorts(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              required
+            />
+            <div className="flex space-x-3 justify-end">
+              {editingSwitch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSwitch(null);
+                    setSwitchFormName("");
+                    setSwitchFormIp("");
+                    setSwitchFormLocationId("");
+                    setSwitchFormTotalPorts(1);
+                    setIsAddSwitchFormExpanded(false); // Collapse form on cancel
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
+                >
+                  Cancel Edit
+                </button>
+              )}
+              <button
+                type="submit"
+                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200"
+              >
+                {editingSwitch ? "Update Switch" : "Add Switch"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Switch List Display */}
@@ -152,7 +198,7 @@ function SwitchList({
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {_switch.location || "N/A"}
+                {_switch.location_name || "N/A"} {/* Display location name */}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Total

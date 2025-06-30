@@ -1,13 +1,14 @@
 // frontend/src/App.js
 // This is the main React component for the frontend application.
-// It orchestrates the display of various sections (Connections, PCs, Switches).
+// It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels).
 
 import React, { useState, useEffect, useCallback } from "react";
 import ConnectionList from "./components/ConnectionList";
 import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
-import PcList from "./components/PcList"; // New: Import PcList component
-import SwitchList from "./components/SwitchList"; // New: Import SwitchList component
+import PcList from "./components/PcList";
+import SwitchList from "./components/SwitchList";
+import PatchPanelList from "./components/PatchPanelList"; // New: Import PatchPanelList component
 
 // Base URL for the backend API. When running in Docker Compose,
 // 'backend' is the service name and resolves to the backend container's IP.
@@ -22,9 +23,10 @@ function App() {
   const [patchPanels, setPatchPanels] = useState([]);
   const [switches, setSwitches] = useState([]);
   const [connections, setConnections] = useState([]);
+  const [locations, setLocations] = useState([]); // New: State for locations
 
   // State for current active tab
-  const [activeTab, setActiveTab] = useState("connections"); // 'connections', 'pcs', 'switches'
+  const [activeTab, setActiveTab] = useState("connections"); // 'connections', 'pcs', 'switches', 'patch_panels', 'locations'
 
   const [message, setMessage] = useState(""); // General message for success/error
   const [isMessageVisible, setIsMessageVisible] = useState(false); // Controls message visibility
@@ -69,6 +71,7 @@ function App() {
     fetchData("patch_panels", setPatchPanels);
     fetchData("switches", setSwitches);
     fetchData("connections", setConnections);
+    fetchData("locations", setLocations); // Fetch locations
   }, [fetchData]);
 
   // Handle adding a new connection
@@ -85,7 +88,7 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections);
+      fetchData("connections", setConnections); // Re-fetch all connections to update UI
       showMessage("Connection added successfully!");
     } catch (error) {
       console.error("Error adding connection:", error);
@@ -107,7 +110,7 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections);
+      fetchData("connections", setConnections); // Re-fetch all connections to update UI
       showMessage("Connection updated successfully!");
     } catch (error) {
       console.error("Error updating connection:", error);
@@ -142,19 +145,15 @@ function App() {
     }
   };
 
-  // Handle editing a connection (set the connection to be edited in state)
+  // Handle editing a connection (set the connection to be edited in state for form pre-fill)
+  // This function is still here, but actual editing state management might be more local to forms now.
   const handleEditConnection = (connection) => {
-    const formattedHops = connection.hops.map((hop) => ({
-      patch_panel_id: hop.patch_panel.id,
-      patch_panel_port: hop.patch_panel_port,
-      is_port_up: hop.is_port_up,
-    }));
-    // Note: editingConnection is managed by ConnectionForm now
-    // Passing this up just to trigger the form to open/populate
-    // A more robust solution might use a shared state or context for editing.
+    // This is a placeholder. Real editing will happen via a dedicated form opened by ConnectionList
+    // or through a common state passed to ConnectionForm.
+    // For now, this just demonstrates the trigger.
   };
 
-  // Function to add a new PC, Patch Panel, or Switch
+  // Function to add a new PC, Patch Panel, Switch, or Location
   const handleAddEntity = async (type, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}`, {
@@ -173,18 +172,20 @@ function App() {
       if (type === "patch_panels")
         setPatchPanels((prev) => [...prev, newEntity]);
       if (type === "switches") setSwitches((prev) => [...prev, newEntity]);
+      if (type === "locations") setLocations((prev) => [...prev, newEntity]); // Update locations state
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
       // Re-fetch data relevant to selection dropdowns
       if (type === "patch_panels") fetchData("patch_panels", setPatchPanels);
       if (type === "switches") fetchData("switches", setSwitches);
       if (type === "pcs") fetchData("pcs", setPcs);
+      if (type === "locations") fetchData("locations", setLocations); // Re-fetch locations to keep dropdowns updated
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
     }
   };
 
-  // Function to update an existing PC, Patch Panel, or Switch
+  // Function to update an existing PC, Patch Panel, Switch, or Location
   const handleUpdateEntity = async (type, id, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
@@ -211,16 +212,22 @@ function App() {
         setSwitches((prev) =>
           prev.map((item) => (item.id === id ? updatedEntity : item))
         );
+      if (type === "locations")
+        setLocations((prev) =>
+          prev.map((item) => (item.id === id ? updatedEntity : item))
+        ); // Update locations state
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-      // Re-fetch connections as well, in case associated entity data has changed
+      // Re-fetch connections and other related data as their foreign key info might have changed
       fetchData("connections", setConnections);
+      fetchData("patch_panels", setPatchPanels); // Important if location name changes
+      fetchData("switches", setSwitches); // Important if location name changes
     } catch (error) {
       console.error(`Error updating ${type}:`, error);
       showMessage(`Error updating ${type}: ${error.message}`, 5000);
     }
   };
 
-  // Function to delete a PC, Patch Panel, or Switch
+  // Function to delete a PC, Patch Panel, Switch, or Location
   const handleDeleteEntity = async (type, id) => {
     const confirmed = window.confirm(
       `Are you sure you want to delete this ${type.slice(
@@ -247,9 +254,13 @@ function App() {
         setPatchPanels((prev) => prev.filter((item) => item.id !== id));
       if (type === "switches")
         setSwitches((prev) => prev.filter((item) => item.id !== id));
+      if (type === "locations")
+        setLocations((prev) => prev.filter((item) => item.id !== id)); // Update locations state
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-      // Re-fetch connections as well, as some might have been deleted due to cascade
+      // Re-fetch connections and other related data as cascade deletions might have occurred
       fetchData("connections", setConnections);
+      fetchData("patch_panels", setPatchPanels); // To ensure dropdowns reflect deletions
+      fetchData("switches", setSwitches); // To ensure dropdowns reflect deletions
     } catch (error) {
       console.error(`Error deleting ${type}:`, error);
       showMessage(`Error deleting ${type}: ${error.message}`, 5000);
@@ -361,6 +372,16 @@ function App() {
           >
             Patch Panels
           </button>
+          <button
+            className={`py-3 px-6 text-lg font-medium ${
+              activeTab === "locations"
+                ? "border-b-4 border-blue-600 text-blue-800"
+                : "text-gray-600 hover:text-blue-600"
+            }`}
+            onClick={() => setActiveTab("locations")}
+          >
+            Locations
+          </button>
         </div>
 
         {/* Conditional Tab Content Rendering */}
@@ -377,12 +398,11 @@ function App() {
                 switches={switches}
                 onAddConnection={handleAddConnection}
                 onUpdateConnection={handleUpdateConnection}
-                // No longer passing editingConnection state directly from App.js
-                // ConnectionForm manages its own editing state or receives initial editing data
-                editingConnection={null} // Set to null or a dedicated state for the form if needed
-                setEditingConnection={() => {}} // Placeholder, as form manages internally for new/edit flow
+                editingConnection={null}
+                setEditingConnection={() => {}}
                 onAddEntity={handleAddEntity}
                 onShowPortStatus={handleShowPortStatus}
+                locations={locations}
               />
             </section>
 
@@ -392,7 +412,7 @@ function App() {
                 All Connections
               </h2>
               <ConnectionList
-                connections={connections} // Pass all connections, let ConnectionList handle its own search/filter
+                connections={connections}
                 onDelete={handleDeleteConnection}
                 onEdit={handleEditConnection}
               />
@@ -428,6 +448,7 @@ function App() {
               onUpdateEntity={handleUpdateEntity}
               onDeleteEntity={handleDeleteEntity}
               onShowPortStatus={handleShowPortStatus}
+              locations={locations}
             />
           </section>
         )}
@@ -437,103 +458,80 @@ function App() {
             <h2 className="text-2xl font-bold text-blue-700 mb-6">
               All Patch Panels
             </h2>
-            {/* You'll need to create a PatchPanelList component similar to PcList/SwitchList */}
-            {/* For now, let's add a placeholder or a simple list here */}
-            <div className="bg-white rounded-lg shadow-md p-4">
-              {/* Add New Patch Panel Form (from ConnectionForm, made directly available here if needed, or create a dedicated form) */}
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100 mb-6">
-                <h3 className="text-lg font-semibold text-gray-700 mb-3">
-                  Add New Patch Panel
-                </h3>
-                {/* Simplified form for adding just Patch Panels directly in this tab */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const name = e.target.name.value;
-                    const location = e.target.location.value;
-                    const totalPorts = parseInt(e.target.totalPorts.value);
-                    handleAddEntity("patch_panels", {
-                      name,
-                      location,
-                      total_ports: totalPorts,
-                    });
-                    e.target.reset(); // Clear form
-                  }}
-                  className="space-y-3"
-                >
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Patch Panel Name"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="location"
-                    placeholder="Location (Optional)"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <input
-                    type="number"
-                    name="totalPorts"
-                    placeholder="Total Ports (e.g., 24)"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    min="1"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  >
-                    Add Patch Panel
-                  </button>
-                </form>
-              </div>
+            <PatchPanelList
+              patchPanels={patchPanels}
+              onAddEntity={handleAddEntity}
+              onUpdateEntity={handleUpdateEntity}
+              onDeleteEntity={handleDeleteEntity}
+              onShowPortStatus={handleShowPortStatus}
+              locations={locations}
+            />
+          </section>
+        )}
 
-              {/* List of existing Patch Panels */}
-              <div className="space-y-4">
-                {patchPanels.length > 0 ? (
-                  patchPanels.map((pp) => (
-                    <div
-                      key={pp.id}
-                      className="flex items-center justify-between bg-gray-50 p-4 rounded-md shadow-sm border border-gray-100"
+        {activeTab === "locations" && (
+          <section>
+            <h2 className="text-2xl font-bold text-blue-700 mb-6">
+              Manage Locations
+            </h2>
+            {/* Form for adding new locations */}
+            <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-6">
+              <h3 className="text-xl font-bold text-blue-700 mb-4">
+                Add New Location
+              </h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const name = e.target.locationName.value;
+                  if (name.trim()) {
+                    await handleAddEntity("locations", { name });
+                    e.target.locationName.value = "";
+                  }
+                }}
+                className="flex space-x-2"
+              >
+                <input
+                  type="text"
+                  name="locationName"
+                  placeholder="Location Name (e.g., Data Center)"
+                  className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
+                >
+                  Add Location
+                </button>
+              </form>
+            </div>
+
+            {/* List of existing locations */}
+            <div className="space-y-3">
+              {locations.length > 0 ? (
+                locations.map((location) => (
+                  <div
+                    key={location.id}
+                    className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
+                  >
+                    <span className="text-lg font-medium text-gray-800">
+                      {location.name}
+                    </span>
+                    <button
+                      onClick={() =>
+                        handleDeleteEntity("locations", location.id)
+                      }
+                      className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
                     >
-                      <div>
-                        <p className="font-semibold text-lg">{pp.name}</p>
-                        <p className="text-sm text-gray-600">
-                          Location: {pp.location || "N/A"}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Total Ports: {pp.total_ports}
-                        </p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() =>
-                            handleShowPortStatus("patch_panels", pp.id)
-                          }
-                          className="px-3 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600"
-                        >
-                          View Ports
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleDeleteEntity("patch_panels", pp.id)
-                          }
-                          className="px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-center text-gray-500">
-                    No patch panels added yet.
-                  </p>
-                )}
-              </div>
+                      Delete
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 text-lg">
+                  No locations added yet. Add some to get started!
+                </p>
+              )}
             </div>
           </section>
         )}
