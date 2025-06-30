@@ -1,34 +1,60 @@
 // frontend/src/components/PortStatusModal.js
 // This component displays a modal showing the status (connected/available)
 // of all ports for a given Patch Panel or Server.
+// It now includes separate collapse/expand functionality for the detailed port list and a print button.
 
-import React from 'react';
-import { XCircle, CheckCircle, CircleDot, WifiOff } from 'lucide-react'; // Added WifiOff to imports
+import React, { useState } from 'react';
+import { XCircle, CheckCircle, CircleDot, WifiOff, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 
 function PortStatusModal({ isOpen, onClose, data, entityType }) {
+  const [isDetailedListExpanded, setIsDetailedListExpanded] = useState(false); // New state for detailed list expansion, defaulting to collapsed
+
   if (!isOpen || !data) return null;
 
   const entityName = data.patch_panel_name || data.server_name || 'N/A';
   const totalPorts = data.total_ports || 0;
   const ports = data.ports || [];
 
+  const toggleDetailedList = () => {
+    setIsDetailedListExpanded(!isDetailedListExpanded);
+  };
+
+  const handlePrint = () => {
+    // Uses the browser's native print functionality.
+    // Users can choose "Save as PDF" from their browser's print dialog.
+    window.print();
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100 opacity-100">
-        <div className="p-6">
+        <div className="p-6 print-container">
           {/* Modal Header */}
-          <div className="flex justify-between items-center pb-3 border-b border-gray-200 mb-4">
+          <div className="flex justify-between items-center pb-3 border-b border-gray-200 mb-4 no-print">
             <h2 className="text-2xl font-bold text-gray-800">
               {entityType === 'patch_panels' ? 'Patch Panel' : 'Server'} Port Status: {entityName}
             </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
-              title="Close"
-            >
-              <XCircle size={24} />
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={handlePrint}
+                className="text-gray-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-100 transition-colors duration-200"
+                title="Print Report"
+              >
+                <Printer size={24} />
+              </button>
+              <button
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+                title="Close"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
           </div>
+          {/* Header for Print (visible only in print) */}
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 print-only">
+             {entityType === 'patch_panels' ? 'Patch Panel' : 'Server'} Port Status Report: {entityName}
+          </h2>
 
           {/* Summary */}
           <div className="mb-6 text-center text-lg text-gray-700">
@@ -37,8 +63,9 @@ function PortStatusModal({ isOpen, onClose, data, entityType }) {
             <p>Available Ports: <span className="font-semibold text-gray-500">{ports.filter(p => !p.is_connected).length}</span></p>
           </div>
 
-          {/* Port Grid */}
-          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3">
+          {/* Always visible Port Grid */}
+          <h3 className="text-xl font-semibold text-gray-700 mb-3 no-print">Port Details:</h3>
+          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3 no-print">
             {ports.map((port) => (
               <div
                 key={port.port_number}
@@ -67,8 +94,87 @@ function PortStatusModal({ isOpen, onClose, data, entityType }) {
             ))}
           </div>
 
+          {/* Collapse/Expand Button for Detailed Port List (no-print) */}
+          <div className="flex justify-between items-center mt-6 mb-4 cursor-pointer no-print" onClick={toggleDetailedList}>
+            <h3 className="text-xl font-semibold text-gray-700">Detailed Port List:</h3>
+            <button
+              className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+              title={isDetailedListExpanded ? "Collapse" : "Expand"}
+            >
+              {isDetailedListExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </button>
+          </div>
+
+          {/* Detailed List Content for View (no-print, collapsible) */}
+          <div className={`collapsible-content ${isDetailedListExpanded ? 'expanded py-4' : 'py-0'} no-print`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <h4 className="font-bold text-green-700 mb-2">Connected Ports:</h4>
+                    {ports.filter(p => p.is_connected).length > 0 ? (
+                        <ul className="list-disc list-inside space-y-1">
+                            {ports.filter(p => p.is_connected).map(port => (
+                                <li key={`view-conn-${port.port_number}`}>
+                                    Port {port.port_number}: Connected by {port.connected_by_pc} (Status: {port.is_up ? 'Up' : 'Down'})
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No connected ports.</p>
+                    )}
+                </div>
+                <div>
+                    <h4 className="font-bold text-gray-700 mb-2">Available Ports:</h4>
+                    {ports.filter(p => !p.is_connected).length > 0 ? (
+                        <ul className="list-disc list-inside space-y-1">
+                            {ports.filter(p => !p.is_connected).map(port => (
+                                <li key={`view-avail-${port.port_number}`}>
+                                    Port {port.port_number}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No available ports.</p>
+                    )}
+                </div>
+            </div>
+          </div>
+
+          {/* Detailed List for Print (print-only) */}
+          <div className="mt-6 print-only">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <h4 className="font-bold text-green-700 mb-2">Connected Ports:</h4>
+                    {ports.filter(p => p.is_connected).length > 0 ? (
+                        <ul className="list-disc list-inside space-y-1">
+                            {ports.filter(p => p.is_connected).map(port => (
+                                <li key={`print-conn-${port.port_number}`}>
+                                    Port {port.port_number}: Connected by {port.connected_by_pc} (Status: {port.is_up ? 'Up' : 'Down'})
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No connected ports.</p>
+                    )}
+                </div>
+                <div>
+                    <h4 className="font-bold text-gray-700 mb-2">Available Ports:</h4>
+                    {ports.filter(p => !p.is_connected).length > 0 ? (
+                        <ul className="list-disc list-inside space-y-1">
+                            {ports.filter(p => !p.is_connected).map(port => (
+                                <li key={`print-avail-${port.port_number}`}>
+                                    Port {port.port_number}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No available ports.</p>
+                    )}
+                </div>
+            </div>
+          </div>
+
           {/* Legend */}
-          <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap justify-center gap-4 text-sm text-gray-700">
+          <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap justify-center gap-4 text-sm text-gray-700 no-print">
             <div className="flex items-center">
               <CheckCircle size={18} className="text-green-500 mr-2" /> Connected & Up
             </div>
