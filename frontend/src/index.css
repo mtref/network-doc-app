@@ -54,7 +54,6 @@ body {
   /* Show elements that are only for print view */
   .print-only {
     display: block !important;
-    /* Ensure print-only content takes precedence */
     position: fixed; /* Use fixed to overlay everything */
     top: 0;
     left: 0;
@@ -67,35 +66,34 @@ body {
 
   /* General print container styling */
   body {
-    background-color: #fff !important; /* White background for print */
-    color: #000 !important; /* Black text for readability */
+    background-color: #fff !important;
+    color: #000 !important; /* Ensure black text for body */
     margin: 0;
     padding: 0;
   }
 
-  /* Removed print-page-break as it forces new pages */
-  /* .print-page-break {
-    page-break-after: always;
-  } */
-
-  /* Adjust font sizes for A4 to be much smaller */
+  /* Adjust font sizes for A4 to be much larger */
   h1 {
-    font-size: 18pt !important;
-    margin-bottom: 0.3cm !important;
-  } /* Smaller */
+    font-size: 24pt !important;
+    margin-bottom: 0.6cm !important;
+    color: #000 !important;
+  } /* Increased */
   h2 {
-    font-size: 14pt !important;
-    margin-bottom: 0.3cm !important;
-  } /* Smaller */
+    font-size: 20pt !important;
+    margin-bottom: 0.6cm !important;
+    color: #000 !important;
+  } /* Increased */
   h3 {
-    font-size: 12pt !important;
-    margin-top: 0.5cm !important;
-    margin-bottom: 0.3cm !important;
-  } /* Smaller */
+    font-size: 18pt !important;
+    margin-top: 1cm !important;
+    margin-bottom: 0.6cm !important;
+    color: #000 !important;
+  } /* Increased */
   h4 {
-    font-size: 10pt !important;
-    margin-bottom: 0.2cm !important;
-  } /* Smaller */
+    font-size: 16pt !important;
+    margin-bottom: 0.5cm !important;
+    color: #000 !important;
+  } /* Increased */
   p,
   ul,
   li,
@@ -105,99 +103,75 @@ body {
   select,
   textarea,
   div.p-2.border {
-    font-size: 8pt !important; /* Very small for dense content */
-    line-height: 1.2; /* Tighter line spacing */
-    color: #000; /* Ensure text is black */
+    font-size: 14pt !important; /* Increased */
+    line-height: 1.8 !important; /* Increased line height for more spacing */
+    color: #000 !important; /* Force black color for all text elements */
   }
 
-  /* Reduce padding and margins for sections and fields */
+  /* Increase padding and margins for sections and fields */
   .p-8 {
-    padding: 0.5cm !important;
-  } /* Reduced overall padding */
+    padding: 1.5cm !important;
+  } /* Increased overall padding */
   .p-6 {
-    padding: 0.5cm !important;
-  } /* Reduced section padding */
+    padding: 1cm !important;
+  } /* Increased section padding */
   .p-5 {
-    padding: 0.4cm !important;
-  } /* Reduced form padding */
+    padding: 0.8cm !important;
+  } /* Increased form padding */
   .p-4 {
-    padding: 0.3cm !important;
-  } /* Reduced card padding */
+    padding: 0.7cm !important;
+  } /* Increased card padding */
   .p-2 {
-    padding: 0.2cm !important;
-  } /* Reduced input padding */
+    padding: 0.4cm !important;
+  } /* Increased input padding */
   .space-y-8 > *:not([hidden]) ~ *:not([hidden]) {
-    margin-top: 0.5cm !important;
-  } /* Reduced vertical spacing */
+    margin-top: 1.5cm !important;
+  } /* Increased vertical spacing */
   .space-y-3 > *:not([hidden]) ~ *:not([hidden]) {
-    margin-top: 0.2cm !important;
-  } /* Reduced vertical spacing */
+    margin-top: 0.6cm !important;
+  } /* Increased vertical spacing */
   .mb-8 {
-    margin-bottom: 0.3cm !important;
+    margin-bottom: 0.8cm !important;
   }
   .mb-6 {
-    margin-bottom: 0.3cm !important;
+    margin-bottom: 0.6cm !important;
   }
   .mb-4 {
-    margin-bottom: 0.2cm !important;
+    margin-bottom: 0.5cm !important;
   }
   .mb-3 {
-    margin-bottom: 0.15cm !important;
+    margin-bottom: 0.4cm !important;
   }
   .mb-2 {
-    margin-bottom: 0.1cm !important;
+    margin-bottom: 0.3cm !important;
   }
   .mb-1 {
-    margin-bottom: 0.05cm !important;
+    margin-bottom: 0.2cm !important;
   }
   .mt-1,
   .mt-2,
   .mt-3,
   .mt-4,
   .mt-6 {
-    margin-top: 0.1cm !important;
-  } /* Reduce top margins */
+    margin-top: 0.3cm !important;
+  } /* Adjust top margins */
 
   /* Adjust grid gap */
   .gap-6 {
-    gap: 0.5cm !important;
-  } /* Smaller gap for grids */
+    gap: 1.5cm !important;
+  } /* Increased gap for grids */
   .gap-4 {
-    gap: 0.3cm !important;
+    gap: 1cm !important;
   }
   .gap-y-2 {
-    row-gap: 0.15cm !important;
+    row-gap: 0.5cm !important;
   }
   .gap-x-8 {
-    column-gap: 0.5cm !important;
+    column-gap: 1.5cm !important;
   }
 
   /* Fixed heights for input fields to ensure consistency */
   /* These are now inline styles in PrintableConnectionForm.js */
-  /* .h-10 { height: 0.8cm !important; min-height: 0.8cm !important; } */
-  /* .h-20 { height: 1.5cm !important; min-height: 1.5cm !important; } */
-  /* .min-h-[38px] { min-height: 0.8cm !important; } */
-  /* .min-h-[70px] { min-height: 1.5cm !important; } */
-
-  /* Remove interactive styles for print */
-  input,
-  select,
-  textarea,
-  button {
-    border: 1px solid #ccc !important;
-    background-color: #fff !important;
-    color: #000 !important;
-    -webkit-print-color-adjust: exact; /* For background colors */
-    print-color-adjust: exact;
-  }
-  /* Make select dropdowns look like text */
-  select {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    padding-right: 0 !important; /* Remove space for dropdown arrow */
-    background-image: none !important; /* Remove dropdown arrow */
-  }
 
   /* Ensure borders are visible for form fields */
   div.p-2.border {
@@ -214,5 +188,52 @@ body {
   .rounded-lg,
   .rounded-md {
     border-radius: 0 !important;
+  }
+
+  /* Specific print layout for Patch Panel Hops section */
+  section.bg-green-50 > div.grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1cm !important; /* Adjusted gap for hops grid */
+  }
+  section.bg-green-50 > div.grid > div {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0.5cm !important; /* Adjusted padding for hops */
+    box-sizing: border-box !important;
+    page-break-inside: avoid;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  section.bg-green-50 h3 {
+    font-size: 16pt !important; /* Adjusted heading size for hops */
+  }
+  section.bg-green-50 .space-y-2 > *:not([hidden]) ~ *:not([hidden]) {
+    margin-top: 0.3cm !important; /* Adjusted spacing inside hop details */
+  }
+
+  /* Remove background colors from sections for print */
+  section.bg-blue-50,
+  section.bg-green-50,
+  section.bg-indigo-50,
+  section.bg-red-50 {
+    background-color: #fff !important;
+    border-color: #ccc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Added spacing for form labels and fields */
+  label {
+    margin-bottom: 0.2cm !important; /* Increased space below labels */
+  }
+  div.p-2.border {
+    /* The div acting as an input field */
+    margin-bottom: 0.4cm !important; /* Increased space below input fields */
+  }
+  .flex.items-center.p-2 {
+    /* For checkbox rows */
+    margin-bottom: 0.4cm !important; /* Increased space below checkboxes */
   }
 }
