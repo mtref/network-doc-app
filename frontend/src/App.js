@@ -2,13 +2,16 @@
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels).
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
 import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
 import PatchPanelList from "./components/PatchPanelList";
+import PrintableConnectionForm from "./components/PrintableConnectionForm";
+import { Printer } from "lucide-react";
+import ReactDOMServer from "react-dom/server";
 
 // Base URL for the backend API. When running in Docker Compose,
 // 'backend' is the service name and resolves to the backend container's IP.
@@ -39,6 +42,11 @@ function App() {
 
   // State for editing a connection in the ConnectionForm
   const [editingConnection, setEditingConnection] = useState(null);
+
+  // State for showing the printable form (used for conditional rendering in main app)
+  const [showPrintableForm, setShowPrintableForm] = useState(false);
+  // State to store CSS content for injecting into print window
+  const [cssContent, setCssContent] = useState("");
 
   // Function to show a message temporarily
   const showMessage = (msg, duration = 3000) => {
@@ -75,6 +83,12 @@ function App() {
     fetchData("switches", setSwitches);
     fetchData("connections", setConnections);
     fetchData("locations", setLocations);
+
+    // Fetch CSS content once when component mounts
+    fetch("/static/css/main.css") // Path to your compiled CSS file (relative to public folder)
+      .then((res) => res.text())
+      .then((css) => setCssContent(css))
+      .catch((err) => console.error("Failed to load CSS for printing:", err));
   }, [fetchData]);
 
   // Handle adding a new connection
@@ -93,7 +107,7 @@ function App() {
       }
       fetchData("connections", setConnections);
       showMessage("Connection added successfully!");
-      setEditingConnection(null); // Clear editing state after add
+      setEditingConnection(null);
     } catch (error) {
       console.error("Error adding connection:", error);
       showMessage(`Error adding connection: ${error.message}`, 8000);
@@ -116,7 +130,7 @@ function App() {
       }
       fetchData("connections", setConnections);
       showMessage("Connection updated successfully!");
-      setEditingConnection(null); // Clear editing state after update
+      setEditingConnection(null);
     } catch (error) {
       console.error("Error updating connection:", error);
       showMessage(`Error updating connection: ${error.message}`, 8000);
@@ -152,7 +166,6 @@ function App() {
 
   // Handle editing a connection (set the connection to be edited in state for form pre-fill)
   const handleEditConnection = (connection) => {
-    // Format the connection object to match the expected structure of ConnectionForm's state
     const formattedConnection = {
       id: connection.id,
       pc_id: connection.pc?.id,
@@ -164,10 +177,8 @@ function App() {
         patch_panel_port: hop.patch_panel_port,
         is_port_up: hop.is_port_up,
       })),
-      // Pass full nested objects for pre-filling detailed fields in ConnectionForm
       pc: connection.pc,
       switch: connection.switch,
-      // Patch panel details are within hops, which are already mapped
     };
     setEditingConnection(formattedConnection);
   };
@@ -316,6 +327,50 @@ function App() {
     setModalEntityId(null);
   };
 
+  // Handle printing the form using an iframe
+  const handlePrintForm = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow pop-ups for printing.");
+      return;
+    }
+
+    // Render the PrintableConnectionForm component to a static HTML string
+    const printableHtml = ReactDOMServer.renderToString(
+      <PrintableConnectionForm
+      // No longer passing dynamic data to this static form
+      />
+    );
+
+    // Inject the fetched CSS content directly
+    const styleTag = `<style>${cssContent}</style>`;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Network Connection Form Print</title>
+          ${styleTag}
+      </head>
+      <body>
+          <div class="print-only-container">
+              ${printableHtml}
+          </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close(); // Close the document to ensure content is loaded
+
+    // Wait for content to load, then print
+    printWindow.onload = () => {
+      printWindow.focus(); // Focus the new window
+      printWindow.print(); // Trigger print
+      // printWindow.close(); // Close the window after printing (optional, can be annoying)
+    };
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-200 font-inter p-4 sm:p-8">
       {/* Global Message Box */}
@@ -336,230 +391,247 @@ function App() {
         />
       )}
 
-      {/* Header Section */}
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight sm:text-5xl">
-          Network Device Documentation
-        </h1>
-        <p className="mt-2 text-lg text-gray-600">
-          Track your network connections from PC to Patch Panel to Switch with
-          ease.
-        </p>
-      </header>
+      {/* Printable Connection Form (Only visible when printing) */}
+      {/* This component is now rendered to string, not conditionally displayed in the main DOM */}
+      {/* Removed: {showPrintableForm && (...) } */}
 
-      {/* Main Content Area */}
-      <main className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
-        {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 mb-6">
-          <button
-            className={`py-3 px-6 text-lg font-medium ${
-              activeTab === "connections"
-                ? "border-b-4 border-blue-600 text-blue-800"
-                : "text-gray-600 hover:text-blue-600"
-            }`}
-            onClick={() => setActiveTab("connections")}
-          >
-            Connections
-          </button>
-          <button
-            className={`py-3 px-6 text-lg font-medium ${
-              activeTab === "pcs"
-                ? "border-b-4 border-blue-600 text-blue-800"
-                : "text-gray-600 hover:text-blue-600"
-            }`}
-            onClick={() => setActiveTab("pcs")}
-          >
-            PCs
-          </button>
-          <button
-            className={`py-3 px-6 text-lg font-medium ${
-              activeTab === "switches"
-                ? "border-b-4 border-blue-600 text-blue-800"
-                : "text-gray-600 hover:text-blue-600"
-            }`}
-            onClick={() => setActiveTab("switches")}
-          >
-            Switches
-          </button>
-          <button
-            className={`py-3 px-6 text-lg font-medium ${
-              activeTab === "patch_panels"
-                ? "border-b-4 border-blue-600 text-blue-800"
-                : "text-gray-600 hover:text-blue-600"
-            }`}
-            onClick={() => setActiveTab("patch_panels")}
-          >
-            Patch Panels
-          </button>
-          <button
-            className={`py-3 px-6 text-lg font-medium ${
-              activeTab === "locations"
-                ? "border-b-4 border-blue-600 text-blue-800"
-                : "text-gray-600 hover:text-blue-600"
-            }`}
-            onClick={() => setActiveTab("locations")}
-          >
-            Locations
-          </button>
-        </div>
+      {/* Main App Content */}
+      <div>
+        {" "}
+        {/* Removed conditional 'no-print' class as iframe handles hiding */}
+        {/* Header Section */}
+        <header className="mb-8 text-center">
+          <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight sm:text-5xl">
+            Network Device Documentation
+          </h1>
+          <p className="mt-2 text-lg text-gray-600">
+            Track your network connections from PC to Patch Panel to Switch with
+            ease.
+          </p>
+        </header>
+        {/* Main Content Area */}
+        <main className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+          {/* Tab Navigation */}
+          <div className="flex border-b border-gray-200 mb-6">
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "connections"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("connections")}
+            >
+              Connections
+            </button>
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "pcs"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("pcs")}
+            >
+              PCs
+            </button>
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "switches"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("switches")}
+            >
+              Switches
+            </button>
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "patch_panels"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("patch_panels")}
+            >
+              Patch Panels
+            </button>
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "locations"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("locations")}
+            >
+              Locations
+            </button>
+          </div>
 
-        {/* Conditional Tab Content Rendering */}
-        {activeTab === "connections" && (
-          <>
-            {/* Connection Form Section */}
-            <section className="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4">
-                Add/Edit Connection
-              </h2>
-              <ConnectionForm
+          {/* Conditional Tab Content Rendering */}
+          {activeTab === "connections" && (
+            <>
+              {/* Connection Form Section */}
+              <section className="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
+                <h2 className="text-2xl font-bold text-blue-700 mb-4">
+                  Add/Edit Connection
+                </h2>
+                <ConnectionForm
+                  pcs={pcs}
+                  patchPanels={patchPanels}
+                  switches={switches}
+                  onAddConnection={handleAddConnection}
+                  onUpdateConnection={handleUpdateConnection}
+                  editingConnection={editingConnection}
+                  setEditingConnection={setEditingConnection}
+                  onAddEntity={handleAddEntity}
+                  onShowPortStatus={handleShowPortStatus}
+                  locations={locations}
+                />
+              </section>
+
+              {/* Print Form Button */}
+              <div className="text-center mb-6">
+                <button
+                  onClick={handlePrintForm}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-md shadow-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center mx-auto"
+                >
+                  <Printer size={20} className="mr-2" /> Print Empty Form
+                </button>
+              </div>
+
+              {/* Connection List Section */}
+              <section>
+                <h2 className="text-2xl font-bold text-blue-700 mb-6">
+                  All Connections
+                </h2>
+                <ConnectionList
+                  connections={connections}
+                  onDelete={handleDeleteConnection}
+                  onEdit={handleEditConnection}
+                />
+                {connections.length === 0 && (
+                  <p className="text-center text-gray-500 text-lg mt-8">
+                    No connections found. Start by adding one above.
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeTab === "pcs" && (
+            <section>
+              <h2 className="text-2xl font-bold text-blue-700 mb-6">All PCs</h2>
+              <PcList
                 pcs={pcs}
-                patchPanels={patchPanels}
-                switches={switches}
-                onAddConnection={handleAddConnection}
-                onUpdateConnection={handleUpdateConnection}
-                editingConnection={editingConnection}
-                setEditingConnection={setEditingConnection}
                 onAddEntity={handleAddEntity}
+                onUpdateEntity={handleUpdateEntity}
+                onDeleteEntity={handleDeleteEntity}
+              />
+            </section>
+          )}
+
+          {activeTab === "switches" && (
+            <section>
+              <h2 className="text-2xl font-bold text-blue-700 mb-6">
+                All Switches
+              </h2>
+              <SwitchList
+                switches={switches}
+                onAddEntity={handleAddEntity}
+                onUpdateEntity={handleUpdateEntity}
+                onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
               />
             </section>
+          )}
 
-            {/* Connection List Section */}
+          {activeTab === "patch_panels" && (
             <section>
               <h2 className="text-2xl font-bold text-blue-700 mb-6">
-                All Connections
+                All Patch Panels
               </h2>
-              <ConnectionList
-                connections={connections}
-                onDelete={handleDeleteConnection}
-                onEdit={handleEditConnection}
+              <PatchPanelList
+                patchPanels={patchPanels}
+                onAddEntity={handleAddEntity}
+                onUpdateEntity={handleUpdateEntity}
+                onDeleteEntity={handleDeleteEntity}
+                onShowPortStatus={handleShowPortStatus}
+                locations={locations}
               />
-              {connections.length === 0 && (
-                <p className="text-center text-gray-500 text-lg mt-8">
-                  No connections found. Start by adding one above.
-                </p>
-              )}
             </section>
-          </>
-        )}
+          )}
 
-        {activeTab === "pcs" && (
-          <section>
-            <h2 className="text-2xl font-bold text-blue-700 mb-6">All PCs</h2>
-            <PcList
-              pcs={pcs}
-              onAddEntity={handleAddEntity}
-              onUpdateEntity={handleUpdateEntity}
-              onDeleteEntity={handleDeleteEntity}
-            />
-          </section>
-        )}
-
-        {activeTab === "switches" && (
-          <section>
-            <h2 className="text-2xl font-bold text-blue-700 mb-6">
-              All Switches
-            </h2>
-            <SwitchList
-              switches={switches}
-              onAddEntity={handleAddEntity}
-              onUpdateEntity={handleUpdateEntity}
-              onDeleteEntity={handleDeleteEntity}
-              onShowPortStatus={handleShowPortStatus}
-              locations={locations}
-            />
-          </section>
-        )}
-
-        {activeTab === "patch_panels" && (
-          <section>
-            <h2 className="text-2xl font-bold text-blue-700 mb-6">
-              All Patch Panels
-            </h2>
-            <PatchPanelList
-              patchPanels={patchPanels}
-              onAddEntity={handleAddEntity}
-              onUpdateEntity={handleUpdateEntity}
-              onDeleteEntity={handleDeleteEntity}
-              onShowPortStatus={handleShowPortStatus}
-              locations={locations}
-            />
-          </section>
-        )}
-
-        {activeTab === "locations" && (
-          <section>
-            <h2 className="text-2xl font-bold text-blue-700 mb-6">
-              Manage Locations
-            </h2>
-            {/* Form for adding new locations */}
-            <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-6">
-              <h3 className="text-xl font-bold text-blue-700 mb-4">
-                Add New Location
-              </h3>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const name = e.target.locationName.value;
-                  if (name.trim()) {
-                    await handleAddEntity("locations", { name });
-                    e.target.locationName.value = "";
-                  }
-                }}
-                className="flex space-x-2"
-              >
-                <input
-                  type="text"
-                  name="locationName"
-                  placeholder="Location Name (e.g., Data Center)"
-                  className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
+          {activeTab === "locations" && (
+            <section>
+              <h2 className="text-2xl font-bold text-blue-700 mb-6">
+                Manage Locations
+              </h2>
+              {/* Form for adding new locations */}
+              <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-6">
+                <h3 className="text-xl font-bold text-blue-700 mb-4">
+                  Add New Location
+                </h3>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const name = e.target.locationName.value;
+                    if (name.trim()) {
+                      await handleAddEntity("locations", { name });
+                      e.target.locationName.value = "";
+                    }
+                  }}
+                  className="flex space-x-2"
                 >
-                  Add Location
-                </button>
-              </form>
-            </div>
-
-            {/* List of existing locations */}
-            <div className="space-y-3">
-              {locations.length > 0 ? (
-                locations.map((location) => (
-                  <div
-                    key={location.id}
-                    className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
+                  <input
+                    type="text"
+                    name="locationName"
+                    placeholder="Location Name (e.g., Data Center)"
+                    className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
                   >
-                    <span className="text-lg font-medium text-gray-800">
-                      {location.name}
-                    </span>
-                    <button
-                      onClick={() =>
-                        handleDeleteEntity("locations", location.id)
-                      }
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-gray-500 text-lg">
-                  No locations added yet. Add some to get started!
-                </p>
-              )}
-            </div>
-          </section>
-        )}
-      </main>
+                    Add Location
+                  </button>
+                </form>
+              </div>
 
-      {/* Footer (Optional) */}
-      <footer className="mt-12 text-center text-gray-500 text-sm">
-        <p>&copy; 2025 Network Doc App. All rights reserved.</p>
-      </footer>
+              {/* List of existing locations */}
+              <div className="space-y-3">
+                {locations.length > 0 ? (
+                  locations.map((location) => (
+                    <div
+                      key={location.id}
+                      className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
+                    >
+                      <span className="text-lg font-medium text-gray-800">
+                        {location.name}
+                      </span>
+                      <button
+                        onClick={() =>
+                          handleDeleteEntity("locations", location.id)
+                        }
+                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 text-lg">
+                    No locations added yet. Add some to get started!
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </main>
+        {/* Footer (Optional) */}
+        <footer className="mt-12 text-center text-gray-500 text-sm">
+          <p>&copy; 2025 Network Doc App. All rights reserved.</p>
+        </footer>
+      </div>
     </div>
   );
 }

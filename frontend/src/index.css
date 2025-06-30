@@ -54,44 +54,165 @@ body {
   /* Show elements that are only for print view */
   .print-only {
     display: block !important;
+    /* Ensure print-only content takes precedence */
+    position: fixed; /* Use fixed to overlay everything */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999; /* High z-index to be on top */
+    background-color: #fff; /* Ensure white background */
+    overflow: auto; /* Allow scrolling if content is larger than one page */
   }
 
-  /* Adjust modal for print */
-  .fixed.inset-0.bg-gray-600.bg-opacity-50 {
-    position: static !important;
-    background: none !important;
-    display: block !important;
-  }
-
-  .print-container {
-    box-shadow: none !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 1.5cm !important; /* Add more padding for A4 print */
-    width: auto !important;
-    max-width: none !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  /* Ensure text is black for readability */
+  /* General print container styling */
   body {
-    color: #000 !important;
+    background-color: #fff !important; /* White background for print */
+    color: #000 !important; /* Black text for readability */
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Removed print-page-break as it forces new pages */
+  /* .print-page-break {
+    page-break-after: always;
+  } */
+
+  /* Adjust font sizes for A4 to be much smaller */
+  h1 {
+    font-size: 18pt !important;
+    margin-bottom: 0.3cm !important;
+  } /* Smaller */
+  h2 {
+    font-size: 14pt !important;
+    margin-bottom: 0.3cm !important;
+  } /* Smaller */
+  h3 {
+    font-size: 12pt !important;
+    margin-top: 0.5cm !important;
+    margin-bottom: 0.3cm !important;
+  } /* Smaller */
+  h4 {
+    font-size: 10pt !important;
+    margin-bottom: 0.2cm !important;
+  } /* Smaller */
+  p,
+  ul,
+  li,
+  span,
+  label,
+  input,
+  select,
+  textarea,
+  div.p-2.border {
+    font-size: 8pt !important; /* Very small for dense content */
+    line-height: 1.2; /* Tighter line spacing */
+    color: #000; /* Ensure text is black */
+  }
+
+  /* Reduce padding and margins for sections and fields */
+  .p-8 {
+    padding: 0.5cm !important;
+  } /* Reduced overall padding */
+  .p-6 {
+    padding: 0.5cm !important;
+  } /* Reduced section padding */
+  .p-5 {
+    padding: 0.4cm !important;
+  } /* Reduced form padding */
+  .p-4 {
+    padding: 0.3cm !important;
+  } /* Reduced card padding */
+  .p-2 {
+    padding: 0.2cm !important;
+  } /* Reduced input padding */
+  .space-y-8 > *:not([hidden]) ~ *:not([hidden]) {
+    margin-top: 0.5cm !important;
+  } /* Reduced vertical spacing */
+  .space-y-3 > *:not([hidden]) ~ *:not([hidden]) {
+    margin-top: 0.2cm !important;
+  } /* Reduced vertical spacing */
+  .mb-8 {
+    margin-bottom: 0.3cm !important;
+  }
+  .mb-6 {
+    margin-bottom: 0.3cm !important;
+  }
+  .mb-4 {
+    margin-bottom: 0.2cm !important;
+  }
+  .mb-3 {
+    margin-bottom: 0.15cm !important;
+  }
+  .mb-2 {
+    margin-bottom: 0.1cm !important;
+  }
+  .mb-1 {
+    margin-bottom: 0.05cm !important;
+  }
+  .mt-1,
+  .mt-2,
+  .mt-3,
+  .mt-4,
+  .mt-6 {
+    margin-top: 0.1cm !important;
+  } /* Reduce top margins */
+
+  /* Adjust grid gap */
+  .gap-6 {
+    gap: 0.5cm !important;
+  } /* Smaller gap for grids */
+  .gap-4 {
+    gap: 0.3cm !important;
+  }
+  .gap-y-2 {
+    row-gap: 0.15cm !important;
+  }
+  .gap-x-8 {
+    column-gap: 0.5cm !important;
+  }
+
+  /* Fixed heights for input fields to ensure consistency */
+  /* These are now inline styles in PrintableConnectionForm.js */
+  /* .h-10 { height: 0.8cm !important; min-height: 0.8cm !important; } */
+  /* .h-20 { height: 1.5cm !important; min-height: 1.5cm !important; } */
+  /* .min-h-[38px] { min-height: 0.8cm !important; } */
+  /* .min-h-[70px] { min-height: 1.5cm !important; } */
+
+  /* Remove interactive styles for print */
+  input,
+  select,
+  textarea,
+  button {
+    border: 1px solid #ccc !important;
     background-color: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact; /* For background colors */
+    print-color-adjust: exact;
+  }
+  /* Make select dropdowns look like text */
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 0 !important; /* Remove space for dropdown arrow */
+    background-image: none !important; /* Remove dropdown arrow */
   }
 
-  /* Adjust font sizes for A4 if needed (optional) */
-  .print-container h2 {
-    font-size: 1.5rem !important; /* Adjust as necessary */
-  }
-  .print-container p,
-  .print-container ul,
-  .print-container li {
-    font-size: 10pt !important; /* Standard print font size */
+  /* Ensure borders are visible for form fields */
+  div.p-2.border {
+    border-color: #000 !important;
   }
 
-  /* Avoid page breaks inside elements where possible */
-  .print-container > div {
-    page-break-inside: avoid;
+  /* Hide any shadows for print */
+  .shadow-xl,
+  .shadow-lg,
+  .shadow-md,
+  .shadow-sm {
+    box-shadow: none !important;
+  }
+  .rounded-lg,
+  .rounded-md {
+    border-radius: 0 !important;
   }
 }
