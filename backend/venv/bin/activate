@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/hilal/Documents/GitHub/network-doc-app/backend/venv"
+VIRTUAL_ENV="/Users/hilal/Downloads/FinanceApp-UpgradeFromHome/network-doc-app/backend/venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

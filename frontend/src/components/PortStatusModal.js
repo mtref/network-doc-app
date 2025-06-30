@@ -1,6 +1,6 @@
 // frontend/src/components/PortStatusModal.js
 // This component displays a modal showing the status (connected/available)
-// of all ports for a given Patch Panel or Server.
+// of all ports for a given Patch Panel or Switch.
 // It now includes separate collapse/expand functionality for the detailed port list.
 // The print feature has been removed.
 
@@ -19,7 +19,7 @@ function PortStatusModal({ isOpen, onClose, data, entityType }) {
 
   if (!isOpen || !data) return null;
 
-  const entityName = data.patch_panel_name || data.server_name || "N/A";
+  const entityName = data.patch_panel_name || data.switch_name || "N/A"; // Renamed server_name to switch_name
   const totalPorts = data.total_ports || 0;
   const ports = data.ports || [];
 
@@ -40,8 +40,8 @@ function PortStatusModal({ isOpen, onClose, data, entityType }) {
             {" "}
             {/* Removed no-print class */}
             <h2 className="text-2xl font-bold text-gray-800">
-              {entityType === "patch_panels" ? "Patch Panel" : "Server"} Port
-              Status: {entityName}
+              {entityType === "patch_panels" ? "Patch Panel" : "Switch"} Port
+              Status: {entityName} {/* Renamed Server to Switch */}
             </h2>
             <div className="flex space-x-2">
               {/* Print button removed */}
