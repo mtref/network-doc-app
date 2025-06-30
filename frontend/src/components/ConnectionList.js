@@ -62,6 +62,12 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 <span className="font-medium">
                   {hop.patch_panel?.name || "N/A"} (Port: {hop.patch_panel_port}
                   )
+                  {hop.patch_panel?.location_name && (
+                    <span className="ml-1">
+                      ({hop.patch_panel.location_name})
+                    </span>
+                  )}{" "}
+                  {/* Added Room # */}
                   {hop.is_port_up ? (
                     <Wifi
                       size={14}
@@ -80,7 +86,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             </React.Fragment>
           ))}
 
-          {/* Switch Info (Renamed from Server Info) */}
+          {/* Switch Info */}
           <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
           <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
             <Server size={16} className="text-red-500 mr-1 flex-shrink-0" />{" "}
@@ -88,6 +94,12 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             <span className="font-medium">
               {connection.switch?.name || "N/A"} (Port: {connection.switch_port}
               )
+              {connection.switch?.location_name && (
+                <span className="ml-1">
+                  ({connection.switch.location_name})
+                </span>
+              )}{" "}
+              {/* Added Room # */}
               {connection.is_switch_port_up ? (
                 <Wifi
                   size={14}
@@ -100,7 +112,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                   className="inline-block ml-1 text-red-500"
                   title="Port Down"
                 />
-              )}{" "}
+              )}
             </span>
           </div>
         </div>
@@ -177,32 +189,30 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             <span className="font-medium">PC Description:</span>{" "}
             {connection.pc?.description || "No description"}
           </p>
+
           {connection.hops.map((hop, index) => (
             <p key={`detail-hop-${index}`}>
               <span className="font-medium">
                 Patch Panel {index + 1} Details:
               </span>{" "}
               {hop.patch_panel?.name || "N/A"} (Port: {hop.patch_panel_port},
-              Location: {hop.patch_panel?.location || "N/A"}) - Status:{" "}
+              Location: {hop.patch_panel?.location_name || "N/A"}) - Status:{" "}
               {hop.is_port_up ? "Up" : "Down"}
             </p>
           ))}
           <p>
             <span className="font-medium">Switch IP:</span>{" "}
             {connection.switch?.ip_address || "N/A"}
-          </p>{" "}
-          # Renamed Server
+          </p>
           <p>
             <span className="font-medium">Switch Port:</span>{" "}
             {connection.switch_port || "N/A"} - Status:{" "}
             {connection.is_switch_port_up ? "Up" : "Down"}
-          </p>{" "}
-          # Renamed Server
+          </p>
           <p>
             <span className="font-medium">Switch Location:</span>{" "}
-            {connection.switch?.location || "N/A"}
-          </p>{" "}
-          # Renamed Server
+            {connection.switch?.location_name || "N/A"}
+          </p>
         </div>
       )}
     </div>
