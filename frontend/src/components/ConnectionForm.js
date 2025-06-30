@@ -33,28 +33,28 @@ function ConnectionForm({
   // State for new entity forms
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
-  const [newPcUsername, setNewPcUsername] = useState(""); // Declared newPcUsername
-  const [newPcInDomain, setNewPcInDomain] = useState(false); // Declared newPcInDomain
-  const [newPcOs, setNewPcOs] = useState(""); // Declared newPcOs
-  const [newPcPortsName, setNewPcPortsName] = useState(""); // Declared newPcPortsName
+  const [newPcUsername, setNewPcUsername] = useState("");
+  const [newPcInDomain, setNewPcInDomain] = useState(false);
+  const [newPcOs, setNewPcOs] = useState("");
+  const [newPcPortsName, setNewPcPortsName] = useState("");
   const [newPcDesc, setNewPcDesc] = useState("");
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
-  const [newPpRowInRack, setNewPpRowInRack] = useState(""); // Declared newPpRowInRack
-  const [newPpRackName, setNewPpRackName] = useState(""); // Declared newPpRackName
+  const [newPpRowInRack, setNewPpRowInRack] = useState("");
+  const [newPpRackName, setNewPpRackName] = useState("");
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
-  const [newPpDesc, setNewPpDesc] = useState(""); // Declared newPpDesc
+  const [newPpDesc, setNewPpDesc] = useState("");
 
   const [newSwitchName, setNewSwitchName] = useState("");
   const [newSwitchIp, setNewSwitchIp] = useState("");
   const [newSwitchLocationId, setNewSwitchLocationId] = useState("");
-  const [newSwitchRowInRack, setNewSwitchRowInRack] = useState(""); // Declared newSwitchRowInRack
-  const [newSwitchRackName, setNewSwitchRackName] = useState(""); // Declared newSwitchRackName
+  const [newSwitchRowInRack, setNewSwitchRowInRack] = useState("");
+  const [newSwitchRackName, setNewSwitchRackName] = useState("");
   const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
-  const [newSwitchSourcePort, setNewSwitchSourcePort] = useState(""); // Declared newSwitchSourcePort
-  const [newSwitchModel, setNewSwitchModel] = useState(""); // Declared newSwitchModel
-  const [newSwitchDesc, setNewSwitchDesc] = useState(""); // Declared newSwitchDesc
+  const [newSwitchSourcePort, setNewSwitchSourcePort] = useState("");
+  const [newSwitchModel, setNewSwitchModel] = useState("");
+  const [newSwitchDesc, setNewSwitchDesc] = useState("");
 
   // Populate form fields if editing an existing connection
   useEffect(() => {
@@ -68,13 +68,81 @@ function ConnectionForm({
           : true
       );
       setHops(editingConnection.hops || []);
+
+      // Populate PC fields if PC object is available
+      if (editingConnection.pc) {
+        setNewPcName(editingConnection.pc.name || "");
+        setNewPcIp(editingConnection.pc.ip_address || "");
+        setNewPcUsername(editingConnection.pc.username || "");
+        setNewPcInDomain(editingConnection.pc.in_domain || false);
+        setNewPcOs(editingConnection.pc.operating_system || "");
+        setNewPcPortsName(editingConnection.pc.ports_name || "");
+        setNewPcDesc(editingConnection.pc.description || "");
+      } else {
+        // Clear PC form fields if no PC data
+        setNewPcName("");
+        setNewPcIp("");
+        setNewPcUsername("");
+        setNewPcInDomain(false);
+        setNewPcOs("");
+        setNewPcPortsName("");
+        setNewPcDesc("");
+      }
+
+      // Populate Switch fields if Switch object is available
+      if (editingConnection.switch) {
+        setNewSwitchName(editingConnection.switch.name || "");
+        setNewSwitchIp(editingConnection.switch.ip_address || "");
+        setNewSwitchLocationId(editingConnection.switch.location_id || "");
+        setNewSwitchRowInRack(editingConnection.switch.row_in_rack || "");
+        setNewSwitchRackName(editingConnection.switch.rack_name || "");
+        setNewSwitchTotalPorts(editingConnection.switch.total_ports || 1);
+        setNewSwitchSourcePort(editingConnection.switch.source_port || "");
+        setNewSwitchModel(editingConnection.switch.model || "");
+        setNewSwitchDesc(editingConnection.switch.description || "");
+      } else {
+        // Clear Switch form fields if no Switch data
+        setNewSwitchName("");
+        setNewSwitchIp("");
+        setNewSwitchLocationId("");
+        setNewSwitchRowInRack("");
+        setNewSwitchRackName("");
+        setNewSwitchTotalPorts(1);
+        setNewSwitchSourcePort("");
+        setNewSwitchModel("");
+        setNewSwitchDesc("");
+      }
+
+      // Patch Panel details are within hops, which are handled by setHops
     } else {
-      // Clear form if not editing
+      // Clear all form fields if not editing
       setPcId("");
       setSwitchId("");
       setSwitchPort("");
       setIsSwitchPortUp(true);
       setHops([]);
+      setNewPcName("");
+      setNewPcIp("");
+      setNewPcUsername("");
+      setNewPcInDomain(false);
+      setNewPcOs("");
+      setNewPcPortsName("");
+      setNewPcDesc("");
+      setNewPpName("");
+      setNewPpLocationId("");
+      setNewPpRowInRack("");
+      setNewPpRackName("");
+      setNewPpTotalPorts(1);
+      setNewPpDesc("");
+      setNewSwitchName("");
+      setNewSwitchIp("");
+      setNewSwitchLocationId("");
+      setNewSwitchRowInRack("");
+      setNewSwitchRackName("");
+      setNewSwitchTotalPorts(1);
+      setNewSwitchSourcePort("");
+      setNewSwitchModel("");
+      setNewSwitchDesc("");
     }
   }, [editingConnection]);
 
@@ -158,6 +226,13 @@ function ConnectionForm({
 
   const handleAddPc = async (e) => {
     e.preventDefault();
+    // Basic IP validation
+    const ipRegex =
+      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (newPcIp && !ipRegex.test(newPcIp)) {
+      alert("Please enter a valid IP address for PC (e.g., 192.168.1.1).");
+      return;
+    }
     if (newPcName.trim()) {
       await onAddEntity("pcs", {
         name: newPcName,
@@ -204,6 +279,13 @@ function ConnectionForm({
 
   const handleAddSwitch = async (e) => {
     e.preventDefault();
+    // Basic IP validation
+    const ipRegex =
+      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (newSwitchIp && !ipRegex.test(newSwitchIp)) {
+      alert("Please enter a valid IP address for Switch (e.g., 192.168.1.1).");
+      return;
+    }
     if (newSwitchName.trim() && newSwitchLocationId) {
       await onAddEntity("switches", {
         name: newSwitchName,
@@ -572,7 +654,7 @@ function ConnectionForm({
               id="switch-select"
               value={switchId}
               onChange={(e) => setSwitchId(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">-- Select a Switch --</option>

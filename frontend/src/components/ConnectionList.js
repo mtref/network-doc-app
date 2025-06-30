@@ -2,16 +2,15 @@
 // This component displays a list of network connections in a compact, single-line format.
 // Each connection shows its full path from PC through multiple Patch Panels to a Switch,
 // with actions for editing and deleting.
+// The expand/collapse feature has been reintroduced.
 
-import React, { useState } from "react";
+import React, { useState } from "react"; // Reintroduced useState for expand/collapse
 // Import icons from lucide-react for a better UI and consistent design
 import {
   Laptop,
   Split,
   Server,
   ArrowRight,
-  ChevronDown,
-  ChevronUp,
   WifiOff,
   Wifi,
   User,
@@ -20,13 +19,15 @@ import {
   Link,
   Info,
   MapPin,
-  HardDrive,
+  ChevronDown,
+  ChevronUp,
   Router,
-} from "lucide-react"; // Added MapPin
+  HardDrive,
+} from "lucide-react"; // Reintroduced ChevronDown, ChevronUp icons
 
 // New component for individual connection cards
 function ConnectionCard({ connection, onDelete, onEdit }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false); // Reintroduced isExpanded state
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -34,11 +35,11 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
 
   return (
     <div
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 cursor-pointer"
-      onClick={toggleExpand} // Click to expand/collapse
+      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4 cursor-pointer" // Reintroduced cursor-pointer
+      onClick={toggleExpand} // Reintroduced onClick for expand/collapse
     >
       {/* Top row: Summary Path and Actions */}
-      <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
         {/* Left side: Summary Connection Path - flex-grow allows it to take available space */}
         <div className="flex-grow flex items-center flex-wrap sm:flex-nowrap overflow-hidden pr-2">
           <span className="font-semibold text-blue-600 mr-2 text-sm flex-shrink-0">
@@ -127,7 +128,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             onClick={(e) => {
               e.stopPropagation();
               onEdit(connection);
-            }} // Prevent card click from triggering
+            }}
             className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
             title="Edit Connection"
           >
@@ -150,7 +151,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             onClick={(e) => {
               e.stopPropagation();
               onDelete(connection.id);
-            }} // Prevent card click from triggering
+            }}
             className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
             title="Delete Connection"
           >
@@ -173,18 +174,25 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             onClick={(e) => {
               e.stopPropagation();
               toggleExpand();
-            }} // Prevent card click from triggering
+            }} // Reintroduced expand button logic
             className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 text-gray-600"
             title={isExpanded ? "Collapse Details" : "Expand Details"}
           >
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}{" "}
+            {/* Reintroduced Chevron icons */}
           </button>
         </div>
       </div>
 
-      {/* Expanded Details Section (Conditional Rendering) */}
-      {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2 text-gray-700 text-sm px-4 pb-4 animate-fade-in-down">
+      {/* Expanded Details Section (Conditional Rendering with collapsible-content) */}
+      <div
+        className={`collapsible-content ${isExpanded ? "expanded" : ""} ${
+          isExpanded ? "pt-4 pb-4 px-4" : "pt-0 pb-0 px-4"
+        }`}
+      >
+        <div className="mt-4 border-t border-gray-100 space-y-2 text-gray-700 text-sm">
+          {" "}
+          {/* Removed px-4 pb-4 from here */}
           {/* PC Details */}
           <p className="flex items-center">
             <Laptop size={16} className="text-indigo-500 mr-2" />{" "}
@@ -208,7 +216,11 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               <WifiOff size={16} className="text-red-500 mr-2" />
             )}
             <span className="font-medium">In Domain:</span>{" "}
-            {connection.pc?.in_domain ? "Yes" : "No"}
+            {connection.pc?.in_domain !== undefined
+              ? connection.pc.in_domain
+                ? "Yes"
+                : "No"
+              : "N/A"}
           </p>
           <p className="flex items-center">
             <Monitor size={16} className="text-gray-500 mr-2" />{" "}
@@ -228,7 +240,6 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             <span className="font-medium">PC Description:</span>{" "}
             {connection.pc?.description || "No description"}
           </p>
-
           {/* Patch Panel Hops Details */}
           {connection.hops.map((hop, index) => (
             <div
@@ -278,7 +289,6 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               </p>
             </div>
           ))}
-
           {/* Switch Details */}
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="flex items-center">
@@ -337,7 +347,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -164,9 +164,10 @@ function App() {
         patch_panel_port: hop.patch_panel_port,
         is_port_up: hop.is_port_up,
       })),
-      // Include full PC and Switch objects for display in the form if needed,
-      // though the form primarily uses their IDs for dropdowns.
-      // The `pcs`, `patchPanels`, `switches` props already provide the full objects.
+      // Pass full nested objects for pre-filling detailed fields in ConnectionForm
+      pc: connection.pc,
+      switch: connection.switch,
+      // Patch panel details are within hops, which are already mapped
     };
     setEditingConnection(formattedConnection);
   };
@@ -416,8 +417,8 @@ function App() {
                 switches={switches}
                 onAddConnection={handleAddConnection}
                 onUpdateConnection={handleUpdateConnection}
-                editingConnection={editingConnection} // Pass editingConnection state
-                setEditingConnection={setEditingConnection} // Pass setter for ConnectionForm to clear/manage
+                editingConnection={editingConnection}
+                setEditingConnection={setEditingConnection}
                 onAddEntity={handleAddEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
@@ -432,7 +433,7 @@ function App() {
               <ConnectionList
                 connections={connections}
                 onDelete={handleDeleteConnection}
-                onEdit={handleEditConnection} // Pass handleEditConnection
+                onEdit={handleEditConnection}
               />
               {connections.length === 0 && (
                 <p className="text-center text-gray-500 text-lg mt-8">

@@ -475,8 +475,8 @@ def handle_connections():
         # Eager load related data to avoid N+1 queries when converting to dicts
         connections = Connection.query.options(
             joinedload(Connection.pc),
-            joinedload(Connection.switch),
-            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location) # Load location for PP
+            joinedload(Connection.switch).joinedload(Switch.location), # Eager load switch location
+            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location) # Eager load patch panel location
         ).all()
         return jsonify([conn.to_dict() for conn in connections])
 
