@@ -1,9 +1,10 @@
 // frontend/src/components/SwitchList.js
 // This component displays a searchable list of Switches in a card format,
 // now including filter options by Location, Rack, and Model.
+// Added a "View Diagram" button to each switch card.
 
 import React, { useState, useEffect } from "react";
-import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
+import SearchBar from "./SearchBar";
 import {
   Server,
   Router,
@@ -15,7 +16,8 @@ import {
   Columns,
   HardDrive,
   Link,
-  Filter, // New icon for filter section
+  Filter,
+  Network, // New icon for the diagram button
 } from "lucide-react";
 
 function SwitchList({
@@ -25,6 +27,7 @@ function SwitchList({
   onDeleteEntity,
   onShowPortStatus,
   locations,
+  onViewDiagram, // New prop for viewing diagram
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSwitches, setFilteredSwitches] = useState([]);
@@ -41,21 +44,17 @@ function SwitchList({
 
   const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false);
 
-  // New states for filter options
   const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
   const [selectedRackFilter, setSelectedRackFilter] = useState("all");
   const [selectedModelFilter, setSelectedModelFilter] = useState("all");
 
-  // States to hold available unique options for filters
   const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
   const [availableRackOptions, setAvailableRackOptions] = useState([]);
   const [availableModelOptions, setAvailableModelOptions] = useState([]);
 
-  // IP Address Regex for validation
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
-  // Effect to extract unique filter options whenever 'switches' data changes
   useEffect(() => {
     const uniqueLocations = [
       ...new Set(switches.map((s) => s.location_name).filter(Boolean)),
@@ -73,11 +72,9 @@ function SwitchList({
     setAvailableModelOptions(uniqueModels);
   }, [switches]);
 
-  // Filter Switches based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
     const filtered = switches.filter((_switch) => {
-      // Text search filter
       const matchesSearch =
         (_switch.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (_switch.ip_address || "")
@@ -101,17 +98,12 @@ function SwitchList({
           .toLowerCase()
           .includes(lowerCaseSearchTerm);
 
-      // Location filter
       const matchesLocation =
         selectedLocationFilter === "all" ||
         _switch.location_name === selectedLocationFilter;
-
-      // Rack filter
       const matchesRack =
         selectedRackFilter === "all" ||
         _switch.rack_name === selectedRackFilter;
-
-      // Model filter
       const matchesModel =
         selectedModelFilter === "all" || _switch.model === selectedModelFilter;
 
@@ -126,7 +118,6 @@ function SwitchList({
     selectedModelFilter,
   ]);
 
-  // Handle edit initiation
   const handleEdit = (_switch) => {
     setEditingSwitch(_switch);
     setSwitchFormName(_switch.name);
@@ -141,11 +132,9 @@ function SwitchList({
     setIsAddSwitchFormExpanded(true);
   };
 
-  // Handle form submission for Add/Update Switch
   const handleSwitchFormSubmit = async (e) => {
     e.preventDefault();
 
-    // IP validation
     if (switchFormIp && !ipRegex.test(switchFormIp)) {
       alert("Please enter a valid IP address (e.g., 192.168.1.1).");
       return;
@@ -195,7 +184,6 @@ function SwitchList({
         <Filter size={20} className="text-gray-600 flex-shrink-0" />
         <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
 
-        {/* Location Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-location-filter"
@@ -218,7 +206,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Rack Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-rack-filter"
@@ -241,7 +228,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Model Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-model-filter"
@@ -450,6 +436,13 @@ function SwitchList({
                   className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
                 >
                   View Ports
+                </button>
+                <button
+                  onClick={() => onViewDiagram(_switch)} // New "View Diagram" button
+                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
+                  title="View Diagram"
+                >
+                  <Network size={16} className="mr-1" /> Diagram
                 </button>
                 <button
                   onClick={() => handleEdit(_switch)}

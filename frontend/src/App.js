@@ -1,6 +1,7 @@
 // frontend/src/App.js
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels).
+// Added state management and rendering for SwitchDiagramModal.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -10,15 +11,13 @@ import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
 import PatchPanelList from "./components/PatchPanelList";
 import PrintableConnectionForm from "./components/PrintableConnectionForm";
+import SwitchDiagramModal from "./components/SwitchDiagramModal"; // Import the new component
 import { Printer } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
 
-// Base URL for the backend API. When running in Docker Compose,
-// 'backend' is the service name and resolves to the backend container's IP.
+// Base URL for the backend API.
 const API_BASE_URL =
-  process.env.NODE_ENV === "production"
-    ? "/api" // In production, proxy requests through Nginx or similar
-    : "http://localhost:5004"; // For local development with 'npm start'
+  process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5004";
 
 function App() {
   // State variables to store fetched data
@@ -29,10 +28,10 @@ function App() {
   const [locations, setLocations] = useState([]);
 
   // State for current active tab
-  const [activeTab, setActiveTab] = useState("connections"); // 'connections', 'pcs', 'switches', 'patch_panels', 'locations'
+  const [activeTab, setActiveTab] = useState("connections");
 
-  const [message, setMessage] = useState(""); // General message for success/error
-  const [isMessageVisible, setIsMessageVisible] = useState(false); // Controls message visibility
+  const [message, setMessage] = useState("");
+  const [isMessageVisible, setIsMessageVisible] = useState(false);
 
   // State for Port Status Modal
   const [showPortStatusModal, setShowPortStatusModal] = useState(false);
@@ -40,15 +39,17 @@ function App() {
   const [modalEntityType, setModalEntityType] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
 
+  // State for Switch Diagram Modal
+  const [showSwitchDiagramModal, setShowSwitchDiagramModal] = useState(false); // New state
+  const [selectedSwitchForDiagram, setSelectedSwitchForDiagram] =
+    useState(null); // New state
+
   // State for editing a connection in the ConnectionForm
   const [editingConnection, setEditingConnection] = useState(null);
 
-  // State for showing the printable form (used for conditional rendering in main app)
-  const [showPrintableForm, setShowPrintableForm] = useState(false);
   // State to store CSS content for injecting into print window
   const [cssContent, setCssContent] = useState("");
 
-  // Function to show a message temporarily
   const showMessage = (msg, duration = 3000) => {
     setMessage(msg);
     setIsMessageVisible(true);
@@ -58,7 +59,6 @@ function App() {
     }, duration);
   };
 
-  // Memoized function to fetch data from the backend
   const fetchData = useCallback(async (endpoint, setter) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${endpoint}`);
@@ -76,7 +76,6 @@ function App() {
     }
   }, []);
 
-  // Fetch all initial data when the component mounts
   useEffect(() => {
     fetchData("pcs", setPcs);
     fetchData("patch_panels", setPatchPanels);
@@ -84,14 +83,12 @@ function App() {
     fetchData("connections", setConnections);
     fetchData("locations", setLocations);
 
-    // Fetch CSS content once when component mounts
-    fetch("/static/css/main.css") // Path to your compiled CSS file (relative to public folder)
+    fetch("/static/css/main.css")
       .then((res) => res.text())
       .then((css) => setCssContent(css))
       .catch((err) => console.error("Failed to load CSS for printing:", err));
   }, [fetchData]);
 
-  // Handle adding a new connection
   const handleAddConnection = async (newConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections`, {
@@ -114,7 +111,6 @@ function App() {
     }
   };
 
-  // Handle updating an existing connection
   const handleUpdateConnection = async (id, updatedConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
@@ -137,7 +133,6 @@ function App() {
     }
   };
 
-  // Handle deleting a connection
   const handleDeleteConnection = async (id) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this connection?"
@@ -164,7 +159,6 @@ function App() {
     }
   };
 
-  // Handle editing a connection (set the connection to be edited in state for form pre-fill)
   const handleEditConnection = (connection) => {
     const formattedConnection = {
       id: connection.id,
@@ -186,7 +180,6 @@ function App() {
     setEditingConnection(formattedConnection);
   };
 
-  // Function to add a new PC, Patch Panel, Switch, or Location
   const handleAddEntity = async (type, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}`, {
@@ -207,18 +200,17 @@ function App() {
       if (type === "switches") setSwitches((prev) => [...prev, newEntity]);
       if (type === "locations") setLocations((prev) => [...prev, newEntity]);
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
-      // Re-fetch data relevant to selection dropdowns
-      if (type === "patch_panels") fetchData("patch_panels", setPatchPanels);
-      if (type === "switches") fetchData("switches", setSwitches);
-      if (type === "pcs") fetchData("pcs", setPcs);
-      if (type === "locations") fetchData("locations", setLocations);
+      fetchData("connections", setConnections); // Re-fetch connections as new entities might affect them
+      fetchData("patch_panels", setPatchPanels);
+      fetchData("switches", setSwitches);
+      fetchData("pcs", setPcs);
+      fetchData("locations", setLocations);
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
     }
   };
 
-  // Function to update an existing PC, Patch Panel, Switch, or Location
   const handleUpdateEntity = async (type, id, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
@@ -250,7 +242,6 @@ function App() {
           prev.map((item) => (item.id === id ? updatedEntity : item))
         );
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-      // Re-fetch connections and other related data as their foreign key info might have changed
       fetchData("connections", setConnections);
       fetchData("patch_panels", setPatchPanels);
       fetchData("switches", setSwitches);
@@ -260,7 +251,6 @@ function App() {
     }
   };
 
-  // Function to delete a PC, Patch Panel, Switch, or Location
   const handleDeleteEntity = async (type, id) => {
     const confirmed = window.confirm(
       `Are you sure you want to delete this ${type.slice(
@@ -290,7 +280,6 @@ function App() {
       if (type === "locations")
         setLocations((prev) => prev.filter((item) => item.id !== id));
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-      // Re-fetch connections and other related data as cascade deletions might have occurred
       fetchData("connections", setConnections);
       fetchData("patch_panels", setPatchPanels);
       fetchData("switches", setSwitches);
@@ -300,7 +289,6 @@ function App() {
     }
   };
 
-  // Function to open the port status modal
   const handleShowPortStatus = async (entityType, entityId) => {
     try {
       const response = await fetch(
@@ -330,7 +318,18 @@ function App() {
     setModalEntityId(null);
   };
 
-  // Handle printing the form using an iframe
+  // New handler for showing the Switch Diagram Modal
+  const handleViewSwitchDiagram = (_switch) => {
+    setSelectedSwitchForDiagram(_switch);
+    setShowSwitchDiagramModal(true);
+  };
+
+  // New handler for closing the Switch Diagram Modal
+  const handleCloseSwitchDiagramModal = () => {
+    setShowSwitchDiagramModal(false);
+    setSelectedSwitchForDiagram(null);
+  };
+
   const handlePrintForm = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -338,14 +337,10 @@ function App() {
       return;
     }
 
-    // Render the PrintableConnectionForm component to a static HTML string
     const printableHtml = ReactDOMServer.renderToString(
-      <PrintableConnectionForm
-      // No longer passing dynamic data to this static form
-      />
+      <PrintableConnectionForm />
     );
 
-    // Inject the fetched CSS content directly
     const styleTag = `<style>${cssContent}</style>`;
 
     printWindow.document.write(`
@@ -364,13 +359,11 @@ function App() {
       </body>
       </html>
     `);
-    printWindow.document.close(); // Close the document to ensure content is loaded
+    printWindow.document.close();
 
-    // Wait for content to load, then print
     printWindow.onload = () => {
-      printWindow.focus(); // Focus the new window
-      printWindow.print(); // Trigger print
-      // printWindow.close(); // Close the window after printing (optional, can be annoying)
+      printWindow.focus();
+      printWindow.print();
     };
   };
 
@@ -395,15 +388,19 @@ function App() {
         />
       )}
 
-      {/* Printable Connection Form (Only visible when printing) */}
-      {/* This component is now rendered to string, not conditionally displayed in the main DOM */}
-      {/* Removed: {showPrintableForm && (...) } */}
+      {/* Switch Diagram Modal */}
+      {showSwitchDiagramModal && selectedSwitchForDiagram && (
+        <SwitchDiagramModal
+          isOpen={showSwitchDiagramModal}
+          onClose={handleCloseSwitchDiagramModal}
+          selectedSwitch={selectedSwitchForDiagram}
+          connections={connections} // Pass all connections to find connected PCs
+          pcs={pcs} // Pass PCs to help find PC details
+        />
+      )}
 
       {/* Main App Content */}
       <div>
-        {" "}
-        {/* Removed conditional 'no-print' class as iframe handles hiding */}
-        {/* Header Section */}
         <header className="mb-8 text-center">
           <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight sm:text-5xl">
             Network Device Documentation
@@ -413,7 +410,6 @@ function App() {
             ease.
           </p>
         </header>
-        {/* Main Content Area */}
         <main className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
           {/* Tab Navigation */}
           <div className="flex border-b border-gray-200 mb-6">
@@ -472,7 +468,6 @@ function App() {
           {/* Conditional Tab Content Rendering */}
           {activeTab === "connections" && (
             <>
-              {/* Connection Form Section */}
               <section className="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
                 <h2 className="text-2xl font-bold text-blue-700 mb-4">
                   Add/Edit Connection
@@ -491,7 +486,6 @@ function App() {
                 />
               </section>
 
-              {/* Print Form Button */}
               <div className="text-center mb-6">
                 <button
                   onClick={handlePrintForm}
@@ -501,7 +495,6 @@ function App() {
                 </button>
               </div>
 
-              {/* Connection List Section */}
               <section>
                 <h2 className="text-2xl font-bold text-blue-700 mb-6">
                   All Connections
@@ -544,6 +537,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
+                onViewDiagram={handleViewSwitchDiagram}
               />
             </section>
           )}
@@ -569,7 +563,6 @@ function App() {
               <h2 className="text-2xl font-bold text-blue-700 mb-6">
                 Manage Locations
               </h2>
-              {/* Form for adding new locations */}
               <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-6">
                 <h3 className="text-xl font-bold text-blue-700 mb-4">
                   Add New Location
@@ -601,7 +594,6 @@ function App() {
                 </form>
               </div>
 
-              {/* List of existing locations */}
               <div className="space-y-3">
                 {locations.length > 0 ? (
                   locations.map((location) => (
@@ -631,7 +623,6 @@ function App() {
             </section>
           )}
         </main>
-        {/* Footer (Optional) */}
         <footer className="mt-12 text-center text-gray-500 text-sm">
           <p>&copy; 2025 Network Doc App. All rights reserved.</p>
         </footer>

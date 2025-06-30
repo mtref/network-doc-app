@@ -116,7 +116,7 @@ class Connection(db.Model):
     __tablename__ = 'connections'
     id = db.Column(db.Integer, primary_key=True)
     pc_id = db.Column(db.Integer, db.ForeignKey('pcs.id'), nullable=False)
-    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
+    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False) # The column itself is here
     switch_port = db.Column(db.String(50), nullable=False)
     is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
 
@@ -128,6 +128,8 @@ class Connection(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'pc_id': self.pc_id,  # Add pc_id here
+            'switch_id': self.switch_id, # Add switch_id here
             'pc': self.pc.to_dict() if self.pc else None,
             'hops': [hop.to_dict() for hop in self.hops],
             'switch': self.switch.to_dict() if self.switch else None,
