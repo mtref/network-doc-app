@@ -23,6 +23,7 @@ import {
   ChevronUp,
   HardDrive,
   Router,
+  Building2, // New icon for Office
 } from "lucide-react";
 
 // New component for individual connection cards
@@ -235,6 +236,12 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               <span className="font-medium">Ports:</span>{" "}
               {connection.pc?.ports_name || "N/A"}
             </p>
+            <p className="flex items-center">
+              <Building2 size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">Office:</span>{" "}
+              {connection.pc?.office || "N/A"}
+            </p>{" "}
+            {/* Display Office field */}
             <p className="flex items-start col-span-full">
               <Info
                 size={16}

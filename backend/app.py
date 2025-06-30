@@ -44,6 +44,7 @@ class PC(db.Model):
     in_domain = db.Column(db.Boolean, nullable=False, default=False) # New field
     operating_system = db.Column(db.String(100), nullable=True) # New field
     ports_name = db.Column(db.String(255), nullable=True) # New field
+    office = db.Column(db.String(100), nullable=True) # New field: Office
     description = db.Column(db.String(255), nullable=True) # Changed to optional
 
     def to_dict(self):
@@ -55,6 +56,7 @@ class PC(db.Model):
             'in_domain': self.in_domain,
             'operating_system': self.operating_system,
             'ports_name': self.ports_name,
+            'office': self.office, # Include new field
             'description': self.description
         }
 
@@ -248,6 +250,7 @@ def handle_pcs():
             in_domain=data.get('in_domain', False),
             operating_system=data.get('operating_system'),
             ports_name=data.get('ports_name'),
+            office=data.get('office'), # Handle new field
             description=data.get('description')
         )
         try:
@@ -276,6 +279,7 @@ def handle_pc_by_id(pc_id):
         pc.in_domain = data.get('in_domain', pc.in_domain)
         pc.operating_system = data.get('operating_system', pc.operating_system)
         pc.ports_name = data.get('ports_name', pc.ports_name)
+        pc.office = data.get('office', pc.office) # Handle new field
         pc.description = data.get('description', pc.description)
         try:
             db.session.commit()

@@ -68,9 +68,8 @@ function PrintableConnectionForm() {
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
             </div>
             <div className="space-y-2">
-              {" "}
-              {/* New field: Office */}
-              <label className="block font-medium text-gray-700">Office:</label>
+              <label className="block font-medium text-gray-700">Office:</label>{" "}
+              {/* New field: Office  */}
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
             </div>
             <div className="md:col-span-2 space-y-2">

@@ -30,13 +30,14 @@ function ConnectionForm({
   const [isNewPpExpanded, setIsNewPpExpanded] = useState(false);
   const [isNewSwitchExpanded, setIsNewSwitchExpanded] = useState(false);
 
-  // State for new entity forms
+  // State for new entity forms (these states are ONLY for the collapsible add forms)
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
   const [newPcUsername, setNewPcUsername] = useState("");
   const [newPcInDomain, setNewPcInDomain] = useState(false);
   const [newPcOs, setNewPcOs] = useState("");
   const [newPcPortsName, setNewPcPortsName] = useState("");
+  const [newPcOffice, setNewPcOffice] = useState(""); // New state for office
   const [newPcDesc, setNewPcDesc] = useState("");
 
   const [newPpName, setNewPpName] = useState("");
@@ -69,51 +70,9 @@ function ConnectionForm({
       );
       setHops(editingConnection.hops || []);
 
-      // Populate PC fields if PC object is available
-      if (editingConnection.pc) {
-        setNewPcName(editingConnection.pc.name || "");
-        setNewPcIp(editingConnection.pc.ip_address || "");
-        setNewPcUsername(editingConnection.pc.username || "");
-        setNewPcInDomain(editingConnection.pc.in_domain || false);
-        setNewPcOs(editingConnection.pc.operating_system || "");
-        setNewPcPortsName(editingConnection.pc.ports_name || "");
-        setNewPcDesc(editingConnection.pc.description || "");
-      } else {
-        // Clear PC form fields if no PC data
-        setNewPcName("");
-        setNewPcIp("");
-        setNewPcUsername("");
-        setNewPcInDomain(false);
-        setNewPcOs("");
-        setNewPcPortsName("");
-        setNewPcDesc("");
-      }
-
-      // Populate Switch fields if Switch object is available
-      if (editingConnection.switch) {
-        setNewSwitchName(editingConnection.switch.name || "");
-        setNewSwitchIp(editingConnection.switch.ip_address || "");
-        setNewSwitchLocationId(editingConnection.switch.location_id || "");
-        setNewSwitchRowInRack(editingConnection.switch.row_in_rack || "");
-        setNewSwitchRackName(editingConnection.switch.rack_name || "");
-        setNewSwitchTotalPorts(editingConnection.switch.total_ports || 1);
-        setNewSwitchSourcePort(editingConnection.switch.source_port || "");
-        setNewSwitchModel(editingConnection.switch.model || "");
-        setNewSwitchDesc(editingConnection.switch.description || "");
-      } else {
-        // Clear Switch form fields if no Switch data
-        setNewSwitchName("");
-        setNewSwitchIp("");
-        setNewSwitchLocationId("");
-        setNewSwitchRowInRack("");
-        setNewSwitchRackName("");
-        setNewSwitchTotalPorts(1);
-        setNewSwitchSourcePort("");
-        setNewSwitchModel("");
-        setNewSwitchDesc("");
-      }
-
-      // Patch Panel details are within hops, which are handled by setHops
+      // IMPORTANT: Do NOT populate newPc/newPp/newSwitch states here.
+      // Those are for adding NEW entities. This form is for editing the CONNECTION.
+      // The dropdowns for PC and Switch will automatically select based on pcId and switchId.
     } else {
       // Clear all form fields if not editing
       setPcId("");
@@ -121,12 +80,14 @@ function ConnectionForm({
       setSwitchPort("");
       setIsSwitchPortUp(true);
       setHops([]);
+      // Also clear the "Add New" entity forms' states when not editing a connection
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
       setNewPcInDomain(false);
       setNewPcOs("");
       setNewPcPortsName("");
+      setNewPcOffice("");
       setNewPcDesc("");
       setNewPpName("");
       setNewPpLocationId("");
@@ -241,6 +202,7 @@ function ConnectionForm({
         in_domain: newPcInDomain,
         operating_system: newPcOs,
         ports_name: newPcPortsName,
+        office: newPcOffice,
         description: newPcDesc,
       });
       setNewPcName("");
@@ -249,6 +211,7 @@ function ConnectionForm({
       setNewPcInDomain(false);
       setNewPcOs("");
       setNewPcPortsName("");
+      setNewPcOffice("");
       setNewPcDesc("");
       setIsNewPcExpanded(false); // Collapse after adding
     }
@@ -348,7 +311,7 @@ function ConnectionForm({
               />
               <input
                 type="text"
-                placeholder="IP Address (Optional)"
+                placeholder="IP Address (e.g., 192.168.1.1)"
                 value={newPcIp}
                 onChange={(e) => setNewPcIp(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -387,6 +350,13 @@ function ConnectionForm({
                 placeholder="Ports Name (e.g., HDMI, USB, Eth)"
                 value={newPcPortsName}
                 onChange={(e) => setNewPcPortsName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Office (Optional)"
+                value={newPcOffice}
+                onChange={(e) => setNewPcOffice(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
               <textarea
@@ -524,7 +494,7 @@ function ConnectionForm({
               />
               <input
                 type="text"
-                placeholder="IP Address (Optional)"
+                placeholder="IP Address (e.g., 192.168.1.1)"
                 value={newSwitchIp}
                 onChange={(e) => setNewSwitchIp(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -654,7 +624,7 @@ function ConnectionForm({
               id="switch-select"
               value={switchId}
               onChange={(e) => setSwitchId(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">-- Select a Switch --</option>
@@ -736,7 +706,7 @@ function ConnectionForm({
               <div className="flex-grow w-full md:w-auto">
                 <label
                   htmlFor={`pp-select-${index}`}
-                  className="block text-xs font-medium text-gray-600 mb-1"
+                  className="block text-sm font-medium text-gray-700 mb-1"
                 >
                   Patch Panel {index + 1}:
                 </label>
@@ -765,7 +735,7 @@ function ConnectionForm({
               <div className="flex-grow w-full md:w-auto">
                 <label
                   htmlFor={`pp-port-${index}`}
-                  className="block text-xs font-medium text-gray-600 mb-1"
+                  className="block text-sm font-medium text-gray-700 mb-1"
                 >
                   Port:
                 </label>

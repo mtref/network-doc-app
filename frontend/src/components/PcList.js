@@ -15,6 +15,7 @@ import {
   ToggleRight,
   ToggleLeft,
   Monitor,
+  Building2, // New icon for Office
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -27,6 +28,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [pcFormInDomain, setPcFormInDomain] = useState(false); // New field
   const [pcFormOs, setPcFormOs] = useState(""); // New field
   const [pcFormPortsName, setPcFormPortsName] = useState(""); // New field
+  const [pcFormOffice, setPcFormOffice] = useState(""); // New state for Office
   const [pcFormDesc, setPcFormDesc] = useState("");
 
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false); // State for collapsible add form
@@ -48,6 +50,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
           .toLowerCase()
           .includes(lowerCaseSearchTerm) || // Search by OS
         (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by ports_name
+        (pc.office || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by Office
         (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm)
     );
     setFilteredPcs(filtered);
@@ -62,6 +65,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormInDomain(pc.in_domain || false);
     setPcFormOs(pc.operating_system || "");
     setPcFormPortsName(pc.ports_name || "");
+    setPcFormOffice(pc.office || ""); // Populate new field
     setPcFormDesc(pc.description || "");
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
@@ -83,6 +87,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       in_domain: pcFormInDomain,
       operating_system: pcFormOs,
       ports_name: pcFormPortsName,
+      office: pcFormOffice, // Include new field
       description: pcFormDesc,
     };
 
@@ -98,6 +103,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormInDomain(false);
     setPcFormOs("");
     setPcFormPortsName("");
+    setPcFormOffice(""); // Clear new field
     setPcFormDesc("");
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
@@ -180,6 +186,13 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
               onChange={(e) => setPcFormPortsName(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+            <input
+              type="text"
+              placeholder="Office (Optional)" // New Office field
+              value={pcFormOffice} // State for Office
+              onChange={(e) => setPcFormOffice(e.target.value)} // Update state on change
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
             <textarea
               placeholder="Description (Optional)"
               value={pcFormDesc}
@@ -199,6 +212,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                     setPcFormInDomain(false);
                     setPcFormOs("");
                     setPcFormPortsName("");
+                    setPcFormOffice(""); // Clear new field
                     setPcFormDesc("");
                     setIsAddPcFormExpanded(false);
                   }}
@@ -252,6 +266,10 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Ports:{" "}
                 {pc.ports_name || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Building2 size={16} className="text-gray-500 mr-2" /> Office:{" "}
+                {pc.office || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
                 <Info
