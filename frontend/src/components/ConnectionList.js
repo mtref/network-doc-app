@@ -2,9 +2,9 @@
 // This component displays a list of network connections in a compact, single-line format.
 // Each connection shows its full path from PC through multiple Patch Panels to a Switch,
 // with actions for editing and deleting.
-// The expand/collapse feature has been reintroduced.
+// The expand/collapse feature has been reintroduced with a more organized expanded view.
 
-import React, { useState } from "react"; // Reintroduced useState for expand/collapse
+import React, { useState } from "react";
 // Import icons from lucide-react for a better UI and consistent design
 import {
   Laptop,
@@ -21,13 +21,13 @@ import {
   MapPin,
   ChevronDown,
   ChevronUp,
-  Router,
   HardDrive,
-} from "lucide-react"; // Reintroduced ChevronDown, ChevronUp icons
+  Router,
+} from "lucide-react";
 
 // New component for individual connection cards
 function ConnectionCard({ connection, onDelete, onEdit }) {
-  const [isExpanded, setIsExpanded] = useState(false); // Reintroduced isExpanded state
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -35,8 +35,8 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
 
   return (
     <div
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4 cursor-pointer" // Reintroduced cursor-pointer
-      onClick={toggleExpand} // Reintroduced onClick for expand/collapse
+      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4 cursor-pointer"
+      onClick={toggleExpand}
     >
       {/* Top row: Summary Path and Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
@@ -174,12 +174,11 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             onClick={(e) => {
               e.stopPropagation();
               toggleExpand();
-            }} // Reintroduced expand button logic
+            }}
             className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 text-gray-600"
             title={isExpanded ? "Collapse Details" : "Expand Details"}
           >
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}{" "}
-            {/* Reintroduced Chevron icons */}
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
       </div>
@@ -187,164 +186,177 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
       {/* Expanded Details Section (Conditional Rendering with collapsible-content) */}
       <div
         className={`collapsible-content ${isExpanded ? "expanded" : ""} ${
-          isExpanded ? "pt-4 pb-4 px-4" : "pt-0 pb-0 px-4"
+          isExpanded ? "py-4 px-4" : "py-0 px-4"
         }`}
       >
-        <div className="mt-4 border-t border-gray-100 space-y-2 text-gray-700 text-sm">
-          {" "}
-          {/* Removed px-4 pb-4 from here */}
+        <div className="space-y-4">
           {/* PC Details */}
-          <p className="flex items-center">
-            <Laptop size={16} className="text-indigo-500 mr-2" />{" "}
-            <span className="font-medium">PC Name:</span>{" "}
-            {connection.pc?.name || "N/A"}
-          </p>
-          <p className="flex items-center">
-            <Router size={16} className="text-gray-500 mr-2" />{" "}
-            <span className="font-medium">PC IP:</span>{" "}
-            {connection.pc?.ip_address || "N/A"}
-          </p>
-          <p className="flex items-center">
-            <User size={16} className="text-gray-500 mr-2" />{" "}
-            <span className="font-medium">Username:</span>{" "}
-            {connection.pc?.username || "N/A"}
-          </p>
-          <p className="flex items-center">
-            {connection.pc?.in_domain ? (
-              <Wifi size={16} className="text-green-500 mr-2" />
-            ) : (
-              <WifiOff size={16} className="text-red-500 mr-2" />
-            )}
-            <span className="font-medium">In Domain:</span>{" "}
-            {connection.pc?.in_domain !== undefined
-              ? connection.pc.in_domain
-                ? "Yes"
-                : "No"
-              : "N/A"}
-          </p>
-          <p className="flex items-center">
-            <Monitor size={16} className="text-gray-500 mr-2" />{" "}
-            <span className="font-medium">OS:</span>{" "}
-            {connection.pc?.operating_system || "N/A"}
-          </p>
-          <p className="flex items-center">
-            <Columns size={16} className="text-gray-500 mr-2" />{" "}
-            <span className="font-medium">Ports Name:</span>{" "}
-            {connection.pc?.ports_name || "N/A"}
-          </p>
-          <p className="flex items-start">
-            <Info
-              size={16}
-              className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-            />{" "}
-            <span className="font-medium">PC Description:</span>{" "}
-            {connection.pc?.description || "No description"}
-          </p>
-          {/* Patch Panel Hops Details */}
-          {connection.hops.map((hop, index) => (
-            <div
-              key={`detail-hop-${index}`}
-              className="mt-3 pt-3 border-t border-gray-100"
-            >
-              <p className="flex items-center">
-                <Split size={16} className="text-green-500 mr-2" />{" "}
-                <span className="font-medium">
-                  Patch Panel {index + 1} Name:
-                </span>{" "}
-                {hop.patch_panel?.name || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <MapPin size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Location:</span>{" "}
-                {hop.patch_panel?.location_name || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Columns size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Row in Rack:</span>{" "}
-                {hop.patch_panel?.row_in_rack || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Server size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Rack Name:</span>{" "}
-                {hop.patch_panel?.rack_name || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Total Ports:</span>{" "}
-                {hop.patch_panel?.total_ports || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Link size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Port:</span>{" "}
-                {hop.patch_panel_port || "N/A"} - Status:{" "}
-                {hop.is_port_up ? "Up" : "Down"}
-              </p>
-              <p className="flex items-start">
-                <Info
-                  size={16}
-                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-                />{" "}
-                <span className="font-medium">Description:</span>{" "}
-                {hop.patch_panel?.description || "No description"}
-              </p>
-            </div>
-          ))}
-          {/* Switch Details */}
-          <div className="mt-3 pt-3 border-t border-gray-100">
+          <h4 className="font-semibold text-indigo-700 mb-2">PC Details:</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
             <p className="flex items-center">
-              <Server size={16} className="text-red-500 mr-2" />{" "}
-              <span className="font-medium">Switch Name:</span>{" "}
-              {connection.switch?.name || "N/A"}
+              <Laptop size={16} className="text-indigo-500 mr-2" />{" "}
+              <span className="font-medium">Name:</span>{" "}
+              {connection.pc?.name || "N/A"}
             </p>
             <p className="flex items-center">
               <Router size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Switch IP:</span>{" "}
-              {connection.switch?.ip_address || "N/A"}
+              <span className="font-medium">IP:</span>{" "}
+              {connection.pc?.ip_address || "N/A"}
             </p>
             <p className="flex items-center">
-              <MapPin size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Location:</span>{" "}
-              {connection.switch?.location_name || "N/A"}
+              <User size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">Username:</span>{" "}
+              {connection.pc?.username || "N/A"}
+            </p>
+            <p className="flex items-center">
+              {connection.pc?.in_domain !== undefined ? (
+                connection.pc.in_domain ? (
+                  <Wifi size={16} className="text-green-500 mr-2" />
+                ) : (
+                  <WifiOff size={16} className="text-red-500 mr-2" />
+                )
+              ) : (
+                <Info size={16} className="text-gray-500 mr-2" />
+              )}
+              <span className="font-medium">In Domain:</span>{" "}
+              {connection.pc?.in_domain !== undefined
+                ? connection.pc.in_domain
+                  ? "Yes"
+                  : "No"
+                : "N/A"}
+            </p>
+            <p className="flex items-center">
+              <Monitor size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">OS:</span>{" "}
+              {connection.pc?.operating_system || "N/A"}
             </p>
             <p className="flex items-center">
               <Columns size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Row in Rack:</span>{" "}
-              {connection.switch?.row_in_rack || "N/A"}
+              <span className="font-medium">Ports:</span>{" "}
+              {connection.pc?.ports_name || "N/A"}
             </p>
-            <p className="flex items-center">
-              <Server size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Rack Name:</span>{" "}
-              {connection.switch?.rack_name || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Total Ports:</span>{" "}
-              {connection.switch?.total_ports || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Link size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Source Port:</span>{" "}
-              {connection.switch?.source_port || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Info size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Model:</span>{" "}
-              {connection.switch?.model || "N/A"}
-            </p>
-            <p className="flex items-start">
+            <p className="flex items-start col-span-full">
               <Info
                 size={16}
                 className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
               />{" "}
               <span className="font-medium">Description:</span>{" "}
-              {connection.switch?.description || "No description"}
+              {connection.pc?.description || "No description"}
             </p>
-            <p className="flex items-center">
-              <Link size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Port:</span>{" "}
-              {connection.switch_port || "N/A"} - Status:{" "}
-              {connection.is_switch_port_up ? "Up" : "Down"}
-            </p>
+          </div>
+
+          {/* Patch Panel Hops Details */}
+          {connection.hops.map((hop, index) => (
+            <div
+              key={`detail-hop-${index}`}
+              className="mt-4 pt-4 border-t border-gray-100"
+            >
+              <h4 className="font-semibold text-green-700 mb-2">
+                Patch Panel {index + 1} Details:
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                <p className="flex items-center">
+                  <Split size={16} className="text-green-500 mr-2" />{" "}
+                  <span className="font-medium">Name:</span>{" "}
+                  {hop.patch_panel?.name || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <MapPin size={16} className="text-gray-500 mr-2" />{" "}
+                  <span className="font-medium">Location:</span>{" "}
+                  {hop.patch_panel?.location_name || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <Columns size={16} className="text-gray-500 mr-2" />{" "}
+                  <span className="font-medium">Row:</span>{" "}
+                  {hop.patch_panel?.row_in_rack || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <Server size={16} className="text-gray-500 mr-2" />{" "}
+                  <span className="font-medium">Rack:</span>{" "}
+                  {hop.patch_panel?.rack_name || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
+                  <span className="font-medium">Total Ports:</span>{" "}
+                  {hop.patch_panel?.total_ports || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <Link size={16} className="text-gray-500 mr-2" />{" "}
+                  <span className="font-medium">Port:</span>{" "}
+                  {hop.patch_panel_port || "N/A"} - Status:{" "}
+                  {hop.is_port_up ? "Up" : "Down"}
+                </p>
+                <p className="flex items-start col-span-full">
+                  <Info
+                    size={16}
+                    className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                  />{" "}
+                  <span className="font-medium">Description:</span>{" "}
+                  {hop.patch_panel?.description || "No description"}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {/* Switch Details */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h4 className="font-semibold text-red-700 mb-2">Switch Details:</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+              <p className="flex items-center">
+                <Server size={16} className="text-red-500 mr-2" />{" "}
+                <span className="font-medium">Name:</span>{" "}
+                {connection.switch?.name || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Router size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">IP:</span>{" "}
+                {connection.switch?.ip_address || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <MapPin size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Location:</span>{" "}
+                {connection.switch?.location_name || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Columns size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Row:</span>{" "}
+                {connection.switch?.row_in_rack || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Server size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Rack:</span>{" "}
+                {connection.switch?.rack_name || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Total Ports:</span>{" "}
+                {connection.switch?.total_ports || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Link size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Source Port:</span>{" "}
+                {connection.switch?.source_port || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Info size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Model:</span>{" "}
+                {connection.switch?.model || "N/A"}
+              </p>
+              <p className="flex items-start col-span-full">
+                <Info
+                  size={16}
+                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                />{" "}
+                <span className="font-medium">Description:</span>{" "}
+                {connection.switch?.description || "No description"}
+              </p>
+              <p className="flex items-center col-span-full">
+                <Link size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Port:</span>{" "}
+                {connection.switch_port || "N/A"} - Status:{" "}
+                {connection.is_switch_port_up ? "Up" : "Down"}
+              </p>
+            </div>
           </div>
         </div>
       </div>
