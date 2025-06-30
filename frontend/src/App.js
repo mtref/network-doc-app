@@ -8,7 +8,7 @@ import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
-import PatchPanelList from "./components/PatchPanelList"; // New: Import PatchPanelList component
+import PatchPanelList from "./components/PatchPanelList";
 
 // Base URL for the backend API. When running in Docker Compose,
 // 'backend' is the service name and resolves to the backend container's IP.
@@ -23,7 +23,7 @@ function App() {
   const [patchPanels, setPatchPanels] = useState([]);
   const [switches, setSwitches] = useState([]);
   const [connections, setConnections] = useState([]);
-  const [locations, setLocations] = useState([]); // New: State for locations
+  const [locations, setLocations] = useState([]);
 
   // State for current active tab
   const [activeTab, setActiveTab] = useState("connections"); // 'connections', 'pcs', 'switches', 'patch_panels', 'locations'
@@ -36,6 +36,9 @@ function App() {
   const [portStatusData, setPortStatusData] = useState(null);
   const [modalEntityType, setModalEntityType] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
+
+  // State for editing a connection in the ConnectionForm
+  const [editingConnection, setEditingConnection] = useState(null);
 
   // Function to show a message temporarily
   const showMessage = (msg, duration = 3000) => {
@@ -71,7 +74,7 @@ function App() {
     fetchData("patch_panels", setPatchPanels);
     fetchData("switches", setSwitches);
     fetchData("connections", setConnections);
-    fetchData("locations", setLocations); // Fetch locations
+    fetchData("locations", setLocations);
   }, [fetchData]);
 
   // Handle adding a new connection
@@ -88,8 +91,9 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections); // Re-fetch all connections to update UI
+      fetchData("connections", setConnections);
       showMessage("Connection added successfully!");
+      setEditingConnection(null); // Clear editing state after add
     } catch (error) {
       console.error("Error adding connection:", error);
       showMessage(`Error adding connection: ${error.message}`, 8000);
@@ -110,8 +114,9 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections); // Re-fetch all connections to update UI
+      fetchData("connections", setConnections);
       showMessage("Connection updated successfully!");
+      setEditingConnection(null); // Clear editing state after update
     } catch (error) {
       console.error("Error updating connection:", error);
       showMessage(`Error updating connection: ${error.message}`, 8000);
@@ -146,11 +151,24 @@ function App() {
   };
 
   // Handle editing a connection (set the connection to be edited in state for form pre-fill)
-  // This function is still here, but actual editing state management might be more local to forms now.
   const handleEditConnection = (connection) => {
-    // This is a placeholder. Real editing will happen via a dedicated form opened by ConnectionList
-    // or through a common state passed to ConnectionForm.
-    // For now, this just demonstrates the trigger.
+    // Format the connection object to match the expected structure of ConnectionForm's state
+    const formattedConnection = {
+      id: connection.id,
+      pc_id: connection.pc?.id,
+      switch_id: connection.switch?.id,
+      switch_port: connection.switch_port,
+      is_switch_port_up: connection.is_switch_port_up,
+      hops: connection.hops.map((hop) => ({
+        patch_panel_id: hop.patch_panel?.id,
+        patch_panel_port: hop.patch_panel_port,
+        is_port_up: hop.is_port_up,
+      })),
+      // Include full PC and Switch objects for display in the form if needed,
+      // though the form primarily uses their IDs for dropdowns.
+      // The `pcs`, `patchPanels`, `switches` props already provide the full objects.
+    };
+    setEditingConnection(formattedConnection);
   };
 
   // Function to add a new PC, Patch Panel, Switch, or Location
@@ -172,13 +190,13 @@ function App() {
       if (type === "patch_panels")
         setPatchPanels((prev) => [...prev, newEntity]);
       if (type === "switches") setSwitches((prev) => [...prev, newEntity]);
-      if (type === "locations") setLocations((prev) => [...prev, newEntity]); // Update locations state
+      if (type === "locations") setLocations((prev) => [...prev, newEntity]);
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
       // Re-fetch data relevant to selection dropdowns
       if (type === "patch_panels") fetchData("patch_panels", setPatchPanels);
       if (type === "switches") fetchData("switches", setSwitches);
       if (type === "pcs") fetchData("pcs", setPcs);
-      if (type === "locations") fetchData("locations", setLocations); // Re-fetch locations to keep dropdowns updated
+      if (type === "locations") fetchData("locations", setLocations);
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
@@ -215,12 +233,12 @@ function App() {
       if (type === "locations")
         setLocations((prev) =>
           prev.map((item) => (item.id === id ? updatedEntity : item))
-        ); // Update locations state
+        );
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
       // Re-fetch connections and other related data as their foreign key info might have changed
       fetchData("connections", setConnections);
-      fetchData("patch_panels", setPatchPanels); // Important if location name changes
-      fetchData("switches", setSwitches); // Important if location name changes
+      fetchData("patch_panels", setPatchPanels);
+      fetchData("switches", setSwitches);
     } catch (error) {
       console.error(`Error updating ${type}:`, error);
       showMessage(`Error updating ${type}: ${error.message}`, 5000);
@@ -255,12 +273,12 @@ function App() {
       if (type === "switches")
         setSwitches((prev) => prev.filter((item) => item.id !== id));
       if (type === "locations")
-        setLocations((prev) => prev.filter((item) => item.id !== id)); // Update locations state
+        setLocations((prev) => prev.filter((item) => item.id !== id));
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
       // Re-fetch connections and other related data as cascade deletions might have occurred
       fetchData("connections", setConnections);
-      fetchData("patch_panels", setPatchPanels); // To ensure dropdowns reflect deletions
-      fetchData("switches", setSwitches); // To ensure dropdowns reflect deletions
+      fetchData("patch_panels", setPatchPanels);
+      fetchData("switches", setSwitches);
     } catch (error) {
       console.error(`Error deleting ${type}:`, error);
       showMessage(`Error deleting ${type}: ${error.message}`, 5000);
@@ -398,8 +416,8 @@ function App() {
                 switches={switches}
                 onAddConnection={handleAddConnection}
                 onUpdateConnection={handleUpdateConnection}
-                editingConnection={null}
-                setEditingConnection={() => {}}
+                editingConnection={editingConnection} // Pass editingConnection state
+                setEditingConnection={setEditingConnection} // Pass setter for ConnectionForm to clear/manage
                 onAddEntity={handleAddEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
@@ -414,7 +432,7 @@ function App() {
               <ConnectionList
                 connections={connections}
                 onDelete={handleDeleteConnection}
-                onEdit={handleEditConnection}
+                onEdit={handleEditConnection} // Pass handleEditConnection
               />
               {connections.length === 0 && (
                 <p className="text-center text-gray-500 text-lg mt-8">

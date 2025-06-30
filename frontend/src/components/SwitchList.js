@@ -290,7 +290,7 @@ function SwitchList({
                 {_switch.location_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Columns size={16} className="text-gray-500 mr-2" /> Row:{" "}
+                <Server size={16} className="text-gray-500 mr-2" /> Row:{" "}
                 {_switch.row_in_rack || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">

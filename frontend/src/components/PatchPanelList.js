@@ -223,11 +223,11 @@ function PatchPanelList({
                 {pp.location_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Columns size={16} className="text-gray-500 mr-2" /> Row:{" "}
+                <Server size={16} className="text-gray-500 mr-2" /> Row:{" "}
                 {pp.row_in_rack || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Server size={16} className="text-gray-500 mr-2" /> Rack:{" "}
+                <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
                 {pp.rack_name || "N/A"} {/* Changed icon to Server for Rack */}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">

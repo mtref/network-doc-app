@@ -19,7 +19,6 @@ function ConnectionForm({
   onShowPortStatus,
   locations,
 }) {
-  // Added locations prop
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
@@ -34,16 +33,28 @@ function ConnectionForm({
   // State for new entity forms
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
+  const [newPcUsername, setNewPcUsername] = useState(""); // Declared newPcUsername
+  const [newPcInDomain, setNewPcInDomain] = useState(false); // Declared newPcInDomain
+  const [newPcOs, setNewPcOs] = useState(""); // Declared newPcOs
+  const [newPcPortsName, setNewPcPortsName] = useState(""); // Declared newPcPortsName
   const [newPcDesc, setNewPcDesc] = useState("");
 
   const [newPpName, setNewPpName] = useState("");
-  const [newPpLocationId, setNewPpLocationId] = useState(""); // Changed to location_id
+  const [newPpLocationId, setNewPpLocationId] = useState("");
+  const [newPpRowInRack, setNewPpRowInRack] = useState(""); // Declared newPpRowInRack
+  const [newPpRackName, setNewPpRackName] = useState(""); // Declared newPpRackName
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
+  const [newPpDesc, setNewPpDesc] = useState(""); // Declared newPpDesc
 
   const [newSwitchName, setNewSwitchName] = useState("");
   const [newSwitchIp, setNewSwitchIp] = useState("");
-  const [newSwitchLocationId, setNewSwitchLocationId] = useState(""); // Changed to location_id
+  const [newSwitchLocationId, setNewSwitchLocationId] = useState("");
+  const [newSwitchRowInRack, setNewSwitchRowInRack] = useState(""); // Declared newSwitchRowInRack
+  const [newSwitchRackName, setNewSwitchRackName] = useState(""); // Declared newSwitchRackName
   const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
+  const [newSwitchSourcePort, setNewSwitchSourcePort] = useState(""); // Declared newSwitchSourcePort
+  const [newSwitchModel, setNewSwitchModel] = useState(""); // Declared newSwitchModel
+  const [newSwitchDesc, setNewSwitchDesc] = useState(""); // Declared newSwitchDesc
 
   // Populate form fields if editing an existing connection
   useEffect(() => {
@@ -151,10 +162,18 @@ function ConnectionForm({
       await onAddEntity("pcs", {
         name: newPcName,
         ip_address: newPcIp,
+        username: newPcUsername,
+        in_domain: newPcInDomain,
+        operating_system: newPcOs,
+        ports_name: newPcPortsName,
         description: newPcDesc,
       });
       setNewPcName("");
       setNewPcIp("");
+      setNewPcUsername("");
+      setNewPcInDomain(false);
+      setNewPcOs("");
+      setNewPcPortsName("");
       setNewPcDesc("");
       setIsNewPcExpanded(false); // Collapse after adding
     }
@@ -163,15 +182,20 @@ function ConnectionForm({
   const handleAddPp = async (e) => {
     e.preventDefault();
     if (newPpName.trim() && newPpLocationId) {
-      // location_id is now required
       await onAddEntity("patch_panels", {
         name: newPpName,
         location_id: parseInt(newPpLocationId),
+        row_in_rack: newPpRowInRack,
+        rack_name: newPpRackName,
         total_ports: parseInt(newPpTotalPorts),
+        description: newPpDesc,
       });
       setNewPpName("");
       setNewPpLocationId("");
+      setNewPpRowInRack("");
+      setNewPpRackName("");
       setNewPpTotalPorts(1);
+      setNewPpDesc("");
       setIsNewPpExpanded(false); // Collapse after adding
     } else {
       alert("Patch Panel Name and Location are required.");
@@ -181,17 +205,26 @@ function ConnectionForm({
   const handleAddSwitch = async (e) => {
     e.preventDefault();
     if (newSwitchName.trim() && newSwitchLocationId) {
-      // location_id is now required
       await onAddEntity("switches", {
         name: newSwitchName,
         ip_address: newSwitchIp,
         location_id: parseInt(newSwitchLocationId),
+        row_in_rack: newSwitchRowInRack,
+        rack_name: newSwitchRackName,
         total_ports: parseInt(newSwitchTotalPorts),
+        source_port: newSwitchSourcePort,
+        model: newSwitchModel,
+        description: newSwitchDesc,
       });
       setNewSwitchName("");
       setNewSwitchIp("");
       setNewSwitchLocationId("");
+      setNewSwitchRowInRack("");
+      setNewSwitchRackName("");
       setNewSwitchTotalPorts(1);
+      setNewSwitchSourcePort("");
+      setNewSwitchModel("");
+      setNewSwitchDesc("");
       setIsNewSwitchExpanded(false); // Collapse after adding
     } else {
       alert("Switch Name and Location are required.");
@@ -240,11 +273,47 @@ function ConnectionForm({
               />
               <input
                 type="text"
+                placeholder="Username (Optional)"
+                value={newPcUsername}
+                onChange={(e) => setNewPcUsername(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="flex items-center">
+                <input
+                  id="pc-in-domain"
+                  type="checkbox"
+                  checked={newPcInDomain}
+                  onChange={(e) => setNewPcInDomain(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="pc-in-domain"
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  In Domain
+                </label>
+              </div>
+              <input
+                type="text"
+                placeholder="Operating System (Optional)"
+                value={newPcOs}
+                onChange={(e) => setNewPcOs(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Ports Name (e.g., HDMI, USB, Eth)"
+                value={newPcPortsName}
+                onChange={(e) => setNewPcPortsName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <textarea
                 placeholder="Description (Optional)"
                 value={newPcDesc}
                 onChange={(e) => setNewPcDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                rows="3"
+              ></textarea>
               <button
                 type="submit"
                 className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -303,6 +372,20 @@ function ConnectionForm({
                 </p>
               )}
               <input
+                type="text"
+                placeholder="Row in Rack (Optional)"
+                value={newPpRowInRack}
+                onChange={(e) => setNewPpRowInRack(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Rack Name (Optional)"
+                value={newPpRackName}
+                onChange={(e) => setNewPpRackName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
                 type="number"
                 placeholder="Total Ports (e.g., 24)"
                 value={newPpTotalPorts}
@@ -311,13 +394,19 @@ function ConnectionForm({
                 min="1"
                 required
               />
+              <textarea
+                placeholder="Description (Optional)"
+                value={newPpDesc}
+                onChange={(e) => setNewPpDesc(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                rows="3"
+              ></textarea>
               <button
                 type="submit"
                 className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
                 Add Patch Panel
               </button>
-              {/* Removed direct view port status button from this form, now handled in PatchPanelList */}
             </form>
           </div>
         </div>
@@ -377,6 +466,20 @@ function ConnectionForm({
                 </p>
               )}
               <input
+                type="text"
+                placeholder="Row in Rack (Optional)"
+                value={newSwitchRowInRack}
+                onChange={(e) => setNewSwitchRowInRack(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Rack Name (Optional)"
+                value={newSwitchRackName}
+                onChange={(e) => setNewSwitchRackName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
                 type="number"
                 placeholder="Total Ports (e.g., 4)"
                 value={newSwitchTotalPorts}
@@ -385,13 +488,33 @@ function ConnectionForm({
                 min="1"
                 required
               />
+              <input
+                type="text"
+                placeholder="Source Port (Optional)"
+                value={newSwitchSourcePort}
+                onChange={(e) => setNewSwitchSourcePort(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Model (Optional)"
+                value={newSwitchModel}
+                onChange={(e) => setNewSwitchModel(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <textarea
+                placeholder="Description (Optional)"
+                value={newSwitchDesc}
+                onChange={(e) => setNewSwitchDesc(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                rows="3"
+              ></textarea>
               <button
                 type="submit"
                 className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 Add Switch
               </button>
-              {/* Removed direct view port status button from this form, now handled in SwitchList */}
             </form>
           </div>
         </div>
