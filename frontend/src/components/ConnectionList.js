@@ -3,8 +3,9 @@
 // Each connection shows its full path from PC through multiple Patch Panels to a Switch,
 // with actions for editing and deleting.
 // The expand/collapse feature has been reintroduced with a more organized expanded view.
+// Now includes search and pagination.
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 // Import icons from lucide-react for a better UI and consistent design
 import {
   Laptop,
@@ -23,10 +24,11 @@ import {
   ChevronUp,
   HardDrive,
   Router,
-  Building2, // New icon for Office
+  Building2,
 } from "lucide-react";
+import SearchBar from "./SearchBar"; // Import the SearchBar component
 
-// New component for individual connection cards
+// ConnectionCard component (remains unchanged as it displays individual connection details)
 function ConnectionCard({ connection, onDelete, onEdit }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -241,7 +243,6 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               <span className="font-medium">Office:</span>{" "}
               {connection.pc?.office || "N/A"}
             </p>{" "}
-            {/* Display Office field */}
             <p className="flex items-start col-span-full">
               <Info
                 size={16}
@@ -372,22 +373,208 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
 }
 
 function ConnectionList({ connections, onDelete, onEdit }) {
-  if (!connections || connections.length === 0) {
-    return null; // Render nothing if there are no connections
-  }
+  const [searchTerm, setSearchTerm] = useState(""); // State for search term
+  const [filteredConnections, setFilteredConnections] = useState([]); // State for filtered connections
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Default to 10 items per page
+
+  // Effect to filter connections based on search term
+  useEffect(() => {
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    const filtered = connections.filter((connection) => {
+      // Check PC details
+      const pcMatches =
+        (connection.pc?.name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.ip_address || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.username || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.operating_system || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.ports_name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.office || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.description || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm);
+
+      // Check Patch Panel hop details
+      const hopMatches = connection.hops.some(
+        (hop) =>
+          (hop.patch_panel?.name || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel_port || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel?.location_name || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel?.rack_name || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel?.row_in_rack || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel?.description || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm)
+      );
+
+      // Check Switch details
+      const switchMatches =
+        (connection.switch?.name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.ip_address || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch_port || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.location_name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.rack_name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.model || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.source_port || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.description || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm);
+
+      return pcMatches || hopMatches || switchMatches;
+    });
+    setFilteredConnections(filtered);
+    setCurrentPage(1); // Reset to first page on new search/filter
+  }, [connections, searchTerm]);
+
+  // Calculate the connections to display for the current page from filteredConnections
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentConnections = filteredConnections.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+
+  // Calculate total pages based on filteredConnections
+  const totalPages = Math.ceil(filteredConnections.length / itemsPerPage);
+
+  // Handle page change
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  // Adjust current page if itemsPerPage changes or filteredConnections list shrinks
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (totalPages === 0 && connections.length > 0) {
+      // If no filtered connections but there are total connections, means search yielded nothing
+      // Or if all connections are deleted
+      setCurrentPage(1); // Still reset to 1
+    } else if (totalPages === 0 && connections.length === 0) {
+      // No connections at all
+      setCurrentPage(1);
+    }
+  }, [
+    filteredConnections.length,
+    itemsPerPage,
+    totalPages,
+    currentPage,
+    connections.length,
+  ]);
 
   return (
-    <div className="space-y-3">
-      {" "}
-      {/* Use space-y for consistent vertical spacing */}
-      {connections.map((connection) => (
-        <ConnectionCard
-          key={connection.id}
-          connection={connection}
-          onDelete={onDelete}
-          onEdit={onEdit}
-        />
-      ))}
+    <div className="space-y-6">
+      {/* Search Bar for Connections */}
+      <SearchBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        placeholder="Search connections (PC, Patch Panel, Switch details...)"
+      />
+
+      {/* Display current connections */}
+      {currentConnections.length > 0 ? (
+        <div className="space-y-3">
+          {currentConnections.map((connection) => (
+            <ConnectionCard
+              key={connection.id}
+              connection={connection}
+              onDelete={onDelete}
+              onEdit={onEdit}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-center text-gray-500 text-lg mt-8">
+          {searchTerm || connections.length > 0
+            ? "No connections match your search criteria."
+            : "No connections found. Start by adding one in the form above."}
+        </p>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2 mt-6">
+          <button
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+            (pageNumber) => (
+              <button
+                key={pageNumber}
+                onClick={() => paginate(pageNumber)}
+                className={`px-4 py-2 rounded-md ${
+                  currentPage === pageNumber
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                {pageNumber}
+              </button>
+            )
+          )}
+          <button
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+
+          {/* Items per page selector (Optional) */}
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1); // Reset to page 1 when items per page changes
+            }}
+            className="ml-4 p-2 border border-gray-300 rounded-md text-sm"
+          >
+            <option value={5}>5 per page</option>
+            <option value={10}>10 per page</option>
+            <option value={20}>20 per page</option>
+            <option value={50}>50 per page</option>
+          </select>
+        </div>
+      )}
     </div>
   );
 }
