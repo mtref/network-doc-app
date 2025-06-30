@@ -6,11 +6,11 @@
 @tailwind utilities;
 
 /* Custom font import from Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
 /* Apply Inter font family to the entire application */
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -31,17 +31,67 @@ body {
   animation: fadeInDown 0.5s ease-out forwards;
 }
 
-/* Optional: Scrollbar styling for a cleaner look */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* New: CSS for collapsible content */
+.collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
 }
 
-::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* gray-300 */
-  border-radius: 4px;
+.collapsible-content.expanded {
+  max-height: 1000px; /* A value larger than expected content height */
+  opacity: 1;
 }
 
-::-webkit-scrollbar-track {
-  background-color: #f1f5f9; /* gray-100 */
+/* Print-specific styles */
+@media print {
+  /* Hide elements that are not needed in print view */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show elements that are only for print view */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Adjust modal for print */
+  .fixed.inset-0.bg-gray-600.bg-opacity-50 {
+    position: static !important;
+    background: none !important;
+    display: block !important;
+  }
+
+  .print-container {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 1.5cm !important; /* Add more padding for A4 print */
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure text is black for readability */
+  body {
+    color: #000 !important;
+    background-color: #fff !important;
+  }
+
+  /* Adjust font sizes for A4 if needed (optional) */
+  .print-container h2 {
+    font-size: 1.5rem !important; /* Adjust as necessary */
+  }
+  .print-container p,
+  .print-container ul,
+  .print-container li {
+    font-size: 10pt !important; /* Standard print font size */
+  }
+
+  /* Avoid page breaks inside elements where possible */
+  .print-container > div {
+    page-break-inside: avoid;
+  }
 }
