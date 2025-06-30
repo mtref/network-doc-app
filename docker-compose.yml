@@ -1,52 +1,35 @@
 # docker-compose.yml
 # This file defines the services for your Dockerized network documentation application.
 # It orchestrates the backend (Python Flask) and frontend (React) services.
-version: '3.8'
+# The frontend will now be accessible on port 3005.
+version: "3.8"
 
 services:
   backend:
-    # Build the backend image using the Dockerfile.backend located in the ./backend directory.
     build:
       context: ./backend
       dockerfile: Dockerfile.backend
-    # Map port 5004 from the container to port 5000 on the host machine.
-    # This allows you to access the Flask API from your host.
     ports:
-      - "5004:5000" # Changed host port to 5004
-    # Mount the ./backend directory into the /app directory inside the container.
-    # This allows for live code changes during development without rebuilding the image.
+      - "5004:5000"
     volumes:
       - ./backend:/app
-      # Create a named volume for persistent storage of the SQLite database.
-      # This ensures your data isn't lost when the container is removed.
       - network_doc_db:/app/instance
-    # Environment variables for the Flask application.
     environment:
       FLASK_APP: app.py
-      FLASK_ENV: development # Set to 'production' for deployment
-    # Command to run the Flask application.
+      FLASK_ENV: development
     command: sh -c "flask db upgrade && flask run --host=0.0.0.0"
 
   frontend:
-    # Build the frontend image using the Dockerfile.frontend located in the ./frontend directory.
     build:
       context: ./frontend
       dockerfile: Dockerfile.frontend
-    # Map port 3000 from the container to port 3000 on the host machine.
-    # This allows you to access the React application from your host.
     ports:
-      - "3000:3000"
-    # Mount the ./frontend directory into the /app directory inside the container.
-    # This allows for live code changes during development.
-    volumes:
-      - ./frontend:/app
-      # Removed the line below to ensure node_modules from build are available at runtime:
-      # - /app/node_modules # Exclude node_modules from the volume mount to prevent issues
-    # Ensure the frontend starts only after the backend is ready.
+      - "3005:3000" # Changed host port to 3005
+    # IMPORTANT: The 'volumes' key and any lines indented below it must be completely REMOVED.
+    # Do NOT include a 'volumes:' key here if you don't have active volume mounts for the frontend.
     depends_on:
       - backend
-    # Command to start the React development server.
-    command: npm start
+    command: nginx -g "daemon off;"
 
 # Define the named volume for persistent database storage.
 volumes:

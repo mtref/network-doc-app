@@ -3,3 +3,4 @@ Flask-SQLAlchemy==3.0.3
 Flask-Migrate==4.0.5
 Flask-Cors==3.0.10
 SQLAlchemy==2.0.21
+gunicorn

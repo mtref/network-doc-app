@@ -6,7 +6,40 @@
 @tailwind utilities;
 
 /* Custom font import from Google Fonts */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+/*@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"); */
+
+/* Add these @font-face rules instead, pointing to your local files */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 300; /* Adjust weight as needed for each file */
+  src: local("Inter Light"), url("./fonts/Inter_18pt-Light.ttf") format("woff2"); /* Adjust filename */
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400; /* Regular */
+  src: local("Inter Regular"),
+    url("./fonts/Inter_18pt-Regular.ttf") format("woff2"); /* Adjust filename */
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500; /* Medium */
+  src: local("Inter Medium"),
+    url("./fonts/Inter_18pt-Medium.ttf") format("woff2"); /* Adjust filename */
+  font-display: swap;
+}
+/* ... repeat for 600, 700, 800, 900 weights as needed */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 900; /* Black */
+  src: local("Inter Black"), url("./fonts/Inter_24pt-Black.ttf") format("woff2"); /* Adjust filename */
+  font-display: swap;
+}
 
 /* Apply Inter font family to the entire application */
 body {
