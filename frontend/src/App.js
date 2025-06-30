@@ -171,7 +171,10 @@ function App() {
       pc_id: connection.pc?.id,
       switch_id: connection.switch?.id,
       switch_port: connection.switch_port,
-      is_switch_port_up: connection.is_switch_port_up,
+      is_switch_port_up:
+        connection.is_switch_port_up !== undefined
+          ? connection.is_switch_port_up
+          : true,
       hops: connection.hops.map((hop) => ({
         patch_panel_id: hop.patch_panel?.id,
         patch_panel_port: hop.patch_panel_port,
@@ -388,6 +391,7 @@ function App() {
           data={portStatusData}
           entityType={modalEntityType}
           entityId={modalEntityId}
+          cssContent={cssContent}
         />
       )}
 
