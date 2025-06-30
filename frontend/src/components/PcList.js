@@ -10,6 +10,11 @@ import {
   PlusCircle,
   ChevronDown,
   ChevronUp,
+  User,
+  HardDrive,
+  ToggleRight,
+  ToggleLeft,
+  Monitor,
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -18,9 +23,17 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [editingPc, setEditingPc] = useState(null); // State for editing a PC
   const [pcFormName, setPcFormName] = useState("");
   const [pcFormIp, setPcFormIp] = useState("");
+  const [pcFormUsername, setPcFormUsername] = useState(""); // New field
+  const [pcFormInDomain, setPcFormInDomain] = useState(false); // New field
+  const [pcFormOs, setPcFormOs] = useState(""); // New field
+  const [pcFormPortsName, setPcFormPortsName] = useState(""); // New field
   const [pcFormDesc, setPcFormDesc] = useState("");
 
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false); // State for collapsible add form
+
+  // IP Address Regex for validation
+  const ipRegex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
   // Filter PCs based on search term
   useEffect(() => {
@@ -29,6 +42,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       (pc) =>
         (pc.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.ip_address || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.username || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by username
+        (pc.in_domain ? "yes" : "no").includes(lowerCaseSearchTerm) || // Search by in_domain status
+        (pc.operating_system || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // Search by OS
+        (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by ports_name
         (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm)
     );
     setFilteredPcs(filtered);
@@ -39,6 +58,10 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setEditingPc(pc);
     setPcFormName(pc.name);
     setPcFormIp(pc.ip_address || "");
+    setPcFormUsername(pc.username || "");
+    setPcFormInDomain(pc.in_domain || false);
+    setPcFormOs(pc.operating_system || "");
+    setPcFormPortsName(pc.ports_name || "");
     setPcFormDesc(pc.description || "");
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
@@ -46,9 +69,20 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   // Handle form submission for Add/Update PC
   const handlePcFormSubmit = async (e) => {
     e.preventDefault();
+
+    // IP validation
+    if (pcFormIp && !ipRegex.test(pcFormIp)) {
+      alert("Please enter a valid IP address (e.g., 192.168.1.1).");
+      return;
+    }
+
     const pcData = {
       name: pcFormName,
       ip_address: pcFormIp,
+      username: pcFormUsername,
+      in_domain: pcFormInDomain,
+      operating_system: pcFormOs,
+      ports_name: pcFormPortsName,
       description: pcFormDesc,
     };
 
@@ -60,6 +94,10 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setEditingPc(null); // Clear editing state
     setPcFormName(""); // Clear form fields
     setPcFormIp("");
+    setPcFormUsername("");
+    setPcFormInDomain(false);
+    setPcFormOs("");
+    setPcFormPortsName("");
     setPcFormDesc("");
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
@@ -101,18 +139,54 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
             />
             <input
               type="text"
-              placeholder="IP Address (Optional)"
+              placeholder="IP Address (e.g., 192.168.1.1)"
               value={pcFormIp}
               onChange={(e) => setPcFormIp(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
             <input
               type="text"
+              placeholder="Username (Optional)"
+              value={pcFormUsername}
+              onChange={(e) => setPcFormUsername(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <div className="flex items-center">
+              <input
+                id="pc-in-domain"
+                type="checkbox"
+                checked={pcFormInDomain}
+                onChange={(e) => setPcFormInDomain(e.target.checked)}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label
+                htmlFor="pc-in-domain"
+                className="ml-2 block text-sm text-gray-900"
+              >
+                In Domain
+              </label>
+            </div>
+            <input
+              type="text"
+              placeholder="Operating System (Optional)"
+              value={pcFormOs}
+              onChange={(e) => setPcFormOs(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Ports Name (e.g., HDMI, USB, Eth)"
+              value={pcFormPortsName}
+              onChange={(e) => setPcFormPortsName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <textarea
               placeholder="Description (Optional)"
               value={pcFormDesc}
               onChange={(e) => setPcFormDesc(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+              rows="3"
+            ></textarea>
             <div className="flex space-x-3 justify-end">
               {editingPc && (
                 <button
@@ -121,8 +195,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                     setEditingPc(null);
                     setPcFormName("");
                     setPcFormIp("");
+                    setPcFormUsername("");
+                    setPcFormInDomain(false);
+                    setPcFormOs("");
+                    setPcFormPortsName("");
                     setPcFormDesc("");
-                    setIsAddPcFormExpanded(false); // Collapse form on cancel
+                    setIsAddPcFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
                 >
@@ -154,6 +232,26 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Router size={16} className="text-gray-500 mr-2" /> IP:{" "}
                 {pc.ip_address || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <User size={16} className="text-gray-500 mr-2" /> Username:{" "}
+                {pc.username || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                {pc.in_domain ? (
+                  <ToggleRight size={16} className="text-green-500 mr-2" />
+                ) : (
+                  <ToggleLeft size={16} className="text-red-500 mr-2" />
+                )}{" "}
+                In Domain: {pc.in_domain ? "Yes" : "No"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Monitor size={16} className="text-gray-500 mr-2" /> OS:{" "}
+                {pc.operating_system || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Ports:{" "}
+                {pc.ports_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
                 <Info

@@ -11,7 +11,9 @@ import {
   PlusCircle,
   ChevronDown,
   ChevronUp,
-} from "lucide-react"; // Icons for PP details and collapse/expand
+  Columns,
+  Server,
+} from "lucide-react"; // Changed ServerStack to Server for Rack icon
 
 function PatchPanelList({
   patchPanels,
@@ -21,13 +23,15 @@ function PatchPanelList({
   onShowPortStatus,
   locations,
 }) {
-  // Added locations prop
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPatchPanels, setFilteredPatchPanels] = useState([]);
   const [editingPatchPanel, setEditingPatchPanel] = useState(null); // State for editing a Patch Panel
   const [ppFormName, setPpFormName] = useState("");
-  const [ppFormLocationId, setPpFormLocationId] = useState(""); // Changed to location_id
+  const [ppFormLocationId, setPpFormLocationId] = useState("");
+  const [ppFormRowInRack, setPpFormRowInRack] = useState(""); // New field
+  const [ppFormRackName, setPpFormRackName] = useState(""); // New field
   const [ppFormTotalPorts, setPpFormTotalPorts] = useState(1);
+  const [ppFormDesc, setPpFormDesc] = useState(""); // New field
 
   const [isAddPpFormExpanded, setIsAddPpFormExpanded] = useState(false); // State for collapsible add form
 
@@ -37,8 +41,11 @@ function PatchPanelList({
     const filtered = patchPanels.filter(
       (pp) =>
         (pp.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (pp.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by location_name
-        String(pp.total_ports).includes(lowerCaseSearchTerm)
+        (pp.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pp.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
+        (pp.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
+        String(pp.total_ports).includes(lowerCaseSearchTerm) ||
+        (pp.description || "").toLowerCase().includes(lowerCaseSearchTerm) // Search by new field
     );
     setFilteredPatchPanels(filtered);
   }, [patchPanels, searchTerm]);
@@ -47,18 +54,29 @@ function PatchPanelList({
   const handleEdit = (pp) => {
     setEditingPatchPanel(pp);
     setPpFormName(pp.name);
-    setPpFormLocationId(pp.location_id || ""); // Set location_id for editing
+    setPpFormLocationId(pp.location_id || "");
+    setPpFormRowInRack(pp.row_in_rack || ""); // Populate new field
+    setPpFormRackName(pp.rack_name || ""); // Populate new field
     setPpFormTotalPorts(pp.total_ports);
+    setPpFormDesc(pp.description || ""); // Populate new field
     setIsAddPpFormExpanded(true); // Expand form when editing
   };
 
   // Handle form submission for Add/Update Patch Panel
   const handlePpFormSubmit = async (e) => {
     e.preventDefault();
+    if (!ppFormName.trim() || !ppFormLocationId) {
+      alert("Patch Panel Name and Location are required.");
+      return;
+    }
+
     const ppData = {
       name: ppFormName,
-      location_id: parseInt(ppFormLocationId), // Send location_id
+      location_id: parseInt(ppFormLocationId),
+      row_in_rack: ppFormRowInRack, // Include new field
+      rack_name: ppFormRackName, // Include new field
       total_ports: parseInt(ppFormTotalPorts),
+      description: ppFormDesc, // Include new field
     };
 
     if (editingPatchPanel) {
@@ -68,8 +86,11 @@ function PatchPanelList({
     }
     setEditingPatchPanel(null); // Clear editing state
     setPpFormName(""); // Clear form fields
-    setPpFormLocationId(""); // Clear location_id
+    setPpFormLocationId("");
+    setPpFormRowInRack("");
+    setPpFormRackName("");
     setPpFormTotalPorts(1);
+    setPpFormDesc("");
     setIsAddPpFormExpanded(false); // Collapse form after submission
   };
 
@@ -127,6 +148,20 @@ function PatchPanelList({
               </p>
             )}
             <input
+              type="text"
+              placeholder="Row in Rack (Optional)"
+              value={ppFormRowInRack}
+              onChange={(e) => setPpFormRowInRack(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Rack Name (Optional)"
+              value={ppFormRackName}
+              onChange={(e) => setPpFormRackName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
               type="number"
               placeholder="Total Ports (e.g., 24)"
               value={ppFormTotalPorts}
@@ -135,6 +170,13 @@ function PatchPanelList({
               min="1"
               required
             />
+            <textarea
+              placeholder="Description (Optional)"
+              value={ppFormDesc}
+              onChange={(e) => setPpFormDesc(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+              rows="3"
+            ></textarea>
             <div className="flex space-x-3 justify-end">
               {editingPatchPanel && (
                 <button
@@ -143,8 +185,11 @@ function PatchPanelList({
                     setEditingPatchPanel(null);
                     setPpFormName("");
                     setPpFormLocationId("");
+                    setPpFormRowInRack("");
+                    setPpFormRackName("");
                     setPpFormTotalPorts(1);
-                    setIsAddPpFormExpanded(false); // Collapse form on cancel
+                    setPpFormDesc("");
+                    setIsAddPpFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
                 >
@@ -175,11 +220,26 @@ function PatchPanelList({
               </h4>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {pp.location_name || "N/A"} {/* Display location name */}
+                {pp.location_name || "N/A"}
               </p>
-              <p className="text-sm text-gray-700 mb-3 flex items-center">
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Columns size={16} className="text-gray-500 mr-2" /> Row:{" "}
+                {pp.row_in_rack || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Server size={16} className="text-gray-500 mr-2" /> Rack:{" "}
+                {pp.rack_name || "N/A"} {/* Changed icon to Server for Rack */}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Total
                 Ports: {pp.total_ports}
+              </p>
+              <p className="text-sm text-gray-700 mb-3 flex items-start">
+                <Info
+                  size={16}
+                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                />{" "}
+                Description: {pp.description || "No description"}
               </p>
               <div className="flex justify-end space-x-2">
                 <button

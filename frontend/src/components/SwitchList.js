@@ -11,8 +11,10 @@ import {
   PlusCircle,
   ChevronDown,
   ChevronUp,
+  Columns,
   HardDrive,
-} from "lucide-react"; // Icons for Switch details and collapse/expand
+  Link,
+} from "lucide-react"; // Removed duplicate Columns, using Server for Rack icon
 
 function SwitchList({
   switches,
@@ -22,16 +24,24 @@ function SwitchList({
   onShowPortStatus,
   locations,
 }) {
-  // Added locations prop
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSwitches, setFilteredSwitches] = useState([]);
   const [editingSwitch, setEditingSwitch] = useState(null); // State for editing a Switch
   const [switchFormName, setSwitchFormName] = useState("");
   const [switchFormIp, setSwitchFormIp] = useState("");
-  const [switchFormLocationId, setSwitchFormLocationId] = useState(""); // Changed to location_id
+  const [switchFormLocationId, setSwitchFormLocationId] = useState("");
+  const [switchFormRowInRack, setSwitchFormRowInRack] = useState(""); // New field
+  const [switchFormRackName, setSwitchFormRackName] = useState(""); // New field
   const [switchFormTotalPorts, setSwitchFormTotalPorts] = useState(1);
+  const [switchFormSourcePort, setSwitchFormSourcePort] = useState(""); // New field
+  const [switchFormModel, setSwitchFormModel] = useState(""); // New field
+  const [switchFormDesc, setSwitchFormDesc] = useState(""); // New field
 
   const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false); // State for collapsible add form
+
+  // IP Address Regex for validation
+  const ipRegex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
   // Filter Switches based on search term
   useEffect(() => {
@@ -44,8 +54,21 @@ function SwitchList({
           .includes(lowerCaseSearchTerm) ||
         (_switch.location_name || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // Search by location_name
-        String(_switch.total_ports).includes(lowerCaseSearchTerm)
+          .includes(lowerCaseSearchTerm) ||
+        (_switch.row_in_rack || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // Search by new field
+        (_switch.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
+        String(_switch.total_ports).includes(lowerCaseSearchTerm) ||
+        (String(_switch.source_port) || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // Search by new field
+        (String(_switch.model) || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // Search by new field
+        (String(_switch.description) || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) // Search by new field
     );
     setFilteredSwitches(filtered);
   }, [switches, searchTerm]);
@@ -55,19 +78,40 @@ function SwitchList({
     setEditingSwitch(_switch);
     setSwitchFormName(_switch.name);
     setSwitchFormIp(_switch.ip_address || "");
-    setSwitchFormLocationId(_switch.location_id || ""); // Set location_id for editing
+    setSwitchFormLocationId(_switch.location_id || "");
+    setSwitchFormRowInRack(_switch.row_in_rack || ""); // Populate new field
+    setSwitchFormRackName(_switch.rack_name || ""); // Populate new field
     setSwitchFormTotalPorts(_switch.total_ports);
+    setSwitchFormSourcePort(_switch.source_port || ""); // Populate new field
+    setSwitchFormModel(_switch.model || ""); // Populate new field
+    setSwitchFormDesc(_switch.description || ""); // Populate new field
     setIsAddSwitchFormExpanded(true); // Expand form when editing
   };
 
   // Handle form submission for Add/Update Switch
   const handleSwitchFormSubmit = async (e) => {
     e.preventDefault();
+
+    // IP validation
+    if (switchFormIp && !ipRegex.test(switchFormIp)) {
+      alert("Please enter a valid IP address (e.g., 192.168.1.1).");
+      return;
+    }
+    if (!switchFormName.trim() || !switchFormLocationId) {
+      alert("Switch Name and Location are required.");
+      return;
+    }
+
     const switchData = {
       name: switchFormName,
       ip_address: switchFormIp,
-      location_id: parseInt(switchFormLocationId), // Send location_id
+      location_id: parseInt(switchFormLocationId),
+      row_in_rack: switchFormRowInRack, // Include new field
+      rack_name: switchFormRackName, // Include new field
       total_ports: parseInt(switchFormTotalPorts),
+      source_port: switchFormSourcePort, // Include new field
+      model: switchFormModel, // Include new field
+      description: switchFormDesc, // Include new field
     };
 
     if (editingSwitch) {
@@ -78,8 +122,13 @@ function SwitchList({
     setEditingSwitch(null); // Clear editing state
     setSwitchFormName(""); // Clear form fields
     setSwitchFormIp("");
-    setSwitchFormLocationId(""); // Clear location_id
+    setSwitchFormLocationId("");
+    setSwitchFormRowInRack("");
+    setSwitchFormRackName("");
     setSwitchFormTotalPorts(1);
+    setSwitchFormSourcePort("");
+    setSwitchFormModel("");
+    setSwitchFormDesc("");
     setIsAddSwitchFormExpanded(false); // Collapse form after submission
   };
 
@@ -120,7 +169,7 @@ function SwitchList({
             />
             <input
               type="text"
-              placeholder="IP Address (Optional)"
+              placeholder="IP Address (e.g., 192.168.1.1)"
               value={switchFormIp}
               onChange={(e) => setSwitchFormIp(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -144,6 +193,20 @@ function SwitchList({
               </p>
             )}
             <input
+              type="text"
+              placeholder="Row in Rack (Optional)"
+              value={switchFormRowInRack}
+              onChange={(e) => setSwitchFormRowInRack(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Rack Name (Optional)"
+              value={switchFormRackName}
+              onChange={(e) => setSwitchFormRackName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
               type="number"
               placeholder="Total Ports (e.g., 4)"
               value={switchFormTotalPorts}
@@ -152,6 +215,27 @@ function SwitchList({
               min="1"
               required
             />
+            <input
+              type="text"
+              placeholder="Source Port (Optional)"
+              value={switchFormSourcePort}
+              onChange={(e) => setSwitchFormSourcePort(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Model (Optional)"
+              value={switchFormModel}
+              onChange={(e) => setSwitchFormModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <textarea
+              placeholder="Description (Optional)"
+              value={switchFormDesc}
+              onChange={(e) => setSwitchFormDesc(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+              rows="3"
+            ></textarea>
             <div className="flex space-x-3 justify-end">
               {editingSwitch && (
                 <button
@@ -161,8 +245,13 @@ function SwitchList({
                     setSwitchFormName("");
                     setSwitchFormIp("");
                     setSwitchFormLocationId("");
+                    setSwitchFormRowInRack("");
+                    setSwitchFormRackName("");
                     setSwitchFormTotalPorts(1);
-                    setIsAddSwitchFormExpanded(false); // Collapse form on cancel
+                    setSwitchFormSourcePort("");
+                    setSwitchFormModel("");
+                    setSwitchFormDesc("");
+                    setIsAddSwitchFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
                 >
@@ -198,11 +287,34 @@ function SwitchList({
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {_switch.location_name || "N/A"} {/* Display location name */}
+                {_switch.location_name || "N/A"}
               </p>
-              <p className="text-sm text-gray-700 mb-3 flex items-center">
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Columns size={16} className="text-gray-500 mr-2" /> Row:{" "}
+                {_switch.row_in_rack || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
+                {_switch.rack_name || "N/A"} {/* Used Columns for rack icon */}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Total
                 Ports: {_switch.total_ports}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Link size={16} className="text-gray-500 mr-2" /> Source Port:{" "}
+                {_switch.source_port || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
+                {_switch.model || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-3 flex items-start">
+                <Info
+                  size={16}
+                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                />{" "}
+                Description: {_switch.description || "No description"}
               </p>
               <div className="flex justify-end space-x-2">
                 <button

@@ -24,10 +24,10 @@ migrate = Migrate(app, db)
 # --- Database Models ---
 # Define the structure of your data tables.
 
-class Location(db.Model): # New: Location Model
+class Location(db.Model):
     __tablename__ = 'locations'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False) # e.g., "Room 1", "Data Center"
+    name = db.Column(db.String(100), unique=True, nullable=False)
 
     def to_dict(self):
         return {
@@ -40,13 +40,21 @@ class PC(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     ip_address = db.Column(db.String(100), nullable=True)
-    description = db.Column(db.String(255))
+    username = db.Column(db.String(100), nullable=True) # New field
+    in_domain = db.Column(db.Boolean, nullable=False, default=False) # New field
+    operating_system = db.Column(db.String(100), nullable=True) # New field
+    ports_name = db.Column(db.String(255), nullable=True) # New field
+    description = db.Column(db.String(255), nullable=True) # Changed to optional
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'ip_address': self.ip_address,
+            'username': self.username,
+            'in_domain': self.in_domain,
+            'operating_system': self.operating_system,
+            'ports_name': self.ports_name,
             'description': self.description
         }
 
@@ -54,29 +62,38 @@ class PatchPanel(db.Model):
     __tablename__ = 'patch_panels'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    # Changed from string 'location' to ForeignKey 'location_id'
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
+    row_in_rack = db.Column(db.String(50), nullable=True) # New field
+    rack_name = db.Column(db.String(100), nullable=True) # New field
     total_ports = db.Column(db.Integer, nullable=False, default=1)
+    description = db.Column(db.String(255), nullable=True) # New field
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'location_id': self.location_id,
-            'location_name': self.location.name if self.location else None, # Include location name for frontend
-            'total_ports': self.total_ports
+            'location_name': self.location.name if self.location else None,
+            'row_in_rack': self.row_in_rack,
+            'rack_name': self.rack_name,
+            'total_ports': self.total_ports,
+            'description': self.description
         }
 
 class Switch(db.Model):
     __tablename__ = 'switches'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    ip_address = db.Column(db.String(100))
-    # Changed from string 'location' to ForeignKey 'location_id'
+    ip_address = db.Column(db.String(100), nullable=True) # Changed to optional
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='switches_in_location', lazy=True)
+    row_in_rack = db.Column(db.String(50), nullable=True) # New field
+    rack_name = db.Column(db.String(100), nullable=True) # New field
     total_ports = db.Column(db.Integer, nullable=False, default=1)
+    source_port = db.Column(db.String(100), nullable=True) # New field
+    model = db.Column(db.String(100), nullable=True) # New field
+    description = db.Column(db.String(255), nullable=True) # New field
 
     def to_dict(self):
         return {
@@ -84,8 +101,13 @@ class Switch(db.Model):
             'name': self.name,
             'ip_address': self.ip_address,
             'location_id': self.location_id,
-            'location_name': self.location.name if self.location else None, # Include location name for frontend
-            'total_ports': self.total_ports
+            'location_name': self.location.name if self.location else None,
+            'row_in_rack': self.row_in_rack,
+            'rack_name': self.rack_name,
+            'total_ports': self.total_ports,
+            'source_port': self.source_port,
+            'model': self.model,
+            'description': self.description
         }
 
 class Connection(db.Model):
@@ -167,7 +189,7 @@ def validate_port_occupancy(target_id, port_number, entity_type, exclude_connect
             return True, conflicting_connection.pc.name if conflicting_connection.pc else "Unknown PC"
     return False, None
 
-# Location Endpoints (New)
+# Location Endpoints
 @app.route('/locations', methods=['GET', 'POST'])
 def handle_locations():
     if request.method == 'POST':
@@ -212,14 +234,22 @@ def handle_location_by_id(location_id):
             return jsonify({'error': str(e)}), 500
 
 
-# PC Endpoints
+# PC Endpoints (updated to handle new fields)
 @app.route('/pcs', methods=['GET', 'POST'])
 def handle_pcs():
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'PC name is required'}), 400
-        new_pc = PC(name=data['name'], ip_address=data.get('ip_address'), description=data.get('description'))
+        new_pc = PC(
+            name=data['name'],
+            ip_address=data.get('ip_address'),
+            username=data.get('username'),
+            in_domain=data.get('in_domain', False),
+            operating_system=data.get('operating_system'),
+            ports_name=data.get('ports_name'),
+            description=data.get('description')
+        )
         try:
             db.session.add(new_pc)
             db.session.commit()
@@ -242,6 +272,10 @@ def handle_pc_by_id(pc_id):
             return jsonify({'error': 'No data provided for update'}), 400
         pc.name = data.get('name', pc.name)
         pc.ip_address = data.get('ip_address', pc.ip_address)
+        pc.username = data.get('username', pc.username)
+        pc.in_domain = data.get('in_domain', pc.in_domain)
+        pc.operating_system = data.get('operating_system', pc.operating_system)
+        pc.ports_name = data.get('ports_name', pc.ports_name)
         pc.description = data.get('description', pc.description)
         try:
             db.session.commit()
@@ -258,7 +292,7 @@ def handle_pc_by_id(pc_id):
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-# Patch Panel Endpoints (updated to use location_id)
+# Patch Panel Endpoints (updated to handle new fields)
 @app.route('/patch_panels', methods=['GET', 'POST'])
 def handle_patch_panels():
     if request.method == 'POST':
@@ -268,8 +302,11 @@ def handle_patch_panels():
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_pp = PatchPanel(
             name=data['name'],
-            location_id=data.get('location_id'), # Use location_id
-            total_ports=total_ports
+            location_id=data.get('location_id'),
+            row_in_rack=data.get('row_in_rack'),
+            rack_name=data.get('rack_name'),
+            total_ports=total_ports,
+            description=data.get('description')
         )
         try:
             db.session.add(new_pp)
@@ -279,7 +316,7 @@ def handle_patch_panels():
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # GET
-        patch_panels = PatchPanel.query.options(joinedload(PatchPanel.location)).all() # Eager load location
+        patch_panels = PatchPanel.query.options(joinedload(PatchPanel.location)).all()
         return jsonify([pp.to_dict() for pp in patch_panels])
 
 @app.route('/patch_panels/<int:pp_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -292,8 +329,11 @@ def handle_patch_panel_by_id(pp_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
         pp.name = data.get('name', pp.name)
-        pp.location_id = data.get('location_id', pp.location_id) # Update location_id
+        pp.location_id = data.get('location_id', pp.location_id)
+        pp.row_in_rack = data.get('row_in_rack', pp.row_in_rack)
+        pp.rack_name = data.get('rack_name', pp.rack_name)
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
+        pp.description = data.get('description', pp.description)
         try:
             db.session.commit()
             return jsonify(pp.to_dict())
@@ -309,7 +349,7 @@ def handle_patch_panel_by_id(pp_id):
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-# Switch Endpoints (updated to use location_id)
+# Switch Endpoints (updated to handle new fields)
 @app.route('/switches', methods=['GET', 'POST'])
 def handle_switches():
     if request.method == 'POST':
@@ -320,8 +360,13 @@ def handle_switches():
         new_switch = Switch(
             name=data['name'],
             ip_address=data.get('ip_address'),
-            location_id=data.get('location_id'), # Use location_id
-            total_ports=total_ports
+            location_id=data.get('location_id'),
+            row_in_rack=data.get('row_in_rack'),
+            rack_name=data.get('rack_name'),
+            total_ports=total_ports,
+            source_port=data.get('source_port'),
+            model=data.get('model'),
+            description=data.get('description')
         )
         try:
             db.session.add(new_switch)
@@ -331,7 +376,7 @@ def handle_switches():
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # GET
-        switches = Switch.query.options(joinedload(Switch.location)).all() # Eager load location
+        switches = Switch.query.options(joinedload(Switch.location)).all()
         return jsonify([_switch.to_dict() for _switch in switches])
 
 @app.route('/switches/<int:switch_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -345,8 +390,13 @@ def handle_switch_by_id(switch_id):
             return jsonify({'error': 'No data provided for update'}), 400
         _switch.name = data.get('name', _switch.name)
         _switch.ip_address = data.get('ip_address', _switch.ip_address)
-        _switch.location_id = data.get('location_id', _switch.location_id) # Update location_id
+        _switch.location_id = data.get('location_id', _switch.location_id)
+        _switch.row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
+        _switch.rack_name = data.get('rack_name', _switch.rack_name)
         _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports
+        _switch.source_port = data.get('source_port', _switch.source_port)
+        _switch.model = data.get('model', _switch.model)
+        _switch.description = data.get('description', _switch.description)
         try:
             db.session.commit()
             return jsonify(_switch.to_dict())
@@ -508,7 +558,7 @@ def handle_connection_by_id(conn_id):
 # New API Endpoints for Port Availability
 @app.route('/patch_panels/<int:pp_id>/ports', methods=['GET'])
 def get_patch_panel_ports(pp_id):
-    patch_panel = PatchPanel.query.options(joinedload(PatchPanel.location)).get_or_404(pp_id) # Load location
+    patch_panel = PatchPanel.query.options(joinedload(PatchPanel.location)).get_or_404(pp_id)
     
     try:
         total_ports_int = int(patch_panel.total_ports)
@@ -548,14 +598,14 @@ def get_patch_panel_ports(pp_id):
     return jsonify({
         'patch_panel_id': pp_id,
         'patch_panel_name': patch_panel.name,
-        'patch_panel_location': patch_panel.location.name if patch_panel.location else None, # Include location name
+        'patch_panel_location': patch_panel.location.name if patch_panel.location else None,
         'total_ports': patch_panel.total_ports,
         'ports': port_status
     })
 
 @app.route('/switches/<int:switch_id>/ports', methods=['GET'])
 def get_switch_ports(switch_id):
-    _switch = Switch.query.options(joinedload(Switch.location)).get_or_404(switch_id) # Load location
+    _switch = Switch.query.options(joinedload(Switch.location)).get_or_404(switch_id)
     
     try:
         total_ports_int = int(_switch.total_ports)
@@ -591,11 +641,11 @@ def get_switch_ports(switch_id):
             'connection_id': status['connection_id'] if status else None,
             'is_up': status['is_up'] if status else False
         })
-
+    
     return jsonify({
         'switch_id': switch_id,
         'switch_name': _switch.name,
-        'switch_location': _switch.location.name if _switch.location else None, # Include location name
+        'switch_location': _switch.location.name if _switch.location else None,
         'total_ports': _switch.total_ports,
         'ports': port_status
     })
