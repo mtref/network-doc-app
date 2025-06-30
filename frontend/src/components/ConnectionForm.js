@@ -1,8 +1,10 @@
 // frontend/src/components/ConnectionForm.js
 // This component provides forms to add new PCs, Patch Panels, Switches,
 // and to create or edit network connections between them.
+// Now, the "Add New" entity forms are collapsible for a cleaner UI.
 
 import React, { useState, useEffect } from "react";
+import { ChevronDown, ChevronUp, PlusCircle } from "lucide-react"; // Import icons for expand/collapse and add buttons
 
 function ConnectionForm({
   pcs,
@@ -15,15 +17,18 @@ function ConnectionForm({
   onAddEntity,
   onShowPortStatus,
 }) {
-  // Renamed servers to switches
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
   const [switchId, setSwitchId] = useState("");
-  // State to manage multiple patch panel hops
-  const [hops, setHops] = useState([]); // Array of { patch_panel_id, patch_panel_port, is_port_up }
+  const [hops, setHops] = useState([]);
 
-  // State for new entity forms (PC, Patch Panel, Switch)
+  // States for managing the expanded/collapsed state of each "Add New" section
+  const [isNewPcExpanded, setIsNewPcExpanded] = useState(false);
+  const [isNewPpExpanded, setIsNewPpExpanded] = useState(false);
+  const [isNewSwitchExpanded, setIsNewSwitchExpanded] = useState(false);
+
+  // State for new entity forms
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
   const [newPcDesc, setNewPcDesc] = useState("");
@@ -32,23 +37,22 @@ function ConnectionForm({
   const [newPpLocation, setNewPpLocation] = useState("");
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
 
-  const [newSwitchName, setNewSwitchName] = useState(""); // Renamed newServerName
-  const [newSwitchIp, setNewSwitchIp] = useState(""); // Renamed newServerIp
-  const [newSwitchLocation, setNewSwitchLocation] = useState(""); // Renamed newServerLocation
-  const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1); // Renamed newServerTotalPorts
+  const [newSwitchName, setNewSwitchName] = useState("");
+  const [newSwitchIp, setNewSwitchIp] = useState("");
+  const [newSwitchLocation, setNewSwitchLocation] = useState("");
+  const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
 
   // Populate form fields if editing an existing connection
   useEffect(() => {
     if (editingConnection) {
       setPcId(editingConnection.pc_id || "");
-      setSwitchId(editingConnection.switch_id || ""); // Renamed serverId
-      setSwitchPort(editingConnection.switch_port || ""); // Renamed serverPort
+      setSwitchId(editingConnection.switch_id || "");
+      setSwitchPort(editingConnection.switch_port || "");
       setIsSwitchPortUp(
         editingConnection.is_switch_port_up !== undefined
           ? editingConnection.is_switch_port_up
           : true
-      ); // Renamed isServerPortUp
-      // When editing, populate hops
+      );
       setHops(editingConnection.hops || []);
     } else {
       // Clear form if not editing
@@ -96,7 +100,6 @@ function ConnectionForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Validate that all hops have selections
     const allHopsValid = hops.every(
       (hop) => hop.patch_panel_id && hop.patch_panel_port.trim()
     );
@@ -107,14 +110,13 @@ function ConnectionForm({
 
     const connectionData = {
       pc_id: parseInt(pcId),
-      switch_id: parseInt(switchId), // Renamed serverId
-      switch_port: switchPort, // Renamed serverPort
-      is_switch_port_up: isSwitchPortUp, // Renamed isServerPortUp
+      switch_id: parseInt(switchId),
+      switch_port: switchPort,
+      is_switch_port_up: isSwitchPortUp,
       hops: hops.map((hop) => ({
-        // Send hops as an array of objects
         patch_panel_id: hop.patch_panel_id,
         patch_panel_port: hop.patch_panel_port,
-        is_port_up: hop.is_port_up, // Include hop port status
+        is_port_up: hop.is_port_up,
       })),
     };
 
@@ -123,18 +125,16 @@ function ConnectionForm({
     } else {
       await onAddConnection(connectionData);
     }
-    // Clear form fields after submission
     setPcId("");
     setSwitchId("");
     setSwitchPort("");
     setIsSwitchPortUp(true);
     setHops([]);
-    setEditingConnection(null); // Ensure editing state is cleared
+    setEditingConnection(null);
   };
 
   const handleCancelEdit = () => {
     setEditingConnection(null);
-    // Also clear the form fields
     setPcId("");
     setSwitchId("");
     setSwitchPort("");
@@ -153,6 +153,7 @@ function ConnectionForm({
       setNewPcName("");
       setNewPcIp("");
       setNewPcDesc("");
+      setIsNewPcExpanded(false); // Collapse after adding
     }
   };
 
@@ -167,191 +168,237 @@ function ConnectionForm({
       setNewPpName("");
       setNewPpLocation("");
       setNewPpTotalPorts(1);
+      setIsNewPpExpanded(false); // Collapse after adding
     }
   };
 
   const handleAddSwitch = async (e) => {
-    // Renamed handleAddServer
     e.preventDefault();
     if (newSwitchName.trim()) {
-      // Renamed newServerName
       await onAddEntity("switches", {
         name: newSwitchName,
         ip_address: newSwitchIp,
         location: newSwitchLocation,
         total_ports: parseInt(newSwitchTotalPorts),
-      }); // Renamed newServerName, newServerIp, newServerLocation, newServerTotalPorts and 'servers'
-      setNewSwitchName(""); // Renamed newServerName
-      setNewSwitchIp(""); // Renamed newServerIp
-      setNewSwitchLocation(""); // Renamed newServerLocation
-      setNewSwitchTotalPorts(1); // Renamed newServerTotalPorts
+      });
+      setNewSwitchName("");
+      setNewSwitchIp("");
+      setNewSwitchLocation("");
+      setNewSwitchTotalPorts(1);
+      setIsNewSwitchExpanded(false); // Collapse after adding
     }
   };
 
   return (
     <div className="space-y-8">
-      {/* Forms to Add New Entities (PC, Patch Panel, Switch) */}
+      {/* Collapsible Forms to Add New Entities */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Add New PC Form */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-700 mb-3">
-            Add New PC
-          </h3>{" "}
-          {/* Simplified "Add New PC or Server" */}
-          <form onSubmit={handleAddPc} className="space-y-3">
-            <input
-              type="text"
-              placeholder="PC Name"
-              value={newPcName}
-              onChange={(e) => setNewPcName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="text"
-              placeholder="IP Address (Optional)"
-              value={newPcIp}
-              onChange={(e) => setNewPcIp(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Description (Optional)"
-              value={newPcDesc}
-              onChange={(e) => setNewPcDesc(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <button
-              type="submit"
-              className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Add PC
-            </button>
-          </form>
+        {/* Add New PC Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+          <div
+            className="flex justify-between items-center p-5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
+            onClick={() => setIsNewPcExpanded(!isNewPcExpanded)}
+          >
+            <h3 className="text-lg font-semibold text-indigo-700 flex items-center">
+              <PlusCircle size={20} className="mr-2" /> Add New PC
+            </h3>
+            {isNewPcExpanded ? (
+              <ChevronUp size={20} />
+            ) : (
+              <ChevronDown size={20} />
+            )}
+          </div>
+          <div
+            className={`collapsible-content ${
+              isNewPcExpanded ? "expanded" : ""
+            }`}
+          >
+            <form onSubmit={handleAddPc} className="p-5 space-y-3">
+              <input
+                type="text"
+                placeholder="PC Name"
+                value={newPcName}
+                onChange={(e) => setNewPcName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+              <input
+                type="text"
+                placeholder="IP Address (Optional)"
+                value={newPcIp}
+                onChange={(e) => setNewPcIp(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Description (Optional)"
+                value={newPcDesc}
+                onChange={(e) => setNewPcDesc(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Add PC
+              </button>
+            </form>
+          </div>
         </div>
 
-        {/* Add New Patch Panel Form */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-700 mb-3">
-            Add New Patch Panel
-          </h3>
-          <form onSubmit={handleAddPp} className="space-y-3">
-            <input
-              type="text"
-              placeholder="Patch Panel Name"
-              value={newPpName}
-              onChange={(e) => setNewPpName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Location (Optional)"
-              value={newPpLocation}
-              onChange={(e) => setNewPpLocation(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="number"
-              placeholder="Total Ports (e.g., 24)"
-              value={newPpTotalPorts}
-              onChange={(e) => setNewPpTotalPorts(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              min="1"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              Add Patch Panel
-            </button>
-            {patchPanels.length > 0 /* Only show if existing PPs */ && (
-              <select
-                onChange={(e) =>
-                  onShowPortStatus("patch_panels", e.target.value)
-                }
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  View Port Status for Existing PP
-                </option>
-                {patchPanels.map((pp) => (
-                  <option key={pp.id} value={pp.id}>
-                    {pp.name} ({pp.location})
-                  </option>
-                ))}
-              </select>
+        {/* Add New Patch Panel Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+          <div
+            className="flex justify-between items-center p-5 cursor-pointer bg-green-50 hover:bg-green-100 transition-colors duration-200 rounded-t-lg"
+            onClick={() => setIsNewPpExpanded(!isNewPpExpanded)}
+          >
+            <h3 className="text-lg font-semibold text-green-700 flex items-center">
+              <PlusCircle size={20} className="mr-2" /> Add New Patch Panel
+            </h3>
+            {isNewPpExpanded ? (
+              <ChevronUp size={20} />
+            ) : (
+              <ChevronDown size={20} />
             )}
-          </form>
+          </div>
+          <div
+            className={`collapsible-content ${
+              isNewPpExpanded ? "expanded" : ""
+            }`}
+          >
+            <form onSubmit={handleAddPp} className="p-5 space-y-3">
+              <input
+                type="text"
+                placeholder="Patch Panel Name"
+                value={newPpName}
+                onChange={(e) => setNewPpName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Location (Optional)"
+                value={newPpLocation}
+                onChange={(e) => setNewPpLocation(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="number"
+                placeholder="Total Ports (e.g., 24)"
+                value={newPpTotalPorts}
+                onChange={(e) => setNewPpTotalPorts(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                required
+              />
+              <button
+                type="submit"
+                className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Add Patch Panel
+              </button>
+              {patchPanels.length > 0 && (
+                <select
+                  onChange={(e) =>
+                    onShowPortStatus("patch_panels", e.target.value)
+                  }
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    View Port Status for Existing PP
+                  </option>
+                  {patchPanels.map((pp) => (
+                    <option key={pp.id} value={pp.id}>
+                      {pp.name} ({pp.location})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </form>
+          </div>
         </div>
 
-        {/* Add New Switch Form (Renamed from Add New Server Form) */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-700 mb-3">
-            Add New Switch
-          </h3>{" "}
-          <form onSubmit={handleAddSwitch} className="space-y-3">
-            {" "}
-            <input
-              type="text"
-              placeholder="Switch Name" // Renamed "Server Name"
-              value={newSwitchName} // Renamed newServerName
-              onChange={(e) => setNewSwitchName(e.target.value)} // Renamed newServerName
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="text"
-              placeholder="IP Address (Optional)"
-              value={newSwitchIp} // Renamed newServerIp
-              onChange={(e) => setNewSwitchIp(e.target.value)} // Renamed newServerIp
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Location (Optional)"
-              value={newSwitchLocation} // Renamed newServerLocation
-              onChange={(e) => setNewSwitchLocation(e.target.value)} // Renamed newServerLocation
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="number"
-              placeholder="Total Ports (e.g., 4)"
-              value={newSwitchTotalPorts} // Renamed newServerTotalPorts
-              onChange={(e) => setNewSwitchTotalPorts(e.target.value)} // Renamed newServerTotalPorts
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              min="1"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              Add Switch
-            </button>
-            {switches.length > 0 /* Only show if existing Switches */ && (
-              <select
-                onChange={(e) => onShowPortStatus("switches", e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  View Port Status for Existing Switch
-                </option>
-                {switches.map((_switch) => (
-                  <option key={_switch.id} value={_switch.id}>
-                    {_switch.name} ({_switch.ip_address})
-                  </option>
-                ))}
-              </select>
+        {/* Add New Switch Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+          <div
+            className="flex justify-between items-center p-5 cursor-pointer bg-red-50 hover:bg-red-100 transition-colors duration-200 rounded-t-lg"
+            onClick={() => setIsNewSwitchExpanded(!isNewSwitchExpanded)}
+          >
+            <h3 className="text-lg font-semibold text-red-700 flex items-center">
+              <PlusCircle size={20} className="mr-2" /> Add New Switch
+            </h3>
+            {isNewSwitchExpanded ? (
+              <ChevronUp size={20} />
+            ) : (
+              <ChevronDown size={20} />
             )}
-          </form>
+          </div>
+          <div
+            className={`collapsible-content ${
+              isNewSwitchExpanded ? "expanded" : ""
+            }`}
+          >
+            <form onSubmit={handleAddSwitch} className="p-5 space-y-3">
+              <input
+                type="text"
+                placeholder="Switch Name"
+                value={newSwitchName}
+                onChange={(e) => setNewSwitchName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+              <input
+                type="text"
+                placeholder="IP Address (Optional)"
+                value={newSwitchIp}
+                onChange={(e) => setNewSwitchIp(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Location (Optional)"
+                value={newSwitchLocation}
+                onChange={(e) => setNewSwitchLocation(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="number"
+                placeholder="Total Ports (e.g., 4)"
+                value={newSwitchTotalPorts}
+                onChange={(e) => setNewSwitchTotalPorts(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                required
+              />
+              <button
+                type="submit"
+                className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Add Switch
+              </button>
+              {switches.length > 0 && (
+                <select
+                  onChange={(e) => onShowPortStatus("switches", e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 mt-2"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    View Port Status for Existing Switch
+                  </option>
+                  {switches.map((_switch) => (
+                    <option key={_switch.id} value={_switch.id}>
+                      {_switch.name} ({_switch.ip_address})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </form>
+          </div>
         </div>
       </div>
 
-      {/* Connection Form */}
+      {/* Main Connection Form */}
       <form
         onSubmit={handleSubmit}
         className="space-y-6 p-6 bg-white rounded-lg shadow-md border border-blue-200"
@@ -359,7 +406,7 @@ function ConnectionForm({
         <h3 className="text-xl font-bold text-blue-700 text-center">
           {editingConnection
             ? "Edit Existing Connection"
-            : "Add New Connection"}
+            : "Create New Connection"}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PC Selection */}
@@ -391,40 +438,36 @@ function ConnectionForm({
             )}
           </div>
 
-          {/* Switch Selection (Renamed from Server Selection) */}
+          {/* Switch Selection */}
           <div>
             <label
               htmlFor="switch-select"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
               Select Switch:
-            </label>{" "}
+            </label>
             <select
-              id="switch-select" // Renamed server-select
-              value={switchId} // Renamed serverId
-              onChange={(e) => setSwitchId(e.target.value)} // Renamed setServerId
+              id="switch-select"
+              value={switchId}
+              onChange={(e) => setSwitchId(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">-- Select a Switch --</option>
-              {switches.map(
-                (
-                  _switch // Renamed servers to switches, server to _switch
-                ) => (
-                  <option key={_switch.id} value={_switch.id}>
-                    {_switch.name} ({_switch.ip_address})
-                  </option>
-                )
-              )}
+              {switches.map((_switch) => (
+                <option key={_switch.id} value={_switch.id}>
+                  {_switch.name} ({_switch.ip_address})
+                </option>
+              ))}
             </select>
             {switches.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
                 Please add a Switch first.
               </p>
-            )}{" "}
+            )}
           </div>
 
-          {/* Switch Port Input and Status (Renamed from Server Port Input and Status) */}
+          {/* Switch Port Input and Status */}
           <div className="md:col-span-2 grid grid-cols-2 gap-4">
             <div>
               <label
@@ -432,45 +475,42 @@ function ConnectionForm({
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
                 Switch Port:
-              </label>{" "}
+              </label>
               <input
-                id="switch-port" // Renamed server-port
+                id="switch-port"
                 type="text"
                 placeholder="e.g., Eth0/1, GigaPort-03"
-                value={switchPort} // Renamed serverPort
-                onChange={(e) => setSwitchPort(e.target.value)} // Renamed setServerPort
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                value={switchPort}
+                onChange={(e) => setSwitchPort(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
             <div className="flex items-center pt-5">
               <input
-                id="is-switch-port-up" // Renamed is-server-port-up
+                id="is-switch-port-up"
                 type="checkbox"
-                checked={isSwitchPortUp} // Renamed isServerPortUp
-                onChange={(e) => setIsSwitchPortUp(e.target.checked)} // Renamed setIsServerPortUp
+                checked={isSwitchPortUp}
+                onChange={(e) => setIsSwitchPortUp(e.target.checked)}
                 className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <label
                 htmlFor="is-switch-port-up"
                 className="ml-2 block text-sm text-gray-900"
               >
-                {" "}
                 Port Up
               </label>
             </div>
-            {switchId &&
-              switches.find((s) => s.id === parseInt(switchId)) && ( // Renamed serverId, servers
-                <button
-                  type="button"
-                  onClick={() => onShowPortStatus("switches", switchId)} // Renamed 'servers', serverId
-                  className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-2"
-                >
-                  View Switch Port Status (
-                  {switches.find((s) => s.id === parseInt(switchId))?.name}) //
-                  Renamed Server, servers
-                </button>
-              )}
+            {switchId && switches.find((s) => s.id === parseInt(switchId)) && (
+              <button
+                type="button"
+                onClick={() => onShowPortStatus("switches", switchId)}
+                className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-2"
+              >
+                View Switch Port Status (
+                {switches.find((s) => s.id === parseInt(switchId))?.name})
+              </button>
+            )}
           </div>
         </div>
 
