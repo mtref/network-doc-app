@@ -1,5 +1,6 @@
 // frontend/src/components/PatchPanelList.js
-// This component displays a searchable list of Patch Panels in a card format.
+// This component displays a searchable list of Patch Panels in a card format,
+// now including filter options by Location and Rack.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -13,7 +14,8 @@ import {
   ChevronUp,
   Columns,
   Server,
-} from "lucide-react"; // Changed ServerStack to Server for Rack icon
+  Filter, // New icon for filter section
+} from "lucide-react";
 
 function PatchPanelList({
   patchPanels,
@@ -25,40 +27,73 @@ function PatchPanelList({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPatchPanels, setFilteredPatchPanels] = useState([]);
-  const [editingPatchPanel, setEditingPatchPanel] = useState(null); // State for editing a Patch Panel
+  const [editingPatchPanel, setEditingPatchPanel] = useState(null);
   const [ppFormName, setPpFormName] = useState("");
   const [ppFormLocationId, setPpFormLocationId] = useState("");
-  const [ppFormRowInRack, setPpFormRowInRack] = useState(""); // New field
-  const [ppFormRackName, setPpFormRackName] = useState(""); // New field
+  const [ppFormRowInRack, setPpFormRowInRack] = useState("");
+  const [ppFormRackName, setPpFormRackName] = useState("");
   const [ppFormTotalPorts, setPpFormTotalPorts] = useState(1);
-  const [ppFormDesc, setPpFormDesc] = useState(""); // New field
+  const [ppFormDesc, setPpFormDesc] = useState("");
 
-  const [isAddPpFormExpanded, setIsAddPpFormExpanded] = useState(false); // State for collapsible add form
+  const [isAddPpFormExpanded, setIsAddPpFormExpanded] = useState(false);
 
-  // Filter Patch Panels based on search term
+  // New states for filter options
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
+  const [selectedRackFilter, setSelectedRackFilter] = useState("all");
+
+  // States to hold available unique options for filters
+  const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
+  const [availableRackOptions, setAvailableRackOptions] = useState([]);
+
+  // Effect to extract unique filter options whenever 'patchPanels' data changes
+  useEffect(() => {
+    const uniqueLocations = [
+      ...new Set(patchPanels.map((pp) => pp.location_name).filter(Boolean)),
+    ].sort();
+    setAvailableLocationOptions(uniqueLocations);
+
+    const uniqueRacks = [
+      ...new Set(patchPanels.map((pp) => pp.rack_name).filter(Boolean)),
+    ].sort();
+    setAvailableRackOptions(uniqueRacks);
+  }, [patchPanels]);
+
+  // Filter Patch Panels based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = patchPanels.filter(
-      (pp) =>
+    const filtered = patchPanels.filter((pp) => {
+      // Text search filter
+      const matchesSearch =
         (pp.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pp.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (pp.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
-        (pp.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
+        (pp.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pp.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         String(pp.total_ports).includes(lowerCaseSearchTerm) ||
-        (pp.description || "").toLowerCase().includes(lowerCaseSearchTerm) // Search by new field
-    );
+        (pp.description || "").toLowerCase().includes(lowerCaseSearchTerm);
+
+      // Location filter
+      const matchesLocation =
+        selectedLocationFilter === "all" ||
+        pp.location_name === selectedLocationFilter;
+
+      // Rack filter
+      const matchesRack =
+        selectedRackFilter === "all" || pp.rack_name === selectedRackFilter;
+
+      return matchesSearch && matchesLocation && matchesRack;
+    });
     setFilteredPatchPanels(filtered);
-  }, [patchPanels, searchTerm]);
+  }, [patchPanels, searchTerm, selectedLocationFilter, selectedRackFilter]);
 
   // Handle edit initiation
   const handleEdit = (pp) => {
     setEditingPatchPanel(pp);
     setPpFormName(pp.name);
     setPpFormLocationId(pp.location_id || "");
-    setPpFormRowInRack(pp.row_in_rack || ""); // Populate new field
-    setPpFormRackName(pp.rack_name || ""); // Populate new field
+    setPpFormRowInRack(pp.row_in_rack || "");
+    setPpFormRackName(pp.rack_name || "");
     setPpFormTotalPorts(pp.total_ports);
-    setPpFormDesc(pp.description || ""); // Populate new field
+    setPpFormDesc(pp.description || "");
     setIsAddPpFormExpanded(true); // Expand form when editing
   };
 
@@ -73,10 +108,10 @@ function PatchPanelList({
     const ppData = {
       name: ppFormName,
       location_id: parseInt(ppFormLocationId),
-      row_in_rack: ppFormRowInRack, // Include new field
-      rack_name: ppFormRackName, // Include new field
+      row_in_rack: ppFormRowInRack,
+      rack_name: ppFormRackName,
       total_ports: parseInt(ppFormTotalPorts),
-      description: ppFormDesc, // Include new field
+      description: ppFormDesc,
     };
 
     if (editingPatchPanel) {
@@ -98,6 +133,58 @@ function PatchPanelList({
     <div className="space-y-6">
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      {/* Filter Options for Patch Panels */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-wrap gap-4 items-center">
+        <Filter size={20} className="text-gray-600 flex-shrink-0" />
+        <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
+
+        {/* Location Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="pp-location-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Location:
+          </label>
+          <select
+            id="pp-location-filter"
+            value={selectedLocationFilter}
+            onChange={(e) => setSelectedLocationFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableLocationOptions.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Rack Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="pp-rack-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Rack:
+          </label>
+          <select
+            id="pp-rack-filter"
+            value={selectedRackFilter}
+            onChange={(e) => setSelectedRackFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableRackOptions.map((rack) => (
+              <option key={rack} value={rack}>
+                {rack}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* Add/Edit Patch Panel Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200">
@@ -228,7 +315,7 @@ function PatchPanelList({
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
-                {pp.rack_name || "N/A"} {/* Changed icon to Server for Rack */}
+                {pp.rack_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Total
@@ -267,7 +354,7 @@ function PatchPanelList({
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
           {searchTerm
-            ? "No Patch Panels match your search."
+            ? "No Patch Panels match your search and filter criteria."
             : "No Patch Panels added yet."}
         </p>
       )}

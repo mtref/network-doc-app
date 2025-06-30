@@ -1,5 +1,6 @@
 // frontend/src/components/SwitchList.js
-// This component displays a searchable list of Switches in a card format.
+// This component displays a searchable list of Switches in a card format,
+// now including filter options by Location, Rack, and Model.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -14,7 +15,8 @@ import {
   Columns,
   HardDrive,
   Link,
-} from "lucide-react"; // Removed duplicate Columns, using Server for Rack icon
+  Filter, // New icon for filter section
+} from "lucide-react";
 
 function SwitchList({
   switches,
@@ -26,28 +28,57 @@ function SwitchList({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSwitches, setFilteredSwitches] = useState([]);
-  const [editingSwitch, setEditingSwitch] = useState(null); // State for editing a Switch
+  const [editingSwitch, setEditingSwitch] = useState(null);
   const [switchFormName, setSwitchFormName] = useState("");
   const [switchFormIp, setSwitchFormIp] = useState("");
   const [switchFormLocationId, setSwitchFormLocationId] = useState("");
-  const [switchFormRowInRack, setSwitchFormRowInRack] = useState(""); // New field
-  const [switchFormRackName, setSwitchFormRackName] = useState(""); // New field
+  const [switchFormRowInRack, setSwitchFormRowInRack] = useState("");
+  const [switchFormRackName, setSwitchFormRackName] = useState("");
   const [switchFormTotalPorts, setSwitchFormTotalPorts] = useState(1);
-  const [switchFormSourcePort, setSwitchFormSourcePort] = useState(""); // New field
-  const [switchFormModel, setSwitchFormModel] = useState(""); // New field
-  const [switchFormDesc, setSwitchFormDesc] = useState(""); // New field
+  const [switchFormSourcePort, setSwitchFormSourcePort] = useState("");
+  const [switchFormModel, setSwitchFormModel] = useState("");
+  const [switchFormDesc, setSwitchFormDesc] = useState("");
 
-  const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false); // State for collapsible add form
+  const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false);
+
+  // New states for filter options
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
+  const [selectedRackFilter, setSelectedRackFilter] = useState("all");
+  const [selectedModelFilter, setSelectedModelFilter] = useState("all");
+
+  // States to hold available unique options for filters
+  const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
+  const [availableRackOptions, setAvailableRackOptions] = useState([]);
+  const [availableModelOptions, setAvailableModelOptions] = useState([]);
 
   // IP Address Regex for validation
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
-  // Filter Switches based on search term
+  // Effect to extract unique filter options whenever 'switches' data changes
+  useEffect(() => {
+    const uniqueLocations = [
+      ...new Set(switches.map((s) => s.location_name).filter(Boolean)),
+    ].sort();
+    setAvailableLocationOptions(uniqueLocations);
+
+    const uniqueRacks = [
+      ...new Set(switches.map((s) => s.rack_name).filter(Boolean)),
+    ].sort();
+    setAvailableRackOptions(uniqueRacks);
+
+    const uniqueModels = [
+      ...new Set(switches.map((s) => s.model).filter(Boolean)),
+    ].sort();
+    setAvailableModelOptions(uniqueModels);
+  }, [switches]);
+
+  // Filter Switches based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = switches.filter(
-      (_switch) =>
+    const filtered = switches.filter((_switch) => {
+      // Text search filter
+      const matchesSearch =
         (_switch.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (_switch.ip_address || "")
           .toLowerCase()
@@ -57,21 +88,43 @@ function SwitchList({
           .includes(lowerCaseSearchTerm) ||
         (_switch.row_in_rack || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // Search by new field
-        (_switch.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by new field
+          .includes(lowerCaseSearchTerm) ||
+        (_switch.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         String(_switch.total_ports).includes(lowerCaseSearchTerm) ||
         (String(_switch.source_port) || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // Search by new field
+          .includes(lowerCaseSearchTerm) ||
         (String(_switch.model) || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // Search by new field
+          .includes(lowerCaseSearchTerm) ||
         (String(_switch.description) || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) // Search by new field
-    );
+          .includes(lowerCaseSearchTerm);
+
+      // Location filter
+      const matchesLocation =
+        selectedLocationFilter === "all" ||
+        _switch.location_name === selectedLocationFilter;
+
+      // Rack filter
+      const matchesRack =
+        selectedRackFilter === "all" ||
+        _switch.rack_name === selectedRackFilter;
+
+      // Model filter
+      const matchesModel =
+        selectedModelFilter === "all" || _switch.model === selectedModelFilter;
+
+      return matchesSearch && matchesLocation && matchesRack && matchesModel;
+    });
     setFilteredSwitches(filtered);
-  }, [switches, searchTerm]);
+  }, [
+    switches,
+    searchTerm,
+    selectedLocationFilter,
+    selectedRackFilter,
+    selectedModelFilter,
+  ]);
 
   // Handle edit initiation
   const handleEdit = (_switch) => {
@@ -79,13 +132,13 @@ function SwitchList({
     setSwitchFormName(_switch.name);
     setSwitchFormIp(_switch.ip_address || "");
     setSwitchFormLocationId(_switch.location_id || "");
-    setSwitchFormRowInRack(_switch.row_in_rack || ""); // Populate new field
-    setSwitchFormRackName(_switch.rack_name || ""); // Populate new field
+    setSwitchFormRowInRack(_switch.row_in_rack || "");
+    setSwitchFormRackName(_switch.rack_name || "");
     setSwitchFormTotalPorts(_switch.total_ports);
-    setSwitchFormSourcePort(_switch.source_port || ""); // Populate new field
-    setSwitchFormModel(_switch.model || ""); // Populate new field
-    setSwitchFormDesc(_switch.description || ""); // Populate new field
-    setIsAddSwitchFormExpanded(true); // Expand form when editing
+    setSwitchFormSourcePort(_switch.source_port || "");
+    setSwitchFormModel(_switch.model || "");
+    setSwitchFormDesc(_switch.description || "");
+    setIsAddSwitchFormExpanded(true);
   };
 
   // Handle form submission for Add/Update Switch
@@ -106,12 +159,12 @@ function SwitchList({
       name: switchFormName,
       ip_address: switchFormIp,
       location_id: parseInt(switchFormLocationId),
-      row_in_rack: switchFormRowInRack, // Include new field
-      rack_name: switchFormRackName, // Include new field
+      row_in_rack: switchFormRowInRack,
+      rack_name: switchFormRackName,
       total_ports: parseInt(switchFormTotalPorts),
-      source_port: switchFormSourcePort, // Include new field
-      model: switchFormModel, // Include new field
-      description: switchFormDesc, // Include new field
+      source_port: switchFormSourcePort,
+      model: switchFormModel,
+      description: switchFormDesc,
     };
 
     if (editingSwitch) {
@@ -119,8 +172,8 @@ function SwitchList({
     } else {
       await onAddEntity("switches", switchData);
     }
-    setEditingSwitch(null); // Clear editing state
-    setSwitchFormName(""); // Clear form fields
+    setEditingSwitch(null);
+    setSwitchFormName("");
     setSwitchFormIp("");
     setSwitchFormLocationId("");
     setSwitchFormRowInRack("");
@@ -129,13 +182,88 @@ function SwitchList({
     setSwitchFormSourcePort("");
     setSwitchFormModel("");
     setSwitchFormDesc("");
-    setIsAddSwitchFormExpanded(false); // Collapse form after submission
+    setIsAddSwitchFormExpanded(false);
   };
 
   return (
     <div className="space-y-6">
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      {/* Filter Options for Switches */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-wrap gap-4 items-center">
+        <Filter size={20} className="text-gray-600 flex-shrink-0" />
+        <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
+
+        {/* Location Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="switch-location-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Location:
+          </label>
+          <select
+            id="switch-location-filter"
+            value={selectedLocationFilter}
+            onChange={(e) => setSelectedLocationFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableLocationOptions.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Rack Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="switch-rack-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Rack:
+          </label>
+          <select
+            id="switch-rack-filter"
+            value={selectedRackFilter}
+            onChange={(e) => setSelectedRackFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableRackOptions.map((rack) => (
+              <option key={rack} value={rack}>
+                {rack}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Model Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="switch-model-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Model:
+          </label>
+          <select
+            id="switch-model-filter"
+            value={selectedModelFilter}
+            onChange={(e) => setSelectedModelFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableModelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* Add/Edit Switch Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200">
@@ -295,7 +423,7 @@ function SwitchList({
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
-                {_switch.rack_name || "N/A"} {/* Used Columns for rack icon */}
+                {_switch.rack_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <HardDrive size={16} className="text-gray-500 mr-2" /> Total
@@ -342,7 +470,7 @@ function SwitchList({
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
           {searchTerm
-            ? "No Switches match your search."
+            ? "No Switches match your search and filter criteria."
             : "No Switches added yet."}
         </p>
       )}

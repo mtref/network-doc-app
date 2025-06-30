@@ -1,5 +1,6 @@
 // frontend/src/components/PcList.js
-// This component displays a searchable list of PCs in a card format.
+// This component displays a searchable list of PCs in a card format,
+// now including filter options by In Domain, OS, and Office.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -15,7 +16,8 @@ import {
   ToggleRight,
   ToggleLeft,
   Monitor,
-  Building2, // New icon for Office
+  Building2,
+  Filter, // New icon for filter
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -24,37 +26,82 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [editingPc, setEditingPc] = useState(null); // State for editing a PC
   const [pcFormName, setPcFormName] = useState("");
   const [pcFormIp, setPcFormIp] = useState("");
-  const [pcFormUsername, setPcFormUsername] = useState(""); // New field
-  const [pcFormInDomain, setPcFormInDomain] = useState(false); // New field
-  const [pcFormOs, setPcFormOs] = useState(""); // New field
-  const [pcFormPortsName, setPcFormPortsName] = useState(""); // New field
-  const [pcFormOffice, setPcFormOffice] = useState(""); // New state for Office
+  const [pcFormUsername, setPcFormUsername] = useState("");
+  const [pcFormInDomain, setPcFormInDomain] = useState(false);
+  const [pcFormOs, setPcFormOs] = useState("");
+  const [pcFormPortsName, setPcFormPortsName] = useState("");
+  const [pcFormOffice, setPcFormOffice] = useState("");
   const [pcFormDesc, setPcFormDesc] = useState("");
 
-  const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false); // State for collapsible add form
+  const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false);
+
+  // New states for filter options
+  const [selectedDomainFilter, setSelectedDomainFilter] = useState("all"); // 'all', 'true', 'false'
+  const [selectedOsFilter, setSelectedOsFilter] = useState("all");
+  const [selectedOfficeFilter, setSelectedOfficeFilter] = useState("all");
+
+  // States to hold available unique options for filters
+  const [availableOsOptions, setAvailableOsOptions] = useState([]);
+  const [availableOfficeOptions, setAvailableOfficeOptions] = useState([]);
 
   // IP Address Regex for validation
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
-  // Filter PCs based on search term
+  // Effect to extract unique filter options whenever 'pcs' data changes
+  useEffect(() => {
+    const uniqueOs = [
+      ...new Set(pcs.map((pc) => pc.operating_system).filter(Boolean)),
+    ].sort();
+    setAvailableOsOptions(uniqueOs);
+
+    const uniqueOffice = [
+      ...new Set(pcs.map((pc) => pc.office).filter(Boolean)),
+    ].sort();
+    setAvailableOfficeOptions(uniqueOffice);
+  }, [pcs]);
+
+  // Filter PCs based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = pcs.filter(
-      (pc) =>
+    const filtered = pcs.filter((pc) => {
+      // Text search filter
+      const matchesSearch =
         (pc.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.ip_address || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (pc.username || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by username
-        (pc.in_domain ? "yes" : "no").includes(lowerCaseSearchTerm) || // Search by in_domain status
+        (pc.username || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.in_domain ? "yes" : "no").includes(lowerCaseSearchTerm) ||
         (pc.operating_system || "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // Search by OS
-        (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by ports_name
-        (pc.office || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by Office
-        (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm)
-    );
+          .includes(lowerCaseSearchTerm) ||
+        (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.office || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm);
+
+      // "In Domain" filter
+      const matchesDomain =
+        selectedDomainFilter === "all" ||
+        (selectedDomainFilter === "true" && pc.in_domain) ||
+        (selectedDomainFilter === "false" && !pc.in_domain);
+
+      // OS filter
+      const matchesOs =
+        selectedOsFilter === "all" || pc.operating_system === selectedOsFilter;
+
+      // Office filter
+      const matchesOffice =
+        selectedOfficeFilter === "all" || pc.office === selectedOfficeFilter;
+
+      return matchesSearch && matchesDomain && matchesOs && matchesOffice;
+    });
     setFilteredPcs(filtered);
-  }, [pcs, searchTerm]);
+  }, [
+    pcs,
+    searchTerm,
+    selectedDomainFilter,
+    selectedOsFilter,
+    selectedOfficeFilter,
+  ]);
 
   // Handle edit initiation
   const handleEdit = (pc) => {
@@ -65,7 +112,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormInDomain(pc.in_domain || false);
     setPcFormOs(pc.operating_system || "");
     setPcFormPortsName(pc.ports_name || "");
-    setPcFormOffice(pc.office || ""); // Populate new field
+    setPcFormOffice(pc.office || "");
     setPcFormDesc(pc.description || "");
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
@@ -87,7 +134,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       in_domain: pcFormInDomain,
       operating_system: pcFormOs,
       ports_name: pcFormPortsName,
-      office: pcFormOffice, // Include new field
+      office: pcFormOffice,
       description: pcFormDesc,
     };
 
@@ -103,7 +150,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormInDomain(false);
     setPcFormOs("");
     setPcFormPortsName("");
-    setPcFormOffice(""); // Clear new field
+    setPcFormOffice("");
     setPcFormDesc("");
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
@@ -112,6 +159,78 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     <div className="space-y-6">
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      {/* Filter Options */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-wrap gap-4 items-center">
+        <Filter size={20} className="text-gray-600 flex-shrink-0" />
+        <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
+
+        {/* In Domain Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="domain-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            In Domain:
+          </label>
+          <select
+            id="domain-filter"
+            value={selectedDomainFilter}
+            onChange={(e) => setSelectedDomainFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+
+        {/* OS Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="os-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            OS:
+          </label>
+          <select
+            id="os-filter"
+            value={selectedOsFilter}
+            onChange={(e) => setSelectedOsFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableOsOptions.map((os) => (
+              <option key={os} value={os}>
+                {os}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Office Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="office-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Office:
+          </label>
+          <select
+            id="office-filter"
+            value={selectedOfficeFilter}
+            onChange={(e) => setSelectedOfficeFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableOfficeOptions.map((office) => (
+              <option key={office} value={office}>
+                {office}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* Add/Edit PC Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200">
@@ -188,9 +307,9 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
             />
             <input
               type="text"
-              placeholder="Office (Optional)" // New Office field
-              value={pcFormOffice} // State for Office
-              onChange={(e) => setPcFormOffice(e.target.value)} // Update state on change
+              placeholder="Office (Optional)"
+              value={pcFormOffice}
+              onChange={(e) => setPcFormOffice(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
             <textarea
@@ -212,7 +331,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                     setPcFormInDomain(false);
                     setPcFormOs("");
                     setPcFormPortsName("");
-                    setPcFormOffice(""); // Clear new field
+                    setPcFormOffice("");
                     setPcFormDesc("");
                     setIsAddPcFormExpanded(false);
                   }}
@@ -297,7 +416,9 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
         </div>
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
-          {searchTerm ? "No PCs match your search." : "No PCs added yet."}
+          {searchTerm
+            ? "No PCs match your search and filter criteria."
+            : "No PCs added yet."}
         </p>
       )}
     </div>
