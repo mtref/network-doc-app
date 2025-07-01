@@ -1,6 +1,7 @@
 // frontend/src/components/SwitchDiagramModal.js
 // This component displays a modal with an interactive diagram of a selected switch
-// using React Flow. It shows the central switch and all connected PCs (direct or via patch panels).
+// using React Flow. It now explicitly shows Patch Panel nodes for connections that
+// pass through them, creating a more detailed and accurate network path.
 
 import React, { useCallback, useState, useEffect } from "react";
 import ReactFlow, {
@@ -11,8 +12,9 @@ import ReactFlow, {
   useEdgesState,
   addEdge,
   MarkerType,
+  useReactFlow,
 } from "reactflow";
-import "reactflow/dist/style.css"; // Import React Flow styles
+import "reactflow/dist/style.css";
 import {
   XCircle,
   Server,
@@ -22,7 +24,8 @@ import {
   WifiOff,
   Network,
   Split,
-} from "lucide-react";
+  HardDrive,
+} from "lucide-react"; // Added HardDrive for Patch Panel icon
 
 // Custom Node for Switch
 const SwitchNode = ({ data }) => {
@@ -63,9 +66,25 @@ const PcNode = ({ data }) => {
   );
 };
 
+// Custom Node for Patch Panel
+const PatchPanelNode = ({ data }) => {
+  return (
+    <div
+      className="bg-green-600 text-white p-3 rounded-full shadow-lg flex flex-col items-center justify-center border-2 border-green-800"
+      style={{ width: "70px", height: "70px" }}
+    >
+      <Split size={28} /> {/* Using Split icon for Patch Panel */}
+      <div className="text-xs font-bold mt-1 text-center truncate w-full px-1">
+        {data.label}
+      </div>
+    </div>
+  );
+};
+
 const nodeTypes = {
   switchNode: SwitchNode,
   pcNode: PcNode,
+  patchPanelNode: PatchPanelNode, // Register the new node type
 };
 
 function SwitchDiagramModal({
@@ -81,146 +100,232 @@ function SwitchDiagramModal({
     (params) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+  const { fitView } = useReactFlow();
+
+  // Define relevantConnections at the component level or within useEffect,
+  // but if needed outside useEffect for rendering logic, it needs to be state or derived.
+  // For simplicity and direct debugging, let's derive it in useEffect and use its values.
+  const [currentRelevantConnections, setCurrentRelevantConnections] = useState(
+    []
+  );
+
+  console.log(
+    "SwitchDiagramModal: Component rendered. isOpen:",
+    isOpen,
+    "selectedSwitch:",
+    selectedSwitch
+  );
 
   useEffect(() => {
+    console.log("SwitchDiagramModal: useEffect triggered.");
     if (!isOpen || !selectedSwitch) {
+      console.log(
+        "SwitchDiagramModal: Modal is not open or no switch selected. Resetting nodes/edges."
+      );
       setNodes([]);
       setEdges([]);
+      setCurrentRelevantConnections([]); // Also reset this state
       return;
     }
 
+    console.log("SwitchDiagramModal: Processing data for diagram...");
     const newNodes = [];
     const newEdges = [];
+    // const addedPatchPanels = new Set(); // Not currently used, can remove or keep for future optimization
 
     // Add the central Switch node
-    newNodes.push({
-      id: String(selectedSwitch.id),
+    const switchNodeId = String(selectedSwitch.id);
+    const centralSwitchNode = {
+      id: switchNodeId,
       type: "switchNode",
       data: { label: selectedSwitch.name, switchData: selectedSwitch },
-      position: { x: 300, y: 150 }, // Central position
+      position: { x: 0, y: 0 }, // Central position
       draggable: true,
-    });
+    };
+    newNodes.push(centralSwitchNode);
+    console.log("SwitchDiagramModal: Added Switch Node:", centralSwitchNode);
 
-    // Find all PCs connected to this switch
-    const connectedPcsInfo = connections.filter(
+    // Filter connections relevant to the selected switch
+    const relevantConnections = connections.filter(
       (conn) => conn.switch_id === selectedSwitch.id
     );
+    // Update state for access outside useEffect
+    setCurrentRelevantConnections(relevantConnections);
 
-    // Filter out connections that have a hop to a patch panel
-    // These connections are for direct PC-to-Switch or PC-to-PatchPanel-to-Switch (single hop) connections
-    const directConnections = connectedPcsInfo.filter(
-      (conn) => conn.hops.length === 0
-    );
-    const viaPatchPanelConnections = connectedPcsInfo.filter(
-      (conn) => conn.hops.length > 0
+    console.log(
+      "SwitchDiagramModal: Relevant connections (filtered by switch ID):",
+      relevantConnections
     );
 
-    // Position direct PCs around the switch in a circle
-    const directPcCount = directConnections.length;
-    const directAngleStep =
-      directPcCount > 0 ? (2 * Math.PI) / directPcCount : 0;
-    const directRadius = 200; // Radius for direct PCs
-
-    directConnections.forEach((conn, index) => {
+    // Process each relevant connection
+    relevantConnections.forEach((conn, connIndex) => {
       const pc = pcs.find((p) => p.id === conn.pc_id);
-      if (pc) {
-        const angle = index * directAngleStep;
-        const x = 300 + directRadius * Math.cos(angle);
-        const y = 150 + directRadius * Math.sin(angle);
-
-        newNodes.push({
-          id: `pc-${pc.id}`,
-          type: "pcNode",
-          data: {
-            label: pc.name,
-            pcData: pc,
-            isPortUp: conn.is_switch_port_up,
-          },
-          position: { x: x - 35, y: y - 35 }, // Adjust for node size
-          draggable: true,
-        });
-
-        newEdges.push({
-          id: `e-switch-${selectedSwitch.id}-pc-${pc.id}`,
-          source: String(selectedSwitch.id),
-          target: `pc-${pc.id}`,
-          type: "smoothstep",
-          label: `Port: ${conn.switch_port}`,
-          animated: !conn.is_switch_port_up,
-          style: { stroke: conn.is_switch_port_up ? "#22C55E" : "#EF4444" }, // Green for up, red for down
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: conn.is_switch_port_up ? "#22C55E" : "#EF4444",
-          },
-          // Add tooltip-like information on hover
-          data: {
-            sourcePort: conn.switch_port,
-            status: conn.is_switch_port_up ? "Up" : "Down",
-            connectedTo: pc.name,
-            connectionId: conn.id,
-          },
-        });
+      if (!pc) {
+        console.warn(
+          `SwitchDiagramModal: PC with ID ${conn.pc_id} not found for connection ${conn.id}. Skipping.`
+        );
+        return;
       }
-    });
 
-    // Handle connections via patch panels
-    // For now, let's just create nodes for these PCs and link them, without explicitly showing patch panels
-    // A more complex layout would be needed to show intermediate patch panel nodes
-    const viaPpRadius = directRadius + 100; // Larger radius for PCs via patch panels
-    const viaPpAngleStep =
-      viaPatchPanelConnections.length > 0
-        ? (2 * Math.PI) / viaPatchPanelConnections.length
-        : 0;
+      // Determine the path for this connection (Switch -> PP1 -> PP2 -> ... -> PC)
+      const pathNodes = [];
+      pathNodes.push({ id: switchNodeId, type: "switch" }); // Start with the switch
 
-    viaPatchPanelConnections.forEach((conn, index) => {
-      const pc = pcs.find((p) => p.id === conn.pc_id);
-      if (pc) {
-        const angle = index * viaPpAngleStep;
-        const x = 300 + viaPpRadius * Math.cos(angle);
-        const y = 150 + viaPpRadius * Math.sin(angle);
+      conn.hops.forEach((hop) => {
+        const patchPanel = hop.patch_panel;
+        if (patchPanel) {
+          pathNodes.push({
+            id: `pp-${patchPanel.id}`,
+            type: "patchPanel",
+            data: patchPanel,
+            hopData: hop,
+          });
+        }
+      });
+      pathNodes.push({
+        id: `pc-${pc.id}-${conn.id}`,
+        type: "pc",
+        data: pc,
+        connData: conn,
+      }); // End with the PC (unique ID for PC per connection)
 
-        newNodes.push({
-          id: `pc-via-pp-${pc.id}`, // Unique ID for PCs connected via PP
-          type: "pcNode",
-          data: {
-            label: `${pc.name} (via PP)`,
-            pcData: pc,
-            isPortUp: conn.is_switch_port_up,
-          },
-          position: { x: x - 35, y: y - 35 },
-          draggable: true,
-        });
+      // Calculate positions for nodes in this path
+      // Simple linear layout for now, radiating from switch
+      const totalPathSegments = pathNodes.length - 1;
+      const segmentLength = 150; // Distance between nodes in a segment
+      const baseAngle =
+        ((2 * Math.PI) / relevantConnections.length) * connIndex; // Angle for this connection's path
 
-        // For simplicity, draw a line from the PC (via PP) to the Switch
-        // In a more advanced diagram, you might insert Patch Panel nodes
+      pathNodes.forEach((nodeInfo, nodeIndex) => {
+        const nodeId = nodeInfo.id;
+        const nodeType = nodeInfo.type;
+        let nodeLabel = "";
+        let nodeComponentType = "";
+        let nodeData = {};
+        let nodeIsPortUp = true; // Default for intermediate nodes
+
+        if (nodeType === "switch") {
+          nodeLabel = selectedSwitch.name;
+          nodeComponentType = "switchNode";
+          nodeData = selectedSwitch;
+        } else if (nodeType === "pc") {
+          nodeLabel = pc.name;
+          nodeComponentType = "pcNode";
+          nodeData = pc;
+          nodeIsPortUp = conn.is_switch_port_up;
+        } else if (nodeType === "patchPanel") {
+          nodeLabel = nodeInfo.data.name;
+          nodeComponentType = "patchPanelNode";
+          nodeData = nodeInfo.data;
+          nodeIsPortUp = nodeInfo.hopData.is_port_up;
+        }
+
+        // Calculate position: radiating outwards from the center (0,0)
+        // Adjust radius based on segment index
+        const currentRadius = nodeIndex * segmentLength;
+        const x = currentRadius * Math.cos(baseAngle);
+        const y = currentRadius * Math.sin(baseAngle);
+
+        // Add node if not already present (for shared patch panels)
+        if (!newNodes.some((n) => n.id === nodeId)) {
+          newNodes.push({
+            id: nodeId,
+            type: nodeComponentType,
+            data: { label: nodeLabel, ...nodeData, isPortUp: nodeIsPortUp },
+            position: { x: x - 35, y: y - 35 }, // Adjust for node size
+            draggable: true,
+          });
+          console.log(
+            `SwitchDiagramModal: Added node:`,
+            newNodes[newNodes.length - 1]
+          );
+        }
+      });
+
+      // Create edges for the path
+      for (let i = 0; i < pathNodes.length - 1; i++) {
+        const sourceNode = pathNodes[i];
+        const targetNode = pathNodes[i + 1];
+        // const isLastSegment = i === pathNodes.length - 2; // Not used
+
+        let edgeLabel = "";
+        // FORCED DEBUG STYLES
+        let edgeColor = "purple"; // DEBUG COLOR
+        let edgeStyle = { stroke: "purple", strokeWidth: 10 }; // DEBUG STYLE
+
+        // Determine edge properties based on source and target node types
+        // Original logic for edgeLabel is kept, but color/style are overridden for debugging
+        if (sourceNode.type === "switch" && targetNode.type === "patchPanel") {
+          const hop = conn.hops[0];
+          edgeLabel = `Port: ${hop.patch_panel_port}`;
+          // edgeAnimated = !hop.is_port_up; // Original, now forced false
+          // edgeColor = hop.is_port_up ? "lime" : "orange"; // Original, now forced purple
+          // edgeStyle = { stroke: edgeColor, strokeWidth: 5, strokeDasharray: "10 10", }; // Original, now forced purple/10
+        } else if (
+          sourceNode.type === "patchPanel" &&
+          targetNode.type === "patchPanel"
+        ) {
+          const hopIndex = conn.hops.findIndex(
+            (h) => `pp-${h.patch_panel.id}` === sourceNode.id
+          );
+          const hop = conn.hops[hopIndex + 1];
+          if (hop) {
+            edgeLabel = `Port: ${hop.patch_panel_port}`;
+            // edgeAnimated = !hop.is_port_up; // Original, now forced false
+            // edgeColor = hop.is_port_up ? "lime" : "orange"; // Original, now forced purple
+            // edgeStyle = { stroke: edgeColor, strokeWidth: 5, strokeDasharray: "10 10", }; // Original, now forced purple/10
+          }
+        } else if (
+          sourceNode.type === "patchPanel" &&
+          targetNode.type === "pc"
+        ) {
+          edgeLabel = `Switch Port: ${conn.switch_port}`;
+          // edgeAnimated = !conn.is_switch_port_up; // Original, now forced false
+          // edgeColor = conn.is_switch_port_up ? "lime" : "orange"; // Original, now forced purple
+          // edgeStyle = { stroke: edgeColor, strokeWidth: 5 }; // Original, now forced purple/10
+        } else if (sourceNode.type === "switch" && targetNode.type === "pc") {
+          // Direct Switch to PC connection (no hops)
+          edgeLabel = `Port: ${conn.switch_port}`;
+          // edgeAnimated = !conn.is_switch_port_up; // Original, now forced false
+          // edgeColor = conn.is_switch_port_up ? "lime" : "orange"; // Original, now forced purple
+          // edgeStyle = { stroke: edgeColor, strokeWidth: 5 }; // Original, now forced purple/10
+        }
+
         newEdges.push({
-          id: `e-switch-${selectedSwitch.id}-pc-via-pp-${pc.id}`,
-          source: String(selectedSwitch.id),
-          target: `pc-via-pp-${pc.id}`,
-          type: "smoothstep",
-          label: `Port: ${conn.switch_port} (via PP)`,
-          animated: !conn.is_switch_port_up,
-          style: {
-            stroke: conn.is_switch_port_up ? "#22C55E" : "#EF4444",
-            strokeDasharray: "5 5",
-          }, // Dashed line for via PP
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: conn.is_switch_port_up ? "#22C55E" : "#EF4444",
-          },
+          id: `e-${sourceNode.id}-${targetNode.id}-${conn.id}`, // Unique edge ID including connection ID
+          source: sourceNode.id,
+          target: targetNode.id,
+          type: "default", // Changed to default for simplicity
+          label: edgeLabel,
+          animated: false, // Turned off for debugging
+          style: edgeStyle, // Use aggressive debug style
+          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
           data: {
-            sourcePort: conn.switch_port,
-            status: conn.is_switch_port_up ? "Up" : "Down",
-            connectedTo: `${pc.name} (via Patch Panel)`,
-            connectionId: conn.id,
+            /* ... edge specific data ... */
           },
         });
+        console.log(
+          `SwitchDiagramModal: Added edge:`,
+          newEdges[newEdges.length - 1]
+        );
       }
     });
 
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [isOpen, selectedSwitch, connections, pcs, setNodes, setEdges]); // Dependencies for useEffect
+
+    // Add the console.logs here, after setNodes and setEdges have been called
+    console.log("Final Nodes state for React Flow:", newNodes);
+    console.log("Final Edges state for React Flow:", newEdges);
+
+    const fitViewTimeout = setTimeout(() => {
+      fitView({ padding: 0.2, duration: 500 });
+    }, 50);
+
+    return () => {
+      clearTimeout(fitViewTimeout);
+    };
+  }, [isOpen, selectedSwitch, connections, pcs, setNodes, setEdges, fitView]);
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -229,7 +334,7 @@ function SwitchDiagramModal({
         <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-800 flex items-center">
             <Network size={24} className="mr-2" /> Network Diagram:{" "}
-            {selectedSwitch.name}
+            {selectedSwitch?.name || "N/A"}
           </h2>
           <button
             onClick={onClose}
@@ -241,8 +346,11 @@ function SwitchDiagramModal({
         </div>
 
         {/* React Flow Diagram Area */}
-        <div className="flex-grow w-full h-full bg-gray-100 reactflow-container">
-          {selectedSwitch && ( // Ensure selectedSwitch exists before rendering ReactFlow
+        {isOpen && selectedSwitch ? (
+          <div
+            className="flex-grow w-full bg-gray-100 reactflow-container"
+            style={{ height: "500px" }}
+          >
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -250,20 +358,34 @@ function SwitchDiagramModal({
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               nodeTypes={nodeTypes}
-              fitView // Zoom and pan to fit all nodes into view
+              fitView
               attributionPosition="bottom-left"
             >
               <MiniMap />
               <Controls />
               <Background variant="dots" gap={12} size={1} />
             </ReactFlow>
-          )}
-          {nodes.length <= 1 && ( // Only the switch node exists if length is 1
+          </div>
+        ) : (
+          <div
+            className="flex-grow w-full flex items-center justify-center bg-gray-100"
+            style={{ height: "500px" }}
+          >
+            <p className="text-xl text-gray-600">
+              Select a switch to view its network diagram.
+            </p>
+          </div>
+        )}
+
+        {/* Conditional message for no connections */}
+        {/* Check currentRelevantConnections instead of nodes.length for connections-related message */}
+        {isOpen &&
+          selectedSwitch &&
+          currentRelevantConnections.length === 0 && (
             <p className="absolute inset-0 flex items-center justify-center text-xl text-gray-600">
-              No PCs found connected to this switch to display in diagram.
+              No connections found for this switch to display in diagram.
             </p>
           )}
-        </div>
 
         {/* Footer for status legend */}
         <div className="p-4 border-t border-gray-200 bg-gray-50 text-sm text-center flex justify-center gap-4 flex-wrap flex-shrink-0">

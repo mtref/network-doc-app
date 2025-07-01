@@ -1,7 +1,7 @@
 // frontend/src/App.js
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
-// Added state management and rendering for SwitchDiagramModal.
+// Optimized data fetching to prevent excessive re-renders.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -9,16 +9,49 @@ import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
-import PatchPanelList from "./components/PatchPanelList";
+import PatchPanelList from "./components/PatchPanelList"; // Corrected import path
 import PrintableConnectionForm from "./components/PrintableConnectionForm";
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
-import SettingsPage from "./components/SettingsPage"; // Import the new SettingsPage component
+import SettingsPage from "./components/SettingsPage";
 import { Printer } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
+import { ReactFlowProvider } from "reactflow";
 
 // Base URL for the backend API.
 const API_BASE_URL =
   process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5004";
+
+// Robust deep comparison helper function - Keep this as it's useful for preventing unnecessary state updates
+const deepEqual = (a, b) => {
+  if (a === b) return true;
+
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (!deepEqual(a[i], b[i])) return false;
+      }
+      return true;
+    }
+
+    if (Array.isArray(b)) return false;
+
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+
+    if (keysA.length !== keysB.length) return false;
+
+    for (const key of keysA) {
+      if (!keysB.includes(key) || !deepEqual(a[key], b[key])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  return false;
+};
 
 function App() {
   // State variables to store fetched data
@@ -60,6 +93,10 @@ function App() {
     }, duration);
   };
 
+  // Centralized data fetching function
+  // This function is memoized and will only be recreated if its dependencies change (none here).
+  // It takes the setter function directly. The deepEqual check is now inside the handler functions
+  // or relies on React's default reconciliation if setter is always called.
   const fetchData = useCallback(async (endpoint, setter) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${endpoint}`);
@@ -70,27 +107,33 @@ function App() {
         );
       }
       const data = await response.json();
-      setter(data);
+      setter(data); // Always call setter, React will optimize if data reference is same
     } catch (error) {
       console.error(`Failed to fetch ${endpoint}:`, error);
       showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
     }
-  }, []);
+  }, []); // No dependencies for fetchData itself, so it's stable
 
+  // Effect to fetch all initial data on component mount
+  // This useEffect now runs only once because fetchData is stable.
   useEffect(() => {
-    fetchData("pcs", setPcs);
-    fetchData("patch_panels", setPatchPanels);
-    fetchData("switches", setSwitches);
-    fetchData("connections", setConnections);
-    fetchData("locations", setLocations);
+    const fetchAllInitialData = async () => {
+      await fetchData("pcs", setPcs);
+      await fetchData("patch_panels", setPatchPanels);
+      await fetchData("switches", setSwitches);
+      await fetchData("connections", setConnections);
+      await fetchData("locations", setLocations);
+    };
+    fetchAllInitialData();
 
     // Fetch CSS for printing
     fetch("/static/css/main.css")
       .then((res) => res.text())
       .then((css) => setCssContent(css))
       .catch((err) => console.error("Failed to load CSS for printing:", err));
-  }, [fetchData]);
+  }, [fetchData]); // Only fetchData is a dependency, and it's memoized
 
+  // Handlers for CRUD operations - explicitly trigger re-fetches after changes
   const handleAddConnection = async (newConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections`, {
@@ -104,9 +147,11 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections);
       showMessage("Connection added successfully!");
       setEditingConnection(null);
+      // Trigger re-fetch for all relevant data after a change
+      await fetchData("connections", setConnections);
+      await fetchData("pcs", setPcs); // PC availability might change
     } catch (error) {
       console.error("Error adding connection:", error);
       showMessage(`Error adding connection: ${error.message}`, 8000);
@@ -126,9 +171,11 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      fetchData("connections", setConnections);
       showMessage("Connection updated successfully!");
       setEditingConnection(null);
+      // Trigger re-fetch for all relevant data after a change
+      await fetchData("connections", setConnections);
+      await fetchData("pcs", setPcs); // PC availability might change
     } catch (error) {
       console.error("Error updating connection:", error);
       showMessage(`Error updating connection: ${error.message}`, 8000);
@@ -136,8 +183,6 @@ function App() {
   };
 
   const handleDeleteConnection = async (id) => {
-    // Replaced window.confirm with a simpler message for now, as per instructions.
-    // In a real app, you'd use a custom modal for confirmation.
     if (!window.confirm("Are you sure you want to delete this connection?")) {
       return;
     }
@@ -152,8 +197,10 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      setConnections((prev) => prev.filter((conn) => conn.id !== id));
       showMessage("Connection deleted successfully!");
+      // Trigger re-fetch for all relevant data after a change
+      await fetchData("connections", setConnections);
+      await fetchData("pcs", setPcs); // PC availability might change
     } catch (error) {
       console.error("Error deleting connection:", error);
       showMessage(`Error deleting connection: ${error.message}`, 5000);
@@ -194,19 +241,14 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      const newEntity = await response.json();
-      if (type === "pcs") setPcs((prev) => [...prev, newEntity]);
-      if (type === "patch_panels")
-        setPatchPanels((prev) => [...prev, newEntity]);
-      if (type === "switches") setSwitches((prev) => [...prev, newEntity]);
-      if (type === "locations") setLocations((prev) => [...prev, newEntity]);
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
-      // Re-fetch connections and other related data to ensure consistency after adding new entities
-      fetchData("connections", setConnections);
-      fetchData("patch_panels", setPatchPanels);
-      fetchData("switches", setSwitches);
-      fetchData("pcs", setPcs);
-      fetchData("locations", setLocations);
+      // Trigger re-fetch for specific data type and connections
+      if (type === "pcs") await fetchData("pcs", setPcs);
+      if (type === "patch_panels")
+        await fetchData("patch_panels", setPatchPanels);
+      if (type === "switches") await fetchData("switches", setSwitches);
+      if (type === "locations") await fetchData("locations", setLocations);
+      await fetchData("connections", setConnections); // Connections might depend on any new entity
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
@@ -226,29 +268,14 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      const updatedEntity = await response.json();
-      if (type === "pcs")
-        setPcs((prev) =>
-          prev.map((item) => (item.id === id ? updatedEntity : item))
-        );
-      if (type === "patch_panels")
-        setPatchPanels((prev) =>
-          prev.map((item) => (item.id === id ? updatedEntity : item))
-        );
-      if (type === "switches")
-        setSwitches((prev) =>
-          prev.map((item) => (item.id === id ? updatedEntity : item))
-        );
-      if (type === "locations")
-        setLocations((prev) =>
-          prev.map((item) => (item.id === id ? updatedEntity : item))
-        );
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-      // Re-fetch connections and other related data to ensure consistency after updating entities
-      fetchData("connections", setConnections);
-      fetchData("patch_panels", setPatchPanels);
-      fetchData("switches", setSwitches);
-      fetchData("pcs", setPcs);
+      // Trigger re-fetch for specific data type and connections
+      if (type === "pcs") await fetchData("pcs", setPcs);
+      if (type === "patch_panels")
+        await fetchData("patch_panels", setPatchPanels);
+      if (type === "switches") await fetchData("switches", setSwitches);
+      if (type === "locations") await fetchData("locations", setLocations);
+      await fetchData("connections", setConnections); // Connections might depend on any updated entity
     } catch (error) {
       console.error(`Error updating ${type}:`, error);
       showMessage(`Error updating ${type}: ${error.message}`, 5000);
@@ -256,7 +283,6 @@ function App() {
   };
 
   const handleDeleteEntity = async (type, id) => {
-    // Replaced window.confirm with a simpler message for now.
     if (
       !window.confirm(
         `Are you sure you want to delete this ${type.slice(
@@ -277,19 +303,14 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
-      if (type === "pcs")
-        setPcs((prev) => prev.filter((item) => item.id !== id));
-      if (type === "patch_panels")
-        setPatchPanels((prev) => prev.filter((item) => item.id !== id));
-      if (type === "switches")
-        setSwitches((prev) => prev.filter((item) => item.id !== id));
-      if (type === "locations")
-        setLocations((prev) => prev.filter((item) => item.id !== id));
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-      // Re-fetch connections and other related data as deletion might affect them
-      fetchData("connections", setConnections);
-      fetchData("patch_panels", setPatchPanels);
-      fetchData("switches", setSwitches);
+      // Trigger re-fetch for specific data type and connections
+      if (type === "pcs") await fetchData("pcs", setPcs);
+      if (type === "patch_panels")
+        await fetchData("patch_panels", setPatchPanels);
+      if (type === "switches") await fetchData("switches", setSwitches);
+      if (type === "locations") await fetchData("locations", setLocations);
+      await fetchData("connections", setConnections); // Connections might depend on any deleted entity
     } catch (error) {
       console.error(`Error deleting ${type}:`, error);
       showMessage(`Error deleting ${type}: ${error.message}`, 5000);
@@ -325,22 +346,21 @@ function App() {
     setModalEntityId(null);
   };
 
-  // New handler for showing the Switch Diagram Modal
-  const handleViewSwitchDiagram = (_switch) => {
+  const handleViewSwitchDiagram = useCallback((_switch) => {
+    console.log("handleViewSwitchDiagram called for switch:", _switch);
     setSelectedSwitchForDiagram(_switch);
     setShowSwitchDiagramModal(true);
-  };
+  }, []);
 
-  // New handler for closing the Switch Diagram Modal
-  const handleCloseSwitchDiagramModal = () => {
+  const handleCloseSwitchDiagramModal = useCallback(() => {
+    console.log("handleCloseSwitchDiagramModal called");
     setShowSwitchDiagramModal(false);
     setSelectedSwitchForDiagram(null);
-  };
+  }, []);
 
   const handlePrintForm = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      // Replaced alert with showMessage
       showMessage("Please allow pop-ups for printing.", 5000);
       return;
     }
@@ -398,13 +418,15 @@ function App() {
 
       {/* Switch Diagram Modal */}
       {showSwitchDiagramModal && selectedSwitchForDiagram && (
-        <SwitchDiagramModal
-          isOpen={showSwitchDiagramModal}
-          onClose={handleCloseSwitchDiagramModal}
-          selectedSwitch={selectedSwitchForDiagram}
-          connections={connections}
-          pcs={pcs}
-        />
+        <ReactFlowProvider>
+          <SwitchDiagramModal
+            isOpen={showSwitchDiagramModal}
+            onClose={handleCloseSwitchDiagramModal}
+            selectedSwitch={selectedSwitchForDiagram}
+            connections={connections}
+            pcs={pcs}
+          />
+        </ReactFlowProvider>
       )}
 
       {/* Main App Content */}
@@ -492,7 +514,7 @@ function App() {
                   Add/Edit Connection
                 </h2>
                 <ConnectionForm
-                  pcs={pcs}
+                  pcs={pcs} // This is for the 'Add New PC' form within ConnectionForm
                   patchPanels={patchPanels}
                   switches={switches}
                   onAddConnection={handleAddConnection}
@@ -642,7 +664,6 @@ function App() {
             </section>
           )}
 
-          {/* New Settings Tab Content */}
           {activeTab === "settings" && (
             <SettingsPage showMessage={showMessage} />
           )}
