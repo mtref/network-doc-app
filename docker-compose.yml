@@ -1,7 +1,6 @@
 # docker-compose.yml
 # This file defines the services for your Dockerized network documentation application.
 # It orchestrates the backend (Python Flask) and frontend (React) services.
-# The frontend will now be accessible on port 3005.
 version: "3.8"
 
 services:
@@ -10,13 +9,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile.backend
     ports:
-      - "5004:5000"
+      - "5004:5000" # Maps host's 5004 to backend container's 5000
     volumes:
-      - ./backend:/app
-      - network_doc_db:/app/instance
+      - ./backend:/app # Mount backend source for development (optional in production)
+      - network_doc_db:/app/instance # Persistent volume for SQLite DB
     environment:
       FLASK_APP: app.py
       FLASK_ENV: development
+    # In a multi-container setup, the backend service usually just runs Flask
+    # without Nginx. Nginx is in the frontend container and proxies to 'backend:5000'.
     command: sh -c "flask db upgrade && flask run --host=0.0.0.0"
 
   frontend:
@@ -24,12 +25,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
     ports:
-      - "3005:3000" # Changed host port to 3005
-    # IMPORTANT: The 'volumes' key and any lines indented below it must be completely REMOVED.
-    # Do NOT include a 'volumes:' key here if you don't have active volume mounts for the frontend.
+      - "3005:80" # Map host's 3005 to frontend container's 80 (where Nginx listens)
+    # The 'volumes' key for frontend should generally be removed for production-ready builds
+    # as the build process copies the files into the image.
+    # For development, if you need live reloading for frontend changes, you would keep:
+    # - ./frontend:/app # This would prevent the build stage's content from being used.
+    # For now, let's assume the build stage is sufficient.
     depends_on:
-      - backend
-    command: nginx -g "daemon off;"
+      - backend # Frontend depends on backend to be up for API calls
+    command: nginx -g "daemon off;" # Nginx is already the CMD in Dockerfile.frontend, but good to be explicit
 
 # Define the named volume for persistent database storage.
 volumes:

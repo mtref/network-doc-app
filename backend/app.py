@@ -2,7 +2,9 @@
 # This is the main Flask application for the network documentation backend.
 # It defines the database models, API endpoints, and handles CRUD operations.
 
-from flask import Flask, request, jsonify
+import io
+import csv
+from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS # For handling Cross-Origin Resource Sharing
@@ -20,6 +22,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# --- Global Constants ---
+MAX_HOPS = 5 # Maximum number of hops to export/import for connections
 
 # --- Database Models ---
 # Define the structure of your data tables.
@@ -46,6 +51,7 @@ class PC(db.Model):
     ports_name = db.Column(db.String(255), nullable=True) # New field
     office = db.Column(db.String(100), nullable=True) # New field: Office
     description = db.Column(db.String(255), nullable=True) # Changed to optional
+    multi_port = db.Column(db.Boolean, nullable=False, default=False) # New field: Multi-port PC
 
     def to_dict(self):
         return {
@@ -56,8 +62,9 @@ class PC(db.Model):
             'in_domain': self.in_domain,
             'operating_system': self.operating_system,
             'ports_name': self.ports_name,
-            'office': self.office, # Include new field
-            'description': self.description
+            'office': self.office,
+            'description': self.description,
+            'multi_port': self.multi_port # Include new field
         }
 
 class PatchPanel(db.Model):
@@ -159,10 +166,6 @@ class ConnectionHop(db.Model):
 
 # --- API Endpoints ---
 
-@app.route('/')
-def index():
-    return "Welcome to the Network Documentation Backend API!"
-
 # Helper function for port validation
 def validate_port_occupancy(target_id, port_number, entity_type, exclude_connection_id=None):
     """
@@ -253,7 +256,8 @@ def handle_pcs():
             operating_system=data.get('operating_system'),
             ports_name=data.get('ports_name'),
             office=data.get('office'), # Handle new field
-            description=data.get('description')
+            description=data.get('description'),
+            multi_port=data.get('multi_port', False) # Handle new field
         )
         try:
             db.session.add(new_pc)
@@ -283,6 +287,7 @@ def handle_pc_by_id(pc_id):
         pc.ports_name = data.get('ports_name', pc.ports_name)
         pc.office = data.get('office', pc.office) # Handle new field
         pc.description = data.get('description', pc.description)
+        pc.multi_port = data.get('multi_port', pc.multi_port) # Handle new field
         try:
             db.session.commit()
             return jsonify(pc.to_dict())
@@ -297,6 +302,25 @@ def handle_pc_by_id(pc_id):
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
+
+# New endpoint to get available PCs for new connections
+@app.route('/available_pcs', methods=['GET'])
+def get_available_pcs():
+    all_pcs = PC.query.all()
+    all_connections = Connection.query.all()
+
+    # Get IDs of PCs that are currently connected
+    connected_pc_ids = {conn.pc_id for conn in all_connections}
+
+    available_pcs = []
+    for pc in all_pcs:
+        # If PC is multi-port, it's always available
+        # If PC is single-port, it's available only if not already connected
+        if pc.multi_port or pc.id not in connected_pc_ids:
+            available_pcs.append(pc.to_dict())
+            
+    return jsonify(available_pcs)
+
 
 # Patch Panel Endpoints (updated to handle new fields)
 @app.route('/patch_panels', methods=['GET', 'POST'])
@@ -427,6 +451,13 @@ def handle_connections():
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields for connection'}), 400
 
+        # Validate PC availability for single-port PCs
+        pc = PC.query.get(data['pc_id'])
+        if pc and not pc.multi_port:
+            existing_connection_for_pc = Connection.query.filter_by(pc_id=pc.id).first()
+            if existing_connection_for_pc:
+                return jsonify({'error': f"PC '{pc.name}' is a single-port device and is already connected. Cannot create new connection."}), 409
+
         # Validate Switch Port occupancy
         is_occupied, conflicting_pc = validate_port_occupancy(
             target_id=data['switch_id'],
@@ -495,6 +526,23 @@ def handle_connection_by_id(conn_id):
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
+
+        # Validate PC availability for single-port PCs during update
+        # Only check if PC ID is changing or if it's a new connection for this PC (i.e., this is the first connection)
+        # If the PC ID is the same, and it's a single-port PC, we allow the update on its existing connection.
+        # If the PC ID is changing to a single-port PC that is already connected, prevent it.
+        # If the PC ID is changing from a multi-port PC to a single-port PC, and that single-port PC is already connected, prevent it.
+        
+        new_pc_id = data.get('pc_id', connection.pc_id)
+        if new_pc_id != connection.pc_id: # PC is being changed
+            new_pc = PC.query.get(new_pc_id)
+            if new_pc and not new_pc.multi_port:
+                existing_connection_for_new_pc = Connection.query.filter(
+                    Connection.pc_id == new_pc.id,
+                    Connection.id != conn_id # Exclude the current connection being updated
+                ).first()
+                if existing_connection_for_new_pc:
+                    return jsonify({'error': f"PC '{new_pc.name}' is a single-port device and is already connected in another connection. Cannot update."}), 409
 
         # Validate Switch Port occupancy (excluding current connection)
         if 'switch_id' in data and 'switch_port' in data:
@@ -656,6 +704,394 @@ def get_switch_ports(switch_id):
         'ports': port_status
     })
 
+# --- New CSV Export Endpoints ---
+
+@app.route('/export/<entity_type>', methods=['GET'])
+def export_data(entity_type):
+    si = io.StringIO()
+    cw = csv.writer(si)
+
+    headers = []
+    data_rows = []
+
+    try:
+        if entity_type == 'locations':
+            headers = ['id', 'name']
+            locations = Location.query.all()
+            data_rows = [[loc.id, loc.name] for loc in locations]
+            filename = 'locations.csv'
+        elif entity_type == 'pcs':
+            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'ports_name', 'office', 'description', 'multi_port'] # Added multi_port
+            pcs = PC.query.all()
+            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.ports_name, pc.office, pc.description, pc.multi_port] for pc in pcs] # Added multi_port
+            filename = 'pcs.csv'
+        elif entity_type == 'patch_panels':
+            headers = ['id', 'name', 'location_id', 'location_name', 'row_in_rack', 'rack_name', 'total_ports', 'description']
+            patch_panels = PatchPanel.query.options(joinedload(PatchPanel.location)).all()
+            data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.row_in_rack, pp.rack_name, pp.total_ports, pp.description] for pp in patch_panels]
+            filename = 'patch_panels.csv'
+        elif entity_type == 'switches':
+            headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'row_in_rack', 'rack_name', 'total_ports', 'source_port', 'model', 'description']
+            switches = Switch.query.options(joinedload(Switch.location)).all()
+            data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.row_in_rack, s.rack_name, s.total_ports, s.source_port, s.model, s.description] for s in switches]
+            filename = 'switches.csv'
+        elif entity_type == 'connections':
+            # Complex export for connections: flatten hops into columns
+            headers = [
+                'connection_id', 'pc_id', 'pc_name', 'pc_ip_address', 'switch_id', 'switch_name', 'switch_ip_address',
+                'switch_port', 'is_switch_port_up',
+            ]
+            # Dynamically add headers for up to N hops
+            for i in range(MAX_HOPS):
+                headers.extend([
+                    f'hop{i+1}_patch_panel_id', f'hop{i+1}_patch_panel_name',
+                    f'hop{i+1}_patch_panel_port', f'hop{i+1}_is_port_up'
+                ])
+
+            all_connections = Connection.query.options(
+                joinedload(Connection.pc),
+                joinedload(Connection.switch).joinedload(Switch.location),
+                joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location)
+            ).all()
+
+            for conn in all_connections:
+                row = [
+                    conn.id,
+                    conn.pc.id if conn.pc else '',
+                    conn.pc.name if conn.pc else '',
+                    conn.pc.ip_address if conn.pc else '',
+                    conn.switch.id if conn.switch else '',
+                    conn.switch.name if conn.switch else '',
+                    conn.switch.ip_address if conn.switch else '',
+                    conn.switch_port,
+                    conn.is_switch_port_up,
+                ]
+                for i in range(MAX_HOPS):
+                    if i < len(conn.hops):
+                        hop = conn.hops[i]
+                        row.extend([
+                            hop.patch_panel.id if hop.patch_panel else '',
+                            hop.patch_panel.name if hop.patch_panel else '',
+                            hop.patch_panel_port,
+                            hop.is_port_up
+                        ])
+                    else:
+                        row.extend(['', '', '', '']) # Fill with empty strings if no more hops
+                data_rows.append(row)
+            filename = 'connections.csv'
+        else:
+            return jsonify({'error': 'Invalid entity type for export.'}), 400
+
+        cw.writerow(headers)
+        cw.writerows(data_rows)
+
+        output = make_response(si.getvalue())
+        output.headers["Content-Disposition"] = f"attachment; filename={filename}"
+        output.headers["Content-type"] = "text/csv"
+        return output
+
+    except Exception as e:
+        app.logger.error(f"Error during CSV export for {entity_type}: {str(e)}")
+        return jsonify({'error': f'Failed to export {entity_type} data: {str(e)}'}), 500
+
+
+# --- New CSV Import Endpoint ---
+
+@app.route('/import/<entity_type>', methods=['POST'])
+def import_data(entity_type):
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request.'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file.'}), 400
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': 'Invalid file type. Please upload a CSV file.'}), 400
+
+    stream = io.StringIO(file.stream.read().decode("UTF8"))
+    reader = csv.reader(stream)
+    header = [h.strip() for h in next(reader)] # Read header row and strip whitespace
+    
+    success_count = 0
+    error_count = 0
+    errors = []
+
+    # Map CSV headers to model attributes
+    # This is a basic mapping, you might need more sophisticated logic
+    # especially for related fields like 'location_name' which need to be converted to 'location_id'
+    
+    # Define mapping for incoming CSV columns to DB model fields
+    # And conversion functions for specific types/relationships
+    field_maps = {
+        'locations': {
+            'name': 'name'
+        },
+        'pcs': {
+            'name': 'name', 'ip_address': 'ip_address', 'username': 'username',
+            'in_domain': lambda x: x.lower() == 'true', # Convert 'true'/'false' string to boolean
+            'operating_system': 'operating_system', 'ports_name': 'ports_name',
+            'office': 'office', 'description': 'description',
+            'multi_port': lambda x: x.lower() == 'true' # Handle new field
+        },
+        'patch_panels': {
+            'name': 'name', 'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None, # Convert name to ID
+            'row_in_rack': 'row_in_rack', 'rack_name': 'rack_name',
+            'total_ports': lambda x: int(x) if x.isdigit() else 1,
+            'description': 'description'
+        },
+        'switches': {
+            'name': 'name', 'ip_address': 'ip_address',
+            'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
+            'row_in_rack': 'row_in_rack', 'rack_name': 'rack_name',
+            'total_ports': lambda x: int(x) if x.isdigit() else 1,
+            'source_port': 'source_port', 'model': 'model', 'description': 'description'
+        },
+        'connections': {
+            # For connections, we need to map to existing PC/Switch/PatchPanel IDs
+            # This mapping assumes 'pc_name', 'switch_name', 'patch_panel_name' etc. in CSV
+            # and will try to look up their IDs. This is crucial for import consistency.
+            # Example: 'pc_name' -> pc_id lookup
+        }
+    }
+
+    if entity_type not in field_maps:
+        return jsonify({'error': 'Invalid entity type for import.'}), 400
+
+    try:
+        if entity_type == 'locations':
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+                
+                name = row_dict.get('name')
+                if not name:
+                    errors.append(f"Row {i+2}: Missing 'name' field. Skipped.")
+                    error_count += 1
+                    continue
+
+                existing_location = Location.query.filter_by(name=name).first()
+                if existing_location:
+                    errors.append(f"Row {i+2}: Location '{name}' already exists. Skipped.")
+                    error_count += 1
+                    continue
+                
+                new_item = Location(name=name)
+                db.session.add(new_item)
+                success_count += 1
+            db.session.commit()
+
+        elif entity_type == 'pcs':
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+                
+                name = row_dict.get('name')
+                if not name:
+                    errors.append(f"Row {i+2}: Missing 'name' field. Skipped.")
+                    error_count += 1
+                    continue
+
+                existing_pc = PC.query.filter_by(name=name).first()
+                if existing_pc:
+                    # If PC exists, update it. This allows re-importing updated PC data.
+                    existing_pc.ip_address = row_dict.get('ip_address', existing_pc.ip_address)
+                    existing_pc.username = row_dict.get('username', existing_pc.username)
+                    existing_pc.in_domain = row_dict.get('in_domain', str(existing_pc.in_domain)).lower() == 'true'
+                    existing_pc.operating_system = row_dict.get('operating_system', existing_pc.operating_system)
+                    existing_pc.ports_name = row_dict.get('ports_name', existing_pc.ports_name)
+                    existing_pc.office = row_dict.get('office', existing_pc.office)
+                    existing_pc.description = row_dict.get('description', existing_pc.description)
+                    existing_pc.multi_port = row_dict.get('multi_port', str(existing_pc.multi_port)).lower() == 'true'
+                    success_count += 1 # Count as success for update
+                    continue # Skip to next row
+
+                new_item_data = {}
+                for csv_header, model_attr in field_maps['pcs'].items():
+                    val = row_dict.get(csv_header)
+                    if val is not None:
+                        new_item_data[model_attr if isinstance(model_attr, str) else csv_header] = model_attr(val) if callable(model_attr) else val
+                
+                new_pc = PC(**new_item_data)
+                db.session.add(new_pc)
+                success_count += 1
+            db.session.commit()
+
+        elif entity_type == 'patch_panels':
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+                
+                name = row_dict.get('name')
+                location_name = row_dict.get('location_name')
+                
+                if not name or not location_name:
+                    errors.append(f"Row {i+2}: Missing 'name' or 'location_name' field. Skipped.")
+                    error_count += 1
+                    continue
+
+                location = Location.query.filter_by(name=location_name).first()
+                if not location:
+                    errors.append(f"Row {i+2}: Location '{location_name}' not found for Patch Panel '{name}'. Skipped.")
+                    error_count += 1
+                    continue
+
+                existing_pp = PatchPanel.query.filter_by(name=name).first()
+                if existing_pp:
+                    errors.append(f"Row {i+2}: Patch Panel '{name}' already exists. Skipped.")
+                    error_count += 1
+                    continue
+                
+                new_item_data = {
+                    'name': name,
+                    'location_id': location.id
+                }
+                for csv_header, model_attr in field_maps['patch_panels'].items():
+                    if csv_header not in ['name', 'location_name'] and row_dict.get(csv_header) is not None:
+                        val = row_dict.get(csv_header)
+                        new_item_data[model_attr if isinstance(model_attr, str) else csv_header] = model_attr(val) if callable(model_attr) else val
+                
+                new_pp = PatchPanel(**new_item_data)
+                db.session.add(new_pp)
+                success_count += 1
+            db.session.commit()
+
+        elif entity_type == 'switches':
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+                
+                name = row_dict.get('name')
+                location_name = row_dict.get('location_name')
+
+                if not name or not location_name:
+                    errors.append(f"Row {i+2}: Missing 'name' or 'location_name' field. Skipped.")
+                    error_count += 1
+                    continue
+
+                location = Location.query.filter_by(name=location_name).first()
+                if not location:
+                    errors.append(f"Row {i+2}: Location '{location_name}' not found for Switch '{name}'. Skipped.")
+                    error_count += 1
+                    continue
+
+                existing_switch = Switch.query.filter_by(name=name).first()
+                if existing_switch:
+                    errors.append(f"Row {i+2}: Switch '{name}' already exists. Skipped.")
+                    error_count += 1
+                    continue
+                
+                new_item_data = {
+                    'name': name,
+                    'location_id': location.id
+                }
+                for csv_header, model_attr in field_maps['switches'].items():
+                    if csv_header not in ['name', 'location_name'] and row_dict.get(csv_header) is not None:
+                        val = row_dict.get(csv_header)
+                        new_item_data[model_attr if isinstance(model_attr, str) else csv_header] = model_attr(val) if callable(model_attr) else val
+                
+                new_switch = Switch(**new_item_data)
+                db.session.add(new_switch)
+                success_count += 1
+            db.session.commit()
+
+        elif entity_type == 'connections':
+            # This is the most complex import. We'll attempt to match by names and ports.
+            # For simplicity, we'll CREATE new connections. Updating existing ones requires
+            # a much more robust matching strategy (e.g., matching by all fields of a unique connection)
+            # which is outside the scope of a basic import.
+            # If a connection with the exact PC, Switch, and Switch Port already exists, we will skip it.
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+
+                pc_name = row_dict.get('pc_name')
+                switch_name = row_dict.get('switch_name')
+                switch_port = row_dict.get('switch_port')
+                is_switch_port_up = row_dict.get('is_switch_port_up', 'True').lower() == 'true'
+
+                if not pc_name or not switch_name or not switch_port:
+                    errors.append(f"Row {i+2}: Missing 'pc_name', 'switch_name', or 'switch_port'. Skipped.")
+                    error_count += 1
+                    continue
+
+                pc = PC.query.filter_by(name=pc_name).first()
+                _switch = Switch.query.filter_by(name=switch_name).first()
+
+                if not pc:
+                    errors.append(f"Row {i+2}: PC '{pc_name}' not found. Skipped connection.")
+                    error_count += 1
+                    continue
+                if not _switch:
+                    errors.append(f"Row {i+2}: Switch '{switch_name}' not found. Skipped connection.")
+                    error_count += 1
+                    continue
+                
+                # Check for existing connection with same PC, Switch, and Switch Port
+                existing_connection = Connection.query.filter_by(
+                    pc_id=pc.id,
+                    switch_id=_switch.id,
+                    switch_port=switch_port
+                ).first()
+
+                if existing_connection:
+                    errors.append(f"Row {i+2}: Connection between PC '{pc_name}', Switch '{switch_name}' port '{switch_port}' already exists. Skipped.")
+                    error_count += 1
+                    continue
+
+                new_connection = Connection(
+                    pc_id=pc.id,
+                    switch_id=_switch.id,
+                    switch_port=switch_port,
+                    is_switch_port_up=is_switch_port_up
+                )
+                db.session.add(new_connection)
+                db.session.flush() # Get the new connection's ID before processing hops
+
+                # Process hops dynamically from CSV
+                hops_to_add = []
+                for j in range(MAX_HOPS):
+                    # Note: We don't expect 'hopX_patch_panel_id' in import CSV, only name
+                    pp_name_col = f'hop{j+1}_patch_panel_name'
+                    pp_port_col = f'hop{j+1}_patch_panel_port'
+                    is_hop_port_up_col = f'hop{j+1}_is_port_up'
+
+                    pp_name = row_dict.get(pp_name_col)
+                    pp_port = row_dict.get(pp_port_col)
+                    is_hop_port_up = row_dict.get(is_hop_port_up_col, 'True').lower() == 'true'
+
+                    if pp_name and pp_port:
+                        patch_panel = PatchPanel.query.filter_by(name=pp_name).first()
+                        if not patch_panel:
+                            errors.append(f"Row {i+2}, Hop {j+1}: Patch Panel '{pp_name}' not found. Skipping this hop.")
+                            continue
+                        hops_to_add.append(ConnectionHop(
+                            connection_id=new_connection.id,
+                            patch_panel_id=patch_panel.id,
+                            patch_panel_port=pp_port,
+                            is_port_up=is_hop_port_up,
+                            sequence=j
+                        ))
+                
+                for hop in hops_to_add:
+                    db.session.add(hop)
+                
+                success_count += 1
+            db.session.commit()
+
+        else:
+            db.session.rollback()
+            return jsonify({'error': 'Invalid entity type for import.'}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error during CSV import for {entity_type}: {str(e)}")
+        return jsonify({'error': f'Failed to import data: {str(e)}', 'details': errors}), 500
+
+    return jsonify({
+        'message': f'Import completed. {success_count} records processed successfully.',
+        'errors': errors,
+        'error_count': error_count,
+        'success_count': success_count
+    }), 200
 
 if __name__ == '__main__':
     # Ensure the instance directory exists for SQLite database

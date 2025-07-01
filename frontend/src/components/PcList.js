@@ -1,6 +1,7 @@
 // frontend/src/components/PcList.js
 // This component displays a searchable list of PCs in a card format,
 // now including filter options by In Domain, OS, and Office.
+// Added multi_port field to PC creation/edit form and display.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -17,7 +18,8 @@ import {
   ToggleLeft,
   Monitor,
   Building2,
-  Filter, // New icon for filter
+  Filter,
+  Link, // New icon for filter
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -32,6 +34,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [pcFormPortsName, setPcFormPortsName] = useState("");
   const [pcFormOffice, setPcFormOffice] = useState("");
   const [pcFormDesc, setPcFormDesc] = useState("");
+  const [pcFormMultiPort, setPcFormMultiPort] = useState(false); // New state for multi_port
 
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false);
 
@@ -76,7 +79,10 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
           .includes(lowerCaseSearchTerm) ||
         (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.office || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm);
+        (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.multi_port ? "multi-port" : "single-port").includes(
+          lowerCaseSearchTerm
+        ); // New: search by multi-port status
 
       // "In Domain" filter
       const matchesDomain =
@@ -114,6 +120,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormPortsName(pc.ports_name || "");
     setPcFormOffice(pc.office || "");
     setPcFormDesc(pc.description || "");
+    setPcFormMultiPort(pc.multi_port || false); // Set multi_port state for editing
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
 
@@ -136,6 +143,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       ports_name: pcFormPortsName,
       office: pcFormOffice,
       description: pcFormDesc,
+      multi_port: pcFormMultiPort, // Include multi_port in data
     };
 
     if (editingPc) {
@@ -150,8 +158,9 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormInDomain(false);
     setPcFormOs("");
     setPcFormPortsName("");
-    setPcFormOffice("");
+    setPcFormOffice(""); // Corrected from setNewPcOffice
     setPcFormDesc("");
+    setPcFormMultiPort(false); // Reset multi_port
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
 
@@ -235,10 +244,10 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       {/* Add/Edit PC Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200">
         <div
-          className="flex justify-between items-center p-5 cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors duration-200 rounded-t-lg"
+          className="flex justify-between items-center p-5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddPcFormExpanded(!isAddPcFormExpanded)}
         >
-          <h3 className="text-xl font-bold text-blue-700 flex items-center">
+          <h3 className="text-xl font-bold text-indigo-700 flex items-center">
             <PlusCircle size={20} className="mr-2" />{" "}
             {editingPc ? "Edit PC" : "Add New PC"}
           </h3>
@@ -291,6 +300,23 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                 In Domain
               </label>
             </div>
+            <div className="flex items-center">
+              {" "}
+              {/* New: Multi-Port checkbox */}
+              <input
+                id="pc-multi-port"
+                type="checkbox"
+                checked={pcFormMultiPort}
+                onChange={(e) => setPcFormMultiPort(e.target.checked)}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label
+                htmlFor="pc-multi-port"
+                className="ml-2 block text-sm text-gray-900"
+              >
+                Multi-Port PC (Can have multiple connections)
+              </label>
+            </div>
             <input
               type="text"
               placeholder="Operating System (Optional)"
@@ -333,6 +359,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                     setPcFormPortsName("");
                     setPcFormOffice("");
                     setPcFormDesc("");
+                    setPcFormMultiPort(false); // Reset multi_port
                     setIsAddPcFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -377,6 +404,14 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                   <ToggleLeft size={16} className="text-red-500 mr-2" />
                 )}{" "}
                 In Domain: {pc.in_domain ? "Yes" : "No"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                {pc.multi_port ? ( // New: Display multi_port status
+                  <Link size={16} className="text-blue-500 mr-2" />
+                ) : (
+                  <Info size={16} className="text-gray-500 mr-2" />
+                )}{" "}
+                Multi-Port: {pc.multi_port ? "Yes" : "No"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Monitor size={16} className="text-gray-500 mr-2" /> OS:{" "}

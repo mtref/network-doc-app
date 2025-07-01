@@ -3,12 +3,17 @@
 // and to create or edit network connections between them.
 // Now, the "Add New" entity forms are collapsible for a cleaner UI, and
 // Patch Panel and Switch creation/editing use a location dropdown.
+// PC selection for connections now filters based on multi-port status.
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ChevronDown, ChevronUp, PlusCircle } from "lucide-react"; // Import icons for expand/collapse and add buttons
 
+// Base URL for the backend API.
+const API_BASE_URL =
+  process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5004";
+
 function ConnectionForm({
-  pcs,
+  pcs, // This 'pcs' prop will now represent ALL PCs for display purposes in the 'Add New PC' section
   patchPanels,
   switches,
   onAddConnection,
@@ -25,6 +30,11 @@ function ConnectionForm({
   const [switchId, setSwitchId] = useState("");
   const [hops, setHops] = useState([]);
 
+  // State for available PCs for the connection dropdown (filtered by multi-port status)
+  const [availablePcsForConnection, setAvailablePcsForConnection] = useState(
+    []
+  );
+
   // States for managing the expanded/collapsed state of each "Add New" section
   const [isNewPcExpanded, setIsNewPcExpanded] = useState(false);
   const [isNewPpExpanded, setIsNewPpExpanded] = useState(false);
@@ -37,8 +47,9 @@ function ConnectionForm({
   const [newPcInDomain, setNewPcInDomain] = useState(false);
   const [newPcOs, setNewPcOs] = useState("");
   const [newPcPortsName, setNewPcPortsName] = useState("");
-  const [newPcOffice, setNewPcOffice] = useState(""); // New state for office
+  const [newPcOffice, setNewPcOffice] = useState("");
   const [newPcDesc, setNewPcDesc] = useState("");
+  const [newPcMultiPort, setNewPcMultiPort] = useState(false); // New state for multi_port
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
@@ -57,6 +68,24 @@ function ConnectionForm({
   const [newSwitchModel, setNewSwitchModel] = useState("");
   const [newSwitchDesc, setNewSwitchDesc] = useState("");
 
+  // Fetch available PCs for connection dropdown
+  const fetchAvailablePcs = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/available_pcs`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setAvailablePcsForConnection(data);
+    } catch (error) {
+      console.error("Failed to fetch available PCs:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAvailablePcs();
+  }, [fetchAvailablePcs, pcs]); // Re-fetch when PCs data changes (e.g., a new PC is added or deleted)
+
   // Populate form fields if editing an existing connection
   useEffect(() => {
     if (editingConnection) {
@@ -70,9 +99,14 @@ function ConnectionForm({
       );
       setHops(editingConnection.hops || []);
 
-      // IMPORTANT: Do NOT populate newPc/newPp/newSwitch states here.
-      // Those are for adding NEW entities. This form is for editing the CONNECTION.
-      // The dropdowns for PC and Switch will automatically select based on pcId and switchId.
+      // Ensure the currently edited PC is in the availablePcsForConnection list
+      // This is important if it's a single-port PC that is already connected by this connection
+      if (
+        editingConnection.pc &&
+        !availablePcsForConnection.find((p) => p.id === editingConnection.pc.id)
+      ) {
+        setAvailablePcsForConnection((prev) => [...prev, editingConnection.pc]);
+      }
     } else {
       // Clear all form fields if not editing
       setPcId("");
@@ -89,6 +123,7 @@ function ConnectionForm({
       setNewPcPortsName("");
       setNewPcOffice("");
       setNewPcDesc("");
+      setNewPcMultiPort(false); // Reset multi_port
       setNewPpName("");
       setNewPpLocationId("");
       setNewPpRowInRack("");
@@ -105,7 +140,7 @@ function ConnectionForm({
       setNewSwitchModel("");
       setNewSwitchDesc("");
     }
-  }, [editingConnection]);
+  }, [editingConnection, availablePcsForConnection]);
 
   // Handle changes for a specific hop's patch panel ID
   const handleHopPatchPanelChange = (index, value) => {
@@ -174,6 +209,7 @@ function ConnectionForm({
     setIsSwitchPortUp(true);
     setHops([]);
     setEditingConnection(null);
+    fetchAvailablePcs(); // Re-fetch available PCs after adding/updating connection
   };
 
   const handleCancelEdit = () => {
@@ -183,6 +219,7 @@ function ConnectionForm({
     setSwitchPort("");
     setIsSwitchPortUp(true);
     setHops([]);
+    fetchAvailablePcs(); // Re-fetch available PCs after canceling edit
   };
 
   const handleAddPc = async (e) => {
@@ -204,6 +241,7 @@ function ConnectionForm({
         ports_name: newPcPortsName,
         office: newPcOffice,
         description: newPcDesc,
+        multi_port: newPcMultiPort, // Include multi_port
       });
       setNewPcName("");
       setNewPcIp("");
@@ -213,7 +251,9 @@ function ConnectionForm({
       setNewPcPortsName("");
       setNewPcOffice("");
       setNewPcDesc("");
+      setNewPcMultiPort(false); // Reset multi_port
       setIsNewPcExpanded(false); // Collapse after adding
+      fetchAvailablePcs(); // Re-fetch available PCs after adding a new PC
     }
   };
 
@@ -325,17 +365,34 @@ function ConnectionForm({
               />
               <div className="flex items-center">
                 <input
-                  id="pc-in-domain"
+                  id="new-pc-in-domain"
                   type="checkbox"
                   checked={newPcInDomain}
                   onChange={(e) => setNewPcInDomain(e.target.checked)}
                   className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <label
-                  htmlFor="pc-in-domain"
+                  htmlFor="new-pc-in-domain"
                   className="ml-2 block text-sm text-gray-900"
                 >
                   In Domain
+                </label>
+              </div>
+              <div className="flex items-center">
+                {" "}
+                {/* New: Multi-Port checkbox */}
+                <input
+                  id="new-pc-multi-port"
+                  type="checkbox"
+                  checked={newPcMultiPort}
+                  onChange={(e) => setNewPcMultiPort(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="new-pc-multi-port"
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  Multi-Port PC (Can have multiple connections)
                 </label>
               </div>
               <input
@@ -599,15 +656,17 @@ function ConnectionForm({
               required
             >
               <option value="">-- Select a PC --</option>
-              {pcs.map((pc) => (
+              {availablePcsForConnection.map((pc) => (
                 <option key={pc.id} value={pc.id}>
-                  {pc.name} ({pc.ip_address || "No IP"})
+                  {pc.name} ({pc.ip_address || "No IP"}){" "}
+                  {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
                 </option>
               ))}
             </select>
-            {pcs.length === 0 && (
+            {availablePcsForConnection.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
-                Please add a PC first.
+                No available PCs. Add a new PC or ensure single-port PCs are not
+                already connected.
               </p>
             )}
           </div>
