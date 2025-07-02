@@ -9,13 +9,13 @@ import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
-import PatchPanelList from "./components/PatchPanelList"; // Corrected import path
+import PatchPanelList from "./components/PatchPanelList";
 import PrintableConnectionForm from "./components/PrintableConnectionForm";
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import { Printer } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
-import { ReactFlowProvider } from "reactflow";
+// import { ReactFlowProvider } from "reactflow"; // Removed as ReactFlow is no longer used for diagram modal
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -115,7 +115,7 @@ function App() {
   }, []); // No dependencies for fetchData itself, so it's stable
 
   // Effect to fetch all initial data on component mount
-  // This useEffect now runs only once because fetchData is stable.
+  // This useEffect now runs only once because fetchData is memoized
   useEffect(() => {
     const fetchAllInitialData = async () => {
       await fetchData("pcs", setPcs);
@@ -241,6 +241,7 @@ function App() {
           errorData.error || `HTTP error! status: ${response.status}`
         );
       }
+      const newEntity = await response.json(); // Capture the response JSON
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
       // Trigger re-fetch for specific data type and connections
       if (type === "pcs") await fetchData("pcs", setPcs);
@@ -249,9 +250,12 @@ function App() {
       if (type === "switches") await fetchData("switches", setSwitches);
       if (type === "locations") await fetchData("locations", setLocations);
       await fetchData("connections", setConnections); // Connections might depend on any new entity
+
+      return newEntity; // <--- ADD THIS LINE: Return the newly created entity
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
+      throw error; // Re-throw the error so handleNewPcSaveAndContinue can catch it
     }
   };
 
@@ -418,15 +422,13 @@ function App() {
 
       {/* Switch Diagram Modal */}
       {showSwitchDiagramModal && selectedSwitchForDiagram && (
-        <ReactFlowProvider>
-          <SwitchDiagramModal
-            isOpen={showSwitchDiagramModal}
-            onClose={handleCloseSwitchDiagramModal}
-            selectedSwitch={selectedSwitchForDiagram}
-            connections={connections}
-            pcs={pcs}
-          />
-        </ReactFlowProvider>
+        <SwitchDiagramModal
+          isOpen={showSwitchDiagramModal}
+          onClose={handleCloseSwitchDiagramModal}
+          selectedSwitch={selectedSwitchForDiagram}
+          connections={connections}
+          pcs={pcs}
+        />
       )}
 
       {/* Main App Content */}
