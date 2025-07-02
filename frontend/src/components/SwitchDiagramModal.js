@@ -2,14 +2,21 @@
 // This component displays a modal with an interactive diagram of a selected switch
 // using Konva, with enhanced visual styling for nodes and edges.
 // New features: Node tooltips on hover, animated "down" connections, and UI controls for zoom/pan.
+// Node visuals are now Lucide icons (Laptop, Server, Split) instead of simple rectangles.
 
 import React, { useCallback, useState, useEffect, useRef } from "react";
-// Corrected import: Konva is often a global or accessed as a default export,
-// or its components are imported directly. For Konva.Animation, it's typically
-// accessed via the Konva global object or a named import if the library provides it.
-// Given the error, it's likely not a named export. We'll import all as Konva.
-import { Stage, Layer, Rect, Line, Text, Group, Circle } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Line,
+  Text,
+  Group,
+  Circle,
+  Image as KonvaImage,
+} from "react-konva";
 import Konva from "konva"; // Import Konva directly from the 'konva' package for Konva.Animation
+import ReactDOMServer from "react-dom/server"; // Required to render Lucide icons to SVG strings
 
 import {
   XCircle,
@@ -19,9 +26,11 @@ import {
   ZoomIn, // New icon for zoom in
   ZoomOut, // New icon for zoom out
   Maximize, // New icon for reset view
-  Server,
-  Laptop,
-  Split,
+  Server, // Lucide icon for Server/Switch
+  Laptop, // Lucide icon for PC
+  Split, // Lucide icon for Patch Panel
+  Info, // Example for other icons if needed
+  Download, // New icon for download feature
 } from "lucide-react";
 
 // Define consistent sizes for your Konva nodes
@@ -31,6 +40,17 @@ const NODE_PADDING = 10;
 const FONT_SIZE_TITLE = 12;
 const FONT_SIZE_LABEL = 10;
 const STATUS_INDICATOR_SIZE = 16; // Size for the small status circle/text
+const ICON_SIZE = 32; // Size for the Lucide icons within the nodes
+
+// Helper function to convert a Lucide icon component to a data URL
+const getSvgDataUrl = (IconComponent, color = "currentColor") => {
+  // Render the icon component to an SVG string
+  const svgString = ReactDOMServer.renderToStaticMarkup(
+    <IconComponent size={ICON_SIZE} color={color} />
+  );
+  // Encode the SVG string as a base64 data URL
+  return `data:image/svg+xml;base64,${btoa(svgString)}`;
+};
 
 // Helper function to draw a custom arrow head for the line
 const drawArrow = (ctx, points, color) => {
@@ -71,13 +91,15 @@ const NodeTooltip = ({ x, y, text, visible }) => {
   if (!visible || !text) return null;
 
   // Calculate tooltip dimensions based on text length
-  const textWidth = text.length * 5 + 20; // Approximate width
+  // Fix: text.measureText is not a function on string. Use approximate width or a Konva.Text ref.
+  // For simplicity, using an approximation based on character count.
+  const approximateTextWidth = (text ? text.length : 0) * 6 + 20; // Approximate width based on font size 10
   const textHeight = 20; // Fixed height
 
   return (
     <Group x={x + NODE_WIDTH / 2 + 10} y={y + NODE_HEIGHT / 2 - textHeight / 2}>
       <Rect
-        width={textWidth}
+        width={approximateTextWidth}
         height={textHeight}
         fill="rgba(0, 0, 0, 0.7)"
         cornerRadius={4}
@@ -94,7 +116,13 @@ const NodeTooltip = ({ x, y, text, visible }) => {
 };
 
 // Custom Node for Switch (Konva Group)
-const SwitchNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
+const SwitchNodeKonva = ({
+  node,
+  onNodeHover,
+  onNodeLeave,
+  onNodeDragEnd,
+  iconImage,
+}) => {
   const rectRef = useRef();
 
   return (
@@ -125,19 +153,15 @@ const SwitchNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
         listening={true}
         hitStrokeWidth={0} // Make hit area only the fill, not stroke
       />
-      <Text
-        text="SWITCH"
-        fontSize={FONT_SIZE_TITLE}
-        fontFamily="Arial"
-        fill="white"
-        align="center"
-        verticalAlign="middle"
-        width={NODE_WIDTH}
-        height={NODE_HEIGHT / 2}
-        x={0}
-        y={NODE_PADDING / 2}
-        fontStyle="bold"
-      />
+      {iconImage && (
+        <KonvaImage
+          image={iconImage}
+          x={(NODE_WIDTH - ICON_SIZE) / 2} // Center the icon
+          y={NODE_PADDING / 2} // Position at top with padding
+          width={ICON_SIZE}
+          height={ICON_SIZE}
+        />
+      )}
       <Text
         text={node.label}
         fontSize={FONT_SIZE_LABEL}
@@ -148,7 +172,7 @@ const SwitchNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 - NODE_PADDING}
+        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
@@ -157,7 +181,13 @@ const SwitchNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
 };
 
 // Custom Node for PC (Konva Group)
-const PcNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
+const PcNodeKonva = ({
+  node,
+  onNodeHover,
+  onNodeLeave,
+  onNodeDragEnd,
+  iconImage,
+}) => {
   const rectRef = useRef();
 
   return (
@@ -188,19 +218,15 @@ const PcNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
         listening={true}
         hitStrokeWidth={0}
       />
-      <Text
-        text="PC"
-        fontSize={FONT_SIZE_TITLE}
-        fontFamily="Arial"
-        fill="white"
-        align="center"
-        verticalAlign="middle"
-        width={NODE_WIDTH}
-        height={NODE_HEIGHT / 2}
-        x={0}
-        y={NODE_PADDING / 2}
-        fontStyle="bold"
-      />
+      {iconImage && (
+        <KonvaImage
+          image={iconImage}
+          x={(NODE_WIDTH - ICON_SIZE) / 2}
+          y={NODE_PADDING / 2}
+          width={ICON_SIZE}
+          height={ICON_SIZE}
+        />
+      )}
       <Text
         text={node.label}
         fontSize={FONT_SIZE_LABEL}
@@ -211,7 +237,7 @@ const PcNodeKonva = ({ node, onNodeHover, onNodeLeave, onNodeDragEnd }) => {
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 - NODE_PADDING}
+        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
@@ -251,6 +277,7 @@ const PatchPanelNodeKonva = ({
   onNodeHover,
   onNodeLeave,
   onNodeDragEnd,
+  iconImage,
 }) => {
   const rectRef = useRef();
 
@@ -282,21 +309,17 @@ const PatchPanelNodeKonva = ({
         listening={true}
         hitStrokeWidth={0}
       />
+      {iconImage && (
+        <KonvaImage
+          image={iconImage}
+          x={(NODE_WIDTH - ICON_SIZE) / 2}
+          y={NODE_PADDING / 2}
+          width={ICON_SIZE}
+          height={ICON_SIZE}
+        />
+      )}
       <Text
         text="PP"
-        fontSize={FONT_SIZE_TITLE}
-        fontFamily="Arial"
-        fill="white"
-        align="center"
-        verticalAlign="middle"
-        width={NODE_WIDTH}
-        height={NODE_HEIGHT / 2}
-        x={0}
-        y={NODE_PADDING / 2}
-        fontStyle="bold"
-      />
-      <Text
-        text={node.label}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -305,7 +328,7 @@ const PatchPanelNodeKonva = ({
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 - NODE_PADDING}
+        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
@@ -331,6 +354,46 @@ function SwitchDiagramModal({
   });
   const stageRef = useRef(null); // Ref for Konva Stage to access its methods
   const animationRef = useRef(null); // Ref for Konva Animation
+
+  // States for loaded icon images
+  const [pcIconImage, setPcIconImage] = useState(null);
+  const [switchIconImage, setSwitchIconImage] = useState(null);
+  const [ppIconImage, setPpIconImage] = useState(null);
+
+  // Load SVG images once on component mount
+  useEffect(() => {
+    const loadImages = async () => {
+      const loadImage = (src) =>
+        new Promise((resolve) => {
+          const img = new window.Image();
+          img.src = src;
+          img.onload = () => resolve(img);
+          img.onerror = () => {
+            console.error("Failed to load image:", src);
+            resolve(null); // Resolve with null on error
+          };
+        });
+
+      // Using a fixed color for icons for better visibility on colored nodes
+      const iconColor = "white";
+
+      const pcIconUrl = getSvgDataUrl(Laptop, iconColor);
+      const switchIconUrl = getSvgDataUrl(Server, iconColor);
+      const ppIconUrl = getSvgDataUrl(Split, iconColor);
+
+      const [pcImg, switchImg, ppImg] = await Promise.all([
+        loadImage(pcIconUrl),
+        loadImage(switchIconUrl),
+        loadImage(ppIconUrl),
+      ]);
+
+      setPcIconImage(pcImg);
+      setSwitchIconImage(switchImg);
+      setPpIconImage(ppImg);
+    };
+
+    loadImages();
+  }, []); // Empty dependency array means this runs once on mount
 
   // State for tooltip
   const [tooltip, setTooltip] = useState({
@@ -397,26 +460,31 @@ function SwitchDiagramModal({
     const dy = targetCenterY - sourceCenterY;
 
     // Function to find intersection point of line (from center) with a rectangle's border
-    const getRectIntersection = (cx, cy, angle) => {
-      // Adjusted to take center coordinates directly
-      const halfWidth = NODE_WIDTH / 2;
-      const halfHeight = NODE_HEIGHT / 2;
+    const getRectIntersection = (cx, cy, angle, rectWidth, rectHeight) => {
+      const halfWidth = rectWidth / 2;
+      const halfHeight = rectHeight / 2;
 
-      let x = cx;
-      let y = cy;
+      // Calculate the angle relative to the center of the rectangle's local coordinate system
+      const angleInRect = Math.atan2(Math.sin(angle), Math.cos(angle));
 
-      // Calculate intersection with horizontal lines (top/bottom)
-      // Check if the line is more horizontal than vertical
-      if (Math.abs(Math.tan(angle)) <= halfHeight / halfWidth) {
-        x = cx + Math.sign(Math.cos(angle)) * halfWidth;
-        y = cy + Math.tan(angle) * halfWidth * Math.sign(Math.cos(angle));
+      let xIntersect, yIntersect;
+
+      // Determine which edge is hit first
+      // Compare the absolute slopes to determine if it hits a vertical or horizontal edge first
+      const slope = Math.abs(Math.tan(angleInRect));
+      const rectSlope = halfHeight / halfWidth;
+
+      if (slope <= rectSlope) {
+        // Hits vertical edges (left/right)
+        xIntersect = Math.sign(Math.cos(angleInRect)) * halfWidth;
+        yIntersect = Math.tan(angleInRect) * xIntersect;
       } else {
-        // Intersects vertical lines (left/right)
-        y = cy + Math.sign(Math.sin(angle)) * halfHeight;
-        x = cx + (halfHeight / Math.tan(angle)) * Math.sign(Math.sin(angle));
+        // Hits horizontal edges (top/bottom)
+        yIntersect = Math.sign(Math.sin(angleInRect)) * halfHeight;
+        xIntersect = yIntersect / Math.tan(angleInRect);
       }
 
-      return { x: x, y: y };
+      return { x: cx + xIntersect, y: cy + yIntersect };
     };
 
     const angle = Math.atan2(dy, dx);
@@ -425,12 +493,16 @@ function SwitchDiagramModal({
     const sourcePoint = getRectIntersection(
       sourceCenterX,
       sourceCenterY,
-      angle
+      angle,
+      NODE_WIDTH,
+      NODE_HEIGHT
     );
     const targetPoint = getRectIntersection(
       targetCenterX,
       targetCenterY,
-      angle + Math.PI
+      angle + Math.PI,
+      NODE_WIDTH,
+      NODE_HEIGHT
     ); // Opposite angle for target
 
     return { source: sourcePoint, target: targetPoint };
@@ -700,7 +772,7 @@ function SwitchDiagramModal({
     // This will update the edgesData state
     updateEdges(initialNodes);
 
-    // Auto-fit view logic for Konva
+    // Auto-fit view logic for Konva - ONLY on initial load/switch change
     if (initialNodes.length > 0) {
       let minX = Infinity,
         minY = Infinity,
@@ -896,14 +968,29 @@ function SwitchDiagramModal({
       setStageScale(1);
       setStagePos({ x: 0, y: 0 });
     }
-  }, [nodesData, containerDimensions]);
+  }, [containerDimensions, nodesData]); // Added nodesData as a dependency here to ensure it uses latest positions
 
   // Reset view when modal opens or switch changes
   useEffect(() => {
-    if (isOpen && selectedSwitch) {
+    // Only call handleResetView if there are nodes to fit
+    if (isOpen && selectedSwitch && nodesData.length > 0) {
       handleResetView();
     }
-  }, [isOpen, selectedSwitch, handleResetView]);
+  }, [isOpen, selectedSwitch, handleResetView, nodesData.length]); // Added nodesData.length as dependency here
+
+  // Handle download of the diagram as a high-resolution image
+  const handleDownloadDiagram = () => {
+    if (stageRef.current) {
+      // Use a higher pixelRatio for high-resolution download
+      const dataURL = stageRef.current.toDataURL({ pixelRatio: 3 }); // Adjust pixelRatio for desired resolution (e.g., 2, 3, 4)
+      const a = document.createElement("a");
+      a.href = dataURL;
+      a.download = `network-diagram-${selectedSwitch?.name || "unknown"}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -914,13 +1001,22 @@ function SwitchDiagramModal({
             <Network size={24} className="mr-2" /> Network Diagram:{" "}
             {selectedSwitch?.name || "N/A"}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
-            title="Close Diagram"
-          >
-            <XCircle size={24} />
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleDownloadDiagram}
+              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+              title="Download Diagram"
+            >
+              <Download size={24} />
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors duration-200"
+              title="Close Diagram"
+            >
+              <XCircle size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Konva Diagram Area */}
@@ -1036,6 +1132,7 @@ function SwitchDiagramModal({
                             onNodeHover={handleNodeHover}
                             onNodeLeave={handleNodeLeave}
                             onNodeDragEnd={handleNodeDragEnd}
+                            iconImage={switchIconImage}
                           />
                         );
                       } else if (node.type === "pc") {
@@ -1046,6 +1143,7 @@ function SwitchDiagramModal({
                             onNodeHover={handleNodeHover}
                             onNodeLeave={handleNodeLeave}
                             onNodeDragEnd={handleNodeDragEnd}
+                            iconImage={pcIconImage}
                           />
                         );
                       } else if (node.type === "patchPanel") {
@@ -1056,6 +1154,7 @@ function SwitchDiagramModal({
                             onNodeHover={handleNodeHover}
                             onNodeLeave={handleNodeLeave}
                             onNodeDragEnd={handleNodeDragEnd}
+                            iconImage={ppIconImage}
                           />
                         );
                       }
