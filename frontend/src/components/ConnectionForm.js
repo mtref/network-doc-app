@@ -5,14 +5,15 @@
 // Patch Panel and Switch creation/editing use a location dropdown.
 // PC selection for connections now filters based on multi-port status.
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { ChevronDown, ChevronUp, PlusCircle } from "lucide-react"; // Import icons for expand/collapse and add buttons
 
 // Base URL for the backend API.
 const API_BASE_URL =
   process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5004";
 
-function ConnectionForm({
+// Wrap the component with memo to prevent unnecessary re-renders
+const ConnectionForm = memo(function ConnectionForm({
   pcs, // This 'pcs' prop will now represent ALL PCs for display purposes in the 'Add New PC' section
   patchPanels,
   switches,
@@ -23,17 +24,36 @@ function ConnectionForm({
   onAddEntity,
   onShowPortStatus,
   locations,
+  showMessage, // Added showMessage prop
 }) {
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
   const [switchId, setSwitchId] = useState("");
   const [hops, setHops] = useState([]);
+  const [cableColor, setCableColor] = useState(""); // New: Main connection cable color
+  const [cableLabel, setCableLabel] = useState(""); // New: Main connection cable label
 
   // State for available PCs for the connection dropdown (filtered by multi-port status)
   const [availablePcsForConnection, setAvailablePcsForConnection] = useState(
     []
   );
+
+  // State for managing the available cable color options
+  const [cableColorOptions, setCableColorOptions] = useState([
+    "Blue",
+    "Green",
+    "Red",
+    "Yellow",
+    "Orange",
+    "Black",
+    "White",
+    "Grey",
+    "Purple",
+    "Brown",
+  ]);
+  const [showAddColorInput, setShowAddColorInput] = useState(false);
+  const [newCustomColor, setNewCustomColor] = useState("");
 
   // States for managing the expanded/collapsed state of each "Add New" section
   const [isNewPcExpanded, setIsNewPcExpanded] = useState(false);
@@ -46,10 +66,12 @@ function ConnectionForm({
   const [newPcUsername, setNewPcUsername] = useState("");
   const [newPcInDomain, setNewPcInDomain] = useState(false);
   const [newPcOs, setNewPcOs] = useState("");
-  const [newPcPortsName, setNewPcPortsName] = useState("");
+  const [newPcModel, setNewPcModel] = useState(""); // Corrected: Renamed from newPcPortsName to newPcModel
   const [newPcOffice, setNewPcOffice] = useState("");
   const [newPcDesc, setNewPcDesc] = useState("");
   const [newPcMultiPort, setNewPcMultiPort] = useState(false); // New state for multi_port
+  const [newPcType, setNewPcType] = useState("Workstation"); // New state for PC type
+  const [newPcUsage, setNewPcUsage] = useState(""); // New state for PC usage
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
@@ -68,6 +90,10 @@ function ConnectionForm({
   const [newSwitchModel, setNewSwitchModel] = useState("");
   const [newSwitchDesc, setNewSwitchDesc] = useState("");
 
+  // IP Address Regex for validation
+  const ipRegex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
   // Fetch available PCs for connection dropdown
   const fetchAvailablePcs = useCallback(async () => {
     try {
@@ -79,15 +105,22 @@ function ConnectionForm({
       setAvailablePcsForConnection(data);
     } catch (error) {
       console.error("Failed to fetch available PCs:", error);
+      showMessage(`Error fetching available PCs: ${error.message}`, 5000);
     }
-  }, []);
+  }, [showMessage]); // showMessage is a dependency
 
   useEffect(() => {
     fetchAvailablePcs();
-  }, [fetchAvailablePcs, pcs]); // Re-fetch when PCs data changes (e.g., a new PC is added or deleted)
+  }, [fetchAvailablePcs, pcs]);
 
-  // Populate form fields if editing an existing connection
+  const isInitialRenderRef = useRef(true);
+
   useEffect(() => {
+    if (isInitialRenderRef.current) {
+        isInitialRenderRef.current = false;
+        return;
+    }
+
     if (editingConnection) {
       setPcId(editingConnection.pc_id || "");
       setSwitchId(editingConnection.switch_id || "");
@@ -97,10 +130,18 @@ function ConnectionForm({
           ? editingConnection.is_switch_port_up
           : true
       );
-      setHops(editingConnection.hops || []);
+      setCableColor(editingConnection.cable_color || "");
+      setCableLabel(editingConnection.cable_label || "");
+      setHops(
+        editingConnection.hops.map((hop) => ({
+          patch_panel_id: hop.patch_panel?.id || "",
+          patch_panel_port: hop.patch_panel_port || "",
+          is_port_up: hop.is_port_up,
+          cable_color: hop.cable_color || "",
+          cable_label: hop.cable_label || "",
+        })) || []
+      );
 
-      // Ensure the currently edited PC is in the availablePcsForConnection list
-      // This is important if it's a single-port PC that is already connected by this connection
       if (
         editingConnection.pc &&
         !availablePcsForConnection.find((p) => p.id === editingConnection.pc.id)
@@ -108,28 +149,32 @@ function ConnectionForm({
         setAvailablePcsForConnection((prev) => [...prev, editingConnection.pc]);
       }
     } else {
-      // Clear all form fields if not editing
       setPcId("");
       setSwitchId("");
       setSwitchPort("");
       setIsSwitchPortUp(true);
+      setCableColor("");
+      setCableLabel("");
       setHops([]);
-      // Also clear the "Add New" entity forms' states when not editing a connection
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
       setNewPcInDomain(false);
       setNewPcOs("");
-      setNewPcPortsName("");
+      setNewPcModel("");
       setNewPcOffice("");
       setNewPcDesc("");
-      setNewPcMultiPort(false); // Reset multi_port
+      setNewPcMultiPort(false);
+      setNewPcType("Workstation");
+      setNewPcUsage("");
+
       setNewPpName("");
       setNewPpLocationId("");
       setNewPpRowInRack("");
       setNewPpRackName("");
       setNewPpTotalPorts(1);
       setNewPpDesc("");
+
       setNewSwitchName("");
       setNewSwitchIp("");
       setNewSwitchLocationId("");
@@ -140,40 +185,64 @@ function ConnectionForm({
       setNewSwitchModel("");
       setNewSwitchDesc("");
     }
-  }, [editingConnection, availablePcsForConnection]);
+  }, [editingConnection, availablePcsForConnection, pcs]);
 
-  // Handle changes for a specific hop's patch panel ID
   const handleHopPatchPanelChange = (index, value) => {
     const updatedHops = [...hops];
     updatedHops[index].patch_panel_id = parseInt(value);
     setHops(updatedHops);
   };
 
-  // Handle changes for a specific hop's patch panel port
   const handleHopPortChange = (index, value) => {
     const updatedHops = [...hops];
     updatedHops[index].patch_panel_port = value;
     setHops(updatedHops);
   };
 
-  // Handle changes for a specific hop's port status
   const handleHopPortStatusChange = (index, value) => {
     const updatedHops = [...hops];
     updatedHops[index].is_port_up = value;
     setHops(updatedHops);
   };
 
-  // Add a new empty hop to the list
+  const handleHopCableColorChange = (index, value) => {
+    const updatedHops = [...hops];
+    updatedHops[index].cable_color = value;
+    setHops(updatedHops);
+  };
+
+  const handleHopCableLabelChange = (index, value) => {
+    const updatedHops = [...hops];
+    updatedHops[index].cable_label = value;
+    setHops(updatedHops);
+  };
+
   const addHop = () => {
     setHops([
       ...hops,
-      { patch_panel_id: "", patch_panel_port: "", is_port_up: true },
+      {
+        patch_panel_id: "",
+        patch_panel_port: "",
+        is_port_up: true,
+        cable_color: "",
+        cable_label: "",
+      },
     ]);
   };
 
-  // Remove a hop by index
   const removeHop = (index) => {
     setHops(hops.filter((_, i) => i !== index));
+  };
+
+  const handleAddCustomColor = () => {
+    if (newCustomColor.trim() && !cableColorOptions.includes(newCustomColor.trim())) {
+        setCableColorOptions((prev) => [...prev, newCustomColor.trim()]);
+        setCableColor(newCustomColor.trim());
+        setNewCustomColor("");
+        setShowAddColorInput(false);
+    } else if (cableColorOptions.includes(newCustomColor.trim())) {
+        showMessage("Color already exists.", 3000);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -191,25 +260,38 @@ function ConnectionForm({
       switch_id: parseInt(switchId),
       switch_port: switchPort,
       is_switch_port_up: isSwitchPortUp,
+      cable_color: cableColor,
+      cable_label: cableLabel,
       hops: hops.map((hop) => ({
         patch_panel_id: hop.patch_panel_id,
         patch_panel_port: hop.patch_panel_port,
         is_port_up: hop.is_port_up,
+        cable_color: hop.cable_color,
+        cable_label: hop.cable_label,
       })),
     };
 
+    let result;
     if (editingConnection) {
-      await onUpdateConnection(editingConnection.id, connectionData);
+      result = await onUpdateConnection(editingConnection.id, connectionData);
     } else {
-      await onAddConnection(connectionData);
+      result = await onAddConnection(connectionData);
     }
-    setPcId("");
-    setSwitchId("");
-    setSwitchPort("");
-    setIsSwitchPortUp(true);
-    setHops([]);
-    setEditingConnection(null);
-    fetchAvailablePcs(); // Re-fetch available PCs after adding/updating connection
+
+    // Only clear the form if the operation was successful
+    if (result.success) {
+      setPcId("");
+      setSwitchId("");
+      setSwitchPort("");
+      setIsSwitchPortUp(true);
+      setCableColor("");
+      setCableLabel("");
+      setHops([]);
+      setEditingConnection(null);
+      fetchAvailablePcs();
+    }
+    // If not successful, the form fields will retain their values,
+    // and App.js will display the error message.
   };
 
   const handleCancelEdit = () => {
@@ -218,63 +300,76 @@ function ConnectionForm({
     setSwitchId("");
     setSwitchPort("");
     setIsSwitchPortUp(true);
+    setCableColor("");
+    setCableLabel("");
     setHops([]);
-    fetchAvailablePcs(); // Re-fetch available PCs after canceling edit
+    fetchAvailablePcs();
   };
 
   const handleAddPc = async (e) => {
     e.preventDefault();
-    // Basic IP validation
-    const ipRegex =
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (newPcIp && !ipRegex.test(newPcIp)) {
       alert("Please enter a valid IP address for PC (e.g., 192.168.1.1).");
       return;
     }
     if (newPcName.trim()) {
-      await onAddEntity("pcs", {
-        name: newPcName,
-        ip_address: newPcIp,
-        username: newPcUsername,
-        in_domain: newPcInDomain,
-        operating_system: newPcOs,
-        ports_name: newPcPortsName,
-        office: newPcOffice,
-        description: newPcDesc,
-        multi_port: newPcMultiPort, // Include multi_port
-      });
-      setNewPcName("");
-      setNewPcIp("");
-      setNewPcUsername("");
-      setNewPcInDomain(false);
-      setNewPcOs("");
-      setNewPcPortsName("");
-      setNewPcOffice("");
-      setNewPcDesc("");
-      setNewPcMultiPort(false); // Reset multi_port
-      setIsNewPcExpanded(false); // Collapse after adding
-      fetchAvailablePcs(); // Re-fetch available PCs after adding a new PC
+      try {
+        await onAddEntity("pcs", {
+          name: newPcName,
+          ip_address: newPcIp,
+          username: newPcUsername,
+          in_domain: newPcInDomain,
+          operating_system: newPcOs,
+          model: newPcModel,
+          office: newPcOffice,
+          description: newPcDesc,
+          multi_port: newPcMultiPort,
+          type: newPcType,
+          usage: newPcUsage,
+        });
+        setNewPcName("");
+        setNewPcIp("");
+        setNewPcUsername("");
+        setNewPcInDomain(false);
+        setNewPcOs("");
+        setNewPcModel("");
+        setNewPcOffice("");
+        setNewPcDesc("");
+        setNewPcMultiPort(false);
+        setNewPcType("Workstation");
+        setNewPcUsage("");
+        setIsNewPcExpanded(false);
+        fetchAvailablePcs();
+      } catch (error) {
+        // Error message already shown by onAddEntity
+      }
+    } else {
+      alert("PC Name is required.");
     }
   };
 
   const handleAddPp = async (e) => {
     e.preventDefault();
     if (newPpName.trim() && newPpLocationId) {
-      await onAddEntity("patch_panels", {
-        name: newPpName,
-        location_id: parseInt(newPpLocationId),
-        row_in_rack: newPpRowInRack,
-        rack_name: newPpRackName,
-        total_ports: parseInt(newPpTotalPorts),
-        description: newPpDesc,
-      });
-      setNewPpName("");
-      setNewPpLocationId("");
-      setNewPpRowInRack("");
-      setNewPpRackName("");
-      setNewPpTotalPorts(1);
-      setNewPpDesc("");
-      setIsNewPpExpanded(false); // Collapse after adding
+      try {
+        await onAddEntity("patch_panels", {
+          name: newPpName,
+          location_id: parseInt(newPpLocationId),
+          row_in_rack: newPpRowInRack,
+          rack_name: newPpRackName,
+          total_ports: parseInt(newPpTotalPorts),
+          description: newPpDesc,
+        });
+        setNewPpName("");
+        setNewPpLocationId("");
+        setNewPpRowInRack("");
+        setNewPpRackName("");
+        setNewPpTotalPorts(1);
+        setNewPpDesc("");
+        setIsNewPpExpanded(false);
+      } catch (error) {
+        // Error message already shown by onAddEntity
+      }
     } else {
       alert("Patch Panel Name and Location are required.");
     }
@@ -282,35 +377,36 @@ function ConnectionForm({
 
   const handleAddSwitch = async (e) => {
     e.preventDefault();
-    // Basic IP validation
-    const ipRegex =
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (newSwitchIp && !ipRegex.test(newSwitchIp)) {
       alert("Please enter a valid IP address for Switch (e.g., 192.168.1.1).");
       return;
     }
     if (newSwitchName.trim() && newSwitchLocationId) {
-      await onAddEntity("switches", {
-        name: newSwitchName,
-        ip_address: newSwitchIp,
-        location_id: parseInt(newSwitchLocationId),
-        row_in_rack: newSwitchRowInRack,
-        rack_name: newSwitchRackName,
-        total_ports: parseInt(newSwitchTotalPorts),
-        source_port: newSwitchSourcePort,
-        model: newSwitchModel,
-        description: newSwitchDesc,
-      });
-      setNewSwitchName("");
-      setNewSwitchIp("");
-      setNewSwitchLocationId("");
-      setNewSwitchRowInRack("");
-      setNewSwitchRackName("");
-      setNewSwitchTotalPorts(1);
-      setNewSwitchSourcePort("");
-      setNewSwitchModel("");
-      setNewSwitchDesc("");
-      setIsNewSwitchExpanded(false); // Collapse after adding
+      try {
+        await onAddEntity("switches", {
+          name: newSwitchName,
+          ip_address: newSwitchIp,
+          location_id: parseInt(newSwitchLocationId),
+          row_in_rack: newSwitchRowInRack,
+          rack_name: newSwitchRackName,
+          total_ports: parseInt(newSwitchTotalPorts),
+          source_port: newSwitchSourcePort,
+          model: newSwitchModel,
+          description: newSwitchDesc,
+        });
+        setNewSwitchName("");
+        setNewSwitchIp("");
+        setNewSwitchLocationId("");
+        setNewSwitchRowInRack("");
+        setNewSwitchRackName("");
+        setNewSwitchTotalPorts(1);
+        setNewSwitchSourcePort("");
+        setNewSwitchModel("");
+        setNewSwitchDesc("");
+        setIsNewSwitchExpanded(false);
+      } catch (error) {
+        // Error message already shown by onAddEntity
+      }
     } else {
       alert("Switch Name and Location are required.");
     }
@@ -363,38 +459,47 @@ function ConnectionForm({
                 onChange={(e) => setNewPcUsername(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
-              <div className="flex items-center">
-                <input
-                  id="new-pc-in-domain"
-                  type="checkbox"
-                  checked={newPcInDomain}
-                  onChange={(e) => setNewPcInDomain(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label
-                  htmlFor="new-pc-in-domain"
-                  className="ml-2 block text-sm text-gray-900"
-                >
-                  In Domain
-                </label>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center">
+                  <input
+                    id="new-pc-in-domain"
+                    type="checkbox"
+                    checked={newPcInDomain}
+                    onChange={(e) => setNewPcInDomain(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="new-pc-in-domain"
+                    className="ml-2 block text-sm text-gray-900"
+                  >
+                    In Domain
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    id="new-pc-multi-port"
+                    type="checkbox"
+                    checked={newPcMultiPort}
+                    onChange={(e) => setNewPcMultiPort(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="new-pc-multi-port"
+                    className="ml-2 block text-sm text-gray-900"
+                  >
+                    Multi-Port PC (Can have multiple connections)
+                  </label>
+                </div>
               </div>
-              <div className="flex items-center">
-                {" "}
-                {/* New: Multi-Port checkbox */}
-                <input
-                  id="new-pc-multi-port"
-                  type="checkbox"
-                  checked={newPcMultiPort}
-                  onChange={(e) => setNewPcMultiPort(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label
-                  htmlFor="new-pc-multi-port"
-                  className="ml-2 block text-sm text-gray-900"
-                >
-                  Multi-Port PC (Can have multiple connections)
-                </label>
-              </div>
+              <select
+                value={newPcType}
+                onChange={(e) => setNewPcType(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="Workstation">Workstation</option>
+                <option value="Server">Server</option>
+              </select>
               <input
                 type="text"
                 placeholder="Operating System (Optional)"
@@ -404,9 +509,9 @@ function ConnectionForm({
               />
               <input
                 type="text"
-                placeholder="Ports Name (e.g., HDMI, USB, Eth)"
-                value={newPcPortsName}
-                onChange={(e) => setNewPcPortsName(e.target.value)}
+                placeholder="Model (e.g., Dell OptiPlex 7010)"
+                value={newPcModel}
+                onChange={(e) => setNewPcModel(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
               <input
@@ -414,6 +519,13 @@ function ConnectionForm({
                 placeholder="Office (Optional)"
                 value={newPcOffice}
                 onChange={(e) => setNewPcOffice(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Usage (Optional)"
+                value={newPcUsage}
+                onChange={(e) => setNewPcUsage(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
               <textarea
@@ -471,7 +583,7 @@ function ConnectionForm({
                 <option value="">-- Select Location --</option>
                 {locations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
-                    {loc.name}
+                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                   </option>
                 ))}
               </select>
@@ -565,7 +677,7 @@ function ConnectionForm({
                 <option value="">-- Select Location --</option>
                 {locations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
-                    {loc.name}
+                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                   </option>
                 ))}
               </select>
@@ -701,7 +813,7 @@ function ConnectionForm({
           </div>
 
           {/* Switch Port Input and Status */}
-          <div className="md:col-span-2 grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
             <div>
               <label
                 htmlFor="switch-port"
@@ -738,12 +850,80 @@ function ConnectionForm({
               <button
                 type="button"
                 onClick={() => onShowPortStatus("switches", switchId)}
-                className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-2"
+                className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-full"
               >
                 View Switch Port Status (
                 {switches.find((s) => s.id === parseInt(switchId))?.name})
               </button>
             )}
+          </div>
+
+          {/* Main Connection Cable Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
+            <div>
+              <label
+                htmlFor="cable-color"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Cable Color:
+              </label>
+              <div className="flex items-center space-x-2">
+                <select
+                  id="cable-color"
+                  value={cableColor}
+                  onChange={(e) => {
+                    if (e.target.value === "add-new") {
+                        setShowAddColorInput(true);
+                        setNewCustomColor("");
+                    } else {
+                        setCableColor(e.target.value);
+                        setShowAddColorInput(false);
+                    }
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">-- Select Color (Optional) --</option>
+                  {cableColorOptions.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                  <option value="add-new">-- Add New Color --</option>
+                </select>
+                {showAddColorInput && (
+                    <input
+                        type="text"
+                        placeholder="Enter new color"
+                        value={newCustomColor}
+                        onChange={(e) => setNewCustomColor(e.target.value)}
+                        onBlur={handleAddCustomColor}
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddCustomColor();
+                            }
+                        }}
+                        className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                )}
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="cable-label"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Cable Label:
+              </label>
+              <input
+                id="cable-label"
+                type="text"
+                placeholder="e.g., A1-B2, Patch-CBL-001"
+                value={cableLabel}
+                onChange={(e) => setCableLabel(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -775,13 +955,13 @@ function ConnectionForm({
                   onChange={(e) =>
                     handleHopPatchPanelChange(index, e.target.value)
                   }
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                   required
                 >
                   <option value="">-- Select Patch Panel --</option>
                   {patchPanels.map((pp) => (
                     <option key={pp.id} value={pp.id}>
-                      {pp.name} ({pp.location_name})
+                      {pp.name} ({pp.location_name}{pp.location?.door_number && ` (Door: ${pp.location.door_number})`})
                     </option>
                   ))}
                 </select>
@@ -825,6 +1005,75 @@ function ConnectionForm({
                   Port Up
                 </label>
               </div>
+
+              {/* New: Cable Color for Hop */}
+              <div className="flex-grow w-full md:w-auto">
+                <label
+                  htmlFor={`hop-cable-color-${index}`}
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Cable Color (Hop):
+                </label>
+                <div className="flex items-center space-x-2">
+                  <select
+                    id={`hop-cable-color-${index}`}
+                    value={hop.cable_color}
+                    onChange={(e) => {
+                        if (e.target.value === "add-new-hop-color") {
+                            setShowAddColorInput(true);
+                            setNewCustomColor("");
+                        } else {
+                            handleHopCableColorChange(index, e.target.value);
+                            setShowAddColorInput(false);
+                        }
+                    }}
+                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value="">-- Select Color (Optional) --</option>
+                    {cableColorOptions.map((color) => (
+                      <option key={color} value={color}>
+                        {color}
+                      </option>
+                    ))}
+                    <option value="add-new-hop-color">-- Add New Color --</option>
+                  </select>
+                  {showAddColorInput && (
+                    <input
+                        type="text"
+                        placeholder="Enter new color"
+                        value={newCustomColor}
+                        onChange={(e) => setNewCustomColor(e.target.value)}
+                        onBlur={handleAddCustomColor}
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddCustomColor();
+                            }
+                        }}
+                        className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                )}
+                </div>
+              </div>
+
+              {/* New: Cable Label for Hop */}
+              <div className="flex-grow w-full md:w-auto">
+                <label
+                  htmlFor={`hop-cable-label-${index}`}
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Cable Label (Hop):
+                </label>
+                <input
+                  id={`hop-cable-label-${index}`}
+                  type="text"
+                  placeholder="e.g., PP1-Port5"
+                  value={hop.cable_label}
+                  onChange={(e) => handleHopCableLabelChange(index, e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
               <button
                 type="button"
                 onClick={() => removeHop(index)}
@@ -884,6 +1133,6 @@ function ConnectionForm({
       </form>
     </div>
   );
-}
+});
 
 export default ConnectionForm;

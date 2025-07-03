@@ -24,6 +24,7 @@ function PatchPanelList({
   onDeleteEntity,
   onShowPortStatus,
   locations,
+  racks, // New prop for Racks [cite: 1]
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPatchPanels, setFilteredPatchPanels] = useState([]);
@@ -47,8 +48,9 @@ function PatchPanelList({
 
   // Effect to extract unique filter options whenever 'patchPanels' data changes
   useEffect(() => {
+    // Combine location name and door number for display in filters
     const uniqueLocations = [
-      ...new Set(patchPanels.map((pp) => pp.location_name).filter(Boolean)),
+      ...new Set(locations.map(loc => loc.name + (loc.door_number ? ` (Door: ${loc.door_number})` : ''))),
     ].sort();
     setAvailableLocationOptions(uniqueLocations);
 
@@ -56,7 +58,7 @@ function PatchPanelList({
       ...new Set(patchPanels.map((pp) => pp.rack_name).filter(Boolean)),
     ].sort();
     setAvailableRackOptions(uniqueRacks);
-  }, [patchPanels]);
+  }, [patchPanels, locations]); // Added locations to dependency array 
 
   // Filter Patch Panels based on search term and filter selections
   useEffect(() => {
@@ -66,6 +68,7 @@ function PatchPanelList({
       const matchesSearch =
         (pp.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pp.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pp.location?.door_number || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by door_number 
         (pp.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pp.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         String(pp.total_ports).includes(lowerCaseSearchTerm) ||
@@ -74,7 +77,7 @@ function PatchPanelList({
       // Location filter
       const matchesLocation =
         selectedLocationFilter === "all" ||
-        pp.location_name === selectedLocationFilter;
+        (pp.location_name + (pp.location?.door_number ? ` (Door: ${pp.location.door_number})` : '')) === selectedLocationFilter; // Match location name + door number 
 
       // Rack filter
       const matchesRack =
@@ -83,7 +86,7 @@ function PatchPanelList({
       return matchesSearch && matchesLocation && matchesRack;
     });
     setFilteredPatchPanels(filtered);
-  }, [patchPanels, searchTerm, selectedLocationFilter, selectedRackFilter]);
+  }, [patchPanels, searchTerm, selectedLocationFilter, selectedRackFilter, locations]); // Added locations to dependency array 
 
   // Handle edit initiation
   const handleEdit = (pp) => {
@@ -154,9 +157,9 @@ function PatchPanelList({
             className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="all">All</option>
-            {availableLocationOptions.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.name + (loc.door_number ? ` (Door: ${loc.door_number})` : '')}>
+                {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
               </option>
             ))}
           </select>
@@ -225,7 +228,7 @@ function PatchPanelList({
               <option value="">-- Select Location --</option>
               {locations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
-                  {loc.name}
+                  {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                 </option>
               ))}
             </select>
@@ -248,6 +251,25 @@ function PatchPanelList({
               onChange={(e) => setPpFormRackName(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+            {/* If you implement linking to Rack model, this section would change to a select: 
+            <select
+              value={ppFormRackId} // New state for rack_id
+              onChange={(e) => setPpFormRackId(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Select Rack (Optional) --</option>
+              {racks.map((rack) => (
+                <option key={rack.id} value={rack.id}>
+                  {rack.name} ({rack.location_name})
+                </option>
+              ))}
+            </select>
+            {racks.length === 0 && (
+              <p className="text-sm text-red-500 mt-1">
+                No racks added. Add racks in the Racks tab to link.
+              </p>
+            )}
+            */}
             <input
               type="number"
               placeholder="Total Ports (e.g., 24)"
@@ -307,7 +329,7 @@ function PatchPanelList({
               </h4>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {pp.location_name || "N/A"}
+                {pp.location_name || "N/A"}{pp.location?.door_number && ` (Door: ${pp.location.door_number})`} {/* Display door_number  */}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Server size={16} className="text-gray-500 mr-2" /> Row:{" "}

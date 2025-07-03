@@ -13,9 +13,9 @@ import PatchPanelList from "./components/PatchPanelList";
 import PrintableConnectionForm from "./components/PrintableConnectionForm";
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
+import RackList from "./components/RackList"; // New import
 import { Printer } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
-// import { ReactFlowProvider } from "reactflow"; // Removed as ReactFlow is no longer used for diagram modal
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -48,7 +48,7 @@ const deepEqual = (a, b) => {
     }
 
     return true;
-  }
+  };
 
   return false;
 };
@@ -60,6 +60,7 @@ function App() {
   const [switches, setSwitches] = useState([]);
   const [connections, setConnections] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [racks, setRacks] = useState([]); // State for Racks
 
   // State for current active tab
   const [activeTab, setActiveTab] = useState("connections");
@@ -84,19 +85,17 @@ function App() {
   // State to store CSS content for injecting into print window
   const [cssContent, setCssContent] = useState("");
 
-  const showMessage = (msg, duration = 3000) => {
+  // Memoized showMessage function
+  const showMessage = useCallback((msg, duration = 3000) => {
     setMessage(msg);
     setIsMessageVisible(true);
     setTimeout(() => {
       setIsMessageVisible(false);
       setMessage("");
     }, duration);
-  };
+  }, []); // No dependencies, as it only sets local state
 
   // Centralized data fetching function
-  // This function is memoized and will only be recreated if its dependencies change (none here).
-  // It takes the setter function directly. The deepEqual check is now inside the handler functions
-  // or relies on React's default reconciliation if setter is always called.
   const fetchData = useCallback(async (endpoint, setter) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${endpoint}`);
@@ -107,15 +106,14 @@ function App() {
         );
       }
       const data = await response.json();
-      setter(data); // Always call setter, React will optimize if data reference is same
+      setter(data);
     } catch (error) {
       console.error(`Failed to fetch ${endpoint}:`, error);
       showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
     }
-  }, []); // No dependencies for fetchData itself, so it's stable
+  }, [showMessage]); // showMessage is a dependency
 
   // Effect to fetch all initial data on component mount
-  // This useEffect now runs only once because fetchData is memoized
   useEffect(() => {
     const fetchAllInitialData = async () => {
       await fetchData("pcs", setPcs);
@@ -123,6 +121,7 @@ function App() {
       await fetchData("switches", setSwitches);
       await fetchData("connections", setConnections);
       await fetchData("locations", setLocations);
+      await fetchData("racks", setRacks);
     };
     fetchAllInitialData();
 
@@ -131,10 +130,11 @@ function App() {
       .then((res) => res.text())
       .then((css) => setCssContent(css))
       .catch((err) => console.error("Failed to load CSS for printing:", err));
-  }, [fetchData]); // Only fetchData is a dependency, and it's memoized
+  }, [fetchData]);
 
   // Handlers for CRUD operations - explicitly trigger re-fetches after changes
-  const handleAddConnection = async (newConnectionData) => {
+  // Modified: handleAddConnection to return success status and message
+  const handleAddConnection = useCallback(async (newConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections`, {
         method: "POST",
@@ -142,23 +142,24 @@ function App() {
         body: JSON.stringify(newConnectionData),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        const errorData = await response.json().catch(() => ({}));
+        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` }; // Return false on error
       }
       showMessage("Connection added successfully!");
       setEditingConnection(null);
-      // Trigger re-fetch for all relevant data after a change
       await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs); // PC availability might change
+      await fetchData("pcs", setPcs);
+      return { success: true }; // Return true on success
     } catch (error) {
       console.error("Error adding connection:", error);
       showMessage(`Error adding connection: ${error.message}`, 8000);
+      return { success: false, error: error.message }; // Return false on network/other error
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleUpdateConnection = async (id, updatedConnectionData) => {
+  // Modified: handleUpdateConnection to return success status and message
+  const handleUpdateConnection = useCallback(async (id, updatedConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
         method: "PUT",
@@ -166,23 +167,23 @@ function App() {
         body: JSON.stringify(updatedConnectionData),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        const errorData = await response.json().catch(() => ({}));
+        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` }; // Return false on error
       }
       showMessage("Connection updated successfully!");
       setEditingConnection(null);
-      // Trigger re-fetch for all relevant data after a change
       await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs); // PC availability might change
+      await fetchData("pcs", setPcs);
+      return { success: true }; // Return true on success
     } catch (error) {
       console.error("Error updating connection:", error);
       showMessage(`Error updating connection: ${error.message}`, 8000);
+      return { success: false, error: error.message }; // Return false on network/other error
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleDeleteConnection = async (id) => {
+  const handleDeleteConnection = useCallback(async (id) => {
     if (!window.confirm("Are you sure you want to delete this connection?")) {
       return;
     }
@@ -198,16 +199,15 @@ function App() {
         );
       }
       showMessage("Connection deleted successfully!");
-      // Trigger re-fetch for all relevant data after a change
       await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs); // PC availability might change
+      await fetchData("pcs", setPcs);
     } catch (error) {
       console.error("Error deleting connection:", error);
       showMessage(`Error deleting connection: ${error.message}`, 5000);
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleEditConnection = (connection) => {
+  const handleEditConnection = useCallback((connection) => {
     const formattedConnection = {
       id: connection.id,
       pc_id: connection.pc?.id,
@@ -217,18 +217,22 @@ function App() {
         connection.is_switch_port_up !== undefined
           ? connection.is_switch_port_up
           : true,
+      cable_color: connection.cable_color || '',
+      cable_label: connection.cable_label || '',
       hops: connection.hops.map((hop) => ({
         patch_panel_id: hop.patch_panel?.id,
         patch_panel_port: hop.patch_panel_port,
         is_port_up: hop.is_port_up,
+        cable_color: hop.cable_color || '',
+        cable_label: hop.cable_label || '',
       })),
       pc: connection.pc,
       switch: connection.switch,
     };
     setEditingConnection(formattedConnection);
-  };
+  }, []); // No specific dependencies beyond the `connection` object that's already stable per call.
 
-  const handleAddEntity = async (type, data) => {
+  const handleAddEntity = useCallback(async (type, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}`, {
         method: "POST",
@@ -236,30 +240,28 @@ function App() {
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        const errorData = await response.json().catch(() => ({}));
+        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 5000);
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
       }
-      const newEntity = await response.json(); // Capture the response JSON
+      const newEntity = await response.json();
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
-      // Trigger re-fetch for specific data type and connections
-      if (type === "pcs") await fetchData("pcs", setPcs);
-      if (type === "patch_panels")
-        await fetchData("patch_panels", setPatchPanels);
-      if (type === "switches") await fetchData("switches", setSwitches);
-      if (type === "locations") await fetchData("locations", setLocations);
+      // Re-fetch data for relevant lists
+      if (type === "pcs") setPcs(prev => [...prev, newEntity]); // Optimistic update or refetch
+      if (type === "patch_panels") setPatchPanels(prev => [...prev, newEntity]);
+      if (type === "switches") setSwitches(prev => [...prev, newEntity]);
+      if (type === "locations") setLocations(prev => [...prev, newEntity]);
+      if (type === "racks") setRacks(prev => [...prev, newEntity]);
       await fetchData("connections", setConnections); // Connections might depend on any new entity
-
-      return newEntity; // <--- ADD THIS LINE: Return the newly created entity
+      return { success: true, entity: newEntity };
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
       showMessage(`Error adding ${type}: ${error.message}`, 5000);
-      throw error; // Re-throw the error so handleNewPcSaveAndContinue can catch it
+      return { success: false, error: error.message };
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleUpdateEntity = async (type, id, data) => {
+  const handleUpdateEntity = useCallback(async (type, id, data) => {
     try {
       const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
         method: "PUT",
@@ -267,26 +269,27 @@ function App() {
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        const errorData = await response.json().catch(() => ({}));
+        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 5000);
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
       }
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-      // Trigger re-fetch for specific data type and connections
       if (type === "pcs") await fetchData("pcs", setPcs);
       if (type === "patch_panels")
         await fetchData("patch_panels", setPatchPanels);
       if (type === "switches") await fetchData("switches", setSwitches);
       if (type === "locations") await fetchData("locations", setLocations);
-      await fetchData("connections", setConnections); // Connections might depend on any updated entity
+      if (type === "racks") await fetchData("racks", setRacks);
+      await fetchData("connections", setConnections);
+      return { success: true };
     } catch (error) {
       console.error(`Error updating ${type}:`, error);
       showMessage(`Error updating ${type}: ${error.message}`, 5000);
+      return { success: false, error: error.message };
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleDeleteEntity = async (type, id) => {
+  const handleDeleteEntity = useCallback(async (type, id) => {
     if (
       !window.confirm(
         `Are you sure you want to delete this ${type.slice(
@@ -308,26 +311,26 @@ function App() {
         );
       }
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-      // Trigger re-fetch for specific data type and connections
       if (type === "pcs") await fetchData("pcs", setPcs);
       if (type === "patch_panels")
         await fetchData("patch_panels", setPatchPanels);
       if (type === "switches") await fetchData("switches", setSwitches);
       if (type === "locations") await fetchData("locations", setLocations);
-      await fetchData("connections", setConnections); // Connections might depend on any deleted entity
+      if (type === "racks") await fetchData("racks", setRacks);
+      await fetchData("connections", setConnections);
     } catch (error) {
       console.error(`Error deleting ${type}:`, error);
       showMessage(`Error deleting ${type}: ${error.message}`, 5000);
     }
-  };
+  }, [fetchData, showMessage]);
 
-  const handleShowPortStatus = async (entityType, entityId) => {
+  const handleShowPortStatus = useCallback(async (entityType, entityId) => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/${entityType}/${entityId}/ports`
       );
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.error || `HTTP error! status: ${response.status}`
         );
@@ -341,14 +344,14 @@ function App() {
       console.error(`Failed to fetch ${entityType} port status:`, error);
       showMessage(`Error fetching port status: ${error.message}`, 5000);
     }
-  };
+  }, [showMessage]); // No dependencies beyond showMessage and state setters
 
-  const handleClosePortStatusModal = () => {
+  const handleClosePortStatusModal = useCallback(() => {
     setShowPortStatusModal(false);
     setPortStatusData(null);
     setModalEntityType(null);
     setModalEntityId(null);
-  };
+  }, []);
 
   const handleViewSwitchDiagram = useCallback((_switch) => {
     console.log("handleViewSwitchDiagram called for switch:", _switch);
@@ -362,7 +365,7 @@ function App() {
     setSelectedSwitchForDiagram(null);
   }, []);
 
-  const handlePrintForm = () => {
+  const handlePrintForm = useCallback(() => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       showMessage("Please allow pop-ups for printing.", 5000);
@@ -397,7 +400,7 @@ function App() {
       printWindow.focus();
       printWindow.print();
     };
-  };
+  }, [cssContent, showMessage]); // cssContent and showMessage are dependencies
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-200 font-inter p-4 sm:p-8">
@@ -495,6 +498,17 @@ function App() {
             >
               Locations
             </button>
+            {/* New Racks Tab */}
+            <button
+              className={`py-3 px-6 text-lg font-medium ${
+                activeTab === "racks"
+                  ? "border-b-4 border-blue-600 text-blue-800"
+                  : "text-gray-600 hover:text-blue-600"
+              }`}
+              onClick={() => setActiveTab("racks")}
+            >
+              Racks
+            </button>
             {/* New Settings Tab */}
             <button
               className={`py-3 px-6 text-lg font-medium ${
@@ -516,7 +530,7 @@ function App() {
                   Add/Edit Connection
                 </h2>
                 <ConnectionForm
-                  pcs={pcs} // This is for the 'Add New PC' form within ConnectionForm
+                  pcs={pcs}
                   patchPanels={patchPanels}
                   switches={switches}
                   onAddConnection={handleAddConnection}
@@ -526,6 +540,8 @@ function App() {
                   onAddEntity={handleAddEntity}
                   onShowPortStatus={handleShowPortStatus}
                   locations={locations}
+                  racks={racks}
+                  showMessage={showMessage}
                 />
               </section>
 
@@ -597,6 +613,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
+                racks={racks}
               />
             </section>
           )}
@@ -614,12 +631,14 @@ function App() {
                   onSubmit={async (e) => {
                     e.preventDefault();
                     const name = e.target.locationName.value;
+                    const door_number = e.target.doorNumber.value;
                     if (name.trim()) {
-                      await handleAddEntity("locations", { name });
+                      await handleAddEntity("locations", { name, door_number });
                       e.target.locationName.value = "";
+                      e.target.doorNumber.value = "";
                     }
                   }}
-                  className="flex space-x-2"
+                  className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2"
                 >
                   <input
                     type="text"
@@ -627,6 +646,12 @@ function App() {
                     placeholder="Location Name (e.g., Data Center)"
                     className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     required
+                  />
+                  <input
+                    type="text"
+                    name="doorNumber"
+                    placeholder="Door Number (Optional)"
+                    className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   />
                   <button
                     type="submit"
@@ -645,16 +670,30 @@ function App() {
                       className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
                     >
                       <span className="text-lg font-medium text-gray-800">
-                        {location.name}
+                        {location.name}{location.door_number ? ` (Door: ${location.door_number})` : ''}
                       </span>
-                      <button
-                        onClick={() =>
-                          handleDeleteEntity("locations", location.id)
-                        }
-                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            const newName = prompt("Enter new name for location:", location.name);
+                            const newDoorNumber = prompt("Enter new door number for location:", location.door_number || '');
+                            if (newName !== null && newName.trim()) {
+                                handleUpdateEntity("locations", location.id, { name: newName, door_number: newDoorNumber });
+                            }
+                          }}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDeleteEntity("locations", location.id)
+                          }
+                          className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -663,6 +702,21 @@ function App() {
                   </p>
                 )}
               </div>
+            </section>
+          )}
+
+          {activeTab === "racks" && (
+            <section>
+              <h2 className="text-2xl font-bold text-blue-700 mb-6">
+                Manage Racks
+              </h2>
+              <RackList
+                racks={racks}
+                locations={locations}
+                onAddEntity={handleAddEntity}
+                onUpdateEntity={handleUpdateEntity}
+                onDeleteEntity={handleDeleteEntity}
+              />
             </section>
           )}
 

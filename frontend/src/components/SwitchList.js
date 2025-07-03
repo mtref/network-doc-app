@@ -1,6 +1,6 @@
 // frontend/src/components/SwitchList.js
 // This component displays a searchable list of Switches in a card format,
-// now including filter options by Location, Rack, and Model.
+// now including filter options by Location, Rack, Model, and Usage.
 // Added a "View Diagram" button to each switch card.
 
 import React, { useState, useEffect } from "react";
@@ -41,19 +41,25 @@ function SwitchList({
   const [switchFormSourcePort, setSwitchFormSourcePort] = useState("");
   const [switchFormModel, setSwitchFormModel] = useState("");
   const [switchFormDesc, setSwitchFormDesc] = useState("");
+  const [switchFormUsage, setSwitchFormUsage] = useState(""); // New state for Switch usage
 
   const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false);
 
   const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
   const [selectedRackFilter, setSelectedRackFilter] = useState("all");
   const [selectedModelFilter, setSelectedModelFilter] = useState("all");
+  const [selectedUsageFilter, setSelectedUsageFilter] = useState("all"); // New filter for Switch Usage
 
   const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
   const [availableRackOptions, setAvailableRackOptions] = useState([]);
   const [availableModelOptions, setAvailableModelOptions] = useState([]);
+  const [availableUsageOptions, setAvailableUsageOptions] = useState([]); // New state for unique usage options
 
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+  // Dropdown options for Usage
+  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"]; //
 
   useEffect(() => {
     const uniqueLocations = [
@@ -70,6 +76,11 @@ function SwitchList({
       ...new Set(switches.map((s) => s.model).filter(Boolean)),
     ].sort();
     setAvailableModelOptions(uniqueModels);
+
+    const uniqueUsage = [ // Extract unique usage options
+      ...new Set(switches.map((s) => s.usage).filter(Boolean)),
+    ].sort();
+    setAvailableUsageOptions(uniqueUsage);
   }, [switches]);
 
   useEffect(() => {
@@ -96,6 +107,9 @@ function SwitchList({
           .includes(lowerCaseSearchTerm) ||
         (String(_switch.description) || "")
           .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (String(_switch.usage) || "") // New: search by usage
+          .toLowerCase()
           .includes(lowerCaseSearchTerm);
 
       const matchesLocation =
@@ -106,8 +120,11 @@ function SwitchList({
         _switch.rack_name === selectedRackFilter;
       const matchesModel =
         selectedModelFilter === "all" || _switch.model === selectedModelFilter;
+      const matchesUsage = // New filter condition for usage
+        selectedUsageFilter === "all" || _switch.usage === selectedUsageFilter;
 
-      return matchesSearch && matchesLocation && matchesRack && matchesModel;
+
+      return matchesSearch && matchesLocation && matchesRack && matchesModel && matchesUsage;
     });
     setFilteredSwitches(filtered);
   }, [
@@ -116,6 +133,7 @@ function SwitchList({
     selectedLocationFilter,
     selectedRackFilter,
     selectedModelFilter,
+    selectedUsageFilter, // Add as dependency
   ]);
 
   const handleEdit = (_switch) => {
@@ -129,6 +147,7 @@ function SwitchList({
     setSwitchFormSourcePort(_switch.source_port || "");
     setSwitchFormModel(_switch.model || "");
     setSwitchFormDesc(_switch.description || "");
+    setSwitchFormUsage(_switch.usage || ""); // Set usage for editing
     setIsAddSwitchFormExpanded(true);
   };
 
@@ -154,6 +173,7 @@ function SwitchList({
       source_port: switchFormSourcePort,
       model: switchFormModel,
       description: switchFormDesc,
+      usage: switchFormUsage, // Include usage in data
     };
 
     if (editingSwitch) {
@@ -171,6 +191,7 @@ function SwitchList({
     setSwitchFormSourcePort("");
     setSwitchFormModel("");
     setSwitchFormDesc("");
+    setSwitchFormUsage(""); // Reset usage field
     setIsAddSwitchFormExpanded(false);
   };
 
@@ -245,6 +266,29 @@ function SwitchList({
             {availableModelOptions.map((model) => (
               <option key={model} value={model}>
                 {model}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Usage Filter for Switches */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="switch-usage-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Usage:
+          </label>
+          <select
+            id="switch-usage-filter"
+            value={selectedUsageFilter}
+            onChange={(e) => setSelectedUsageFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableUsageOptions.map((usage) => (
+              <option key={usage} value={usage}>
+                {usage}
               </option>
             ))}
           </select>
@@ -343,6 +387,36 @@ function SwitchList({
               onChange={(e) => setSwitchFormModel(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+            <select // Switch Usage dropdown
+                value={switchFormUsage}
+                onChange={(e) => setSwitchFormUsage(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+                <option value="">-- Select Usage (Optional) --</option>
+                {usageOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+                {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
+                <option value="other">Add Custom Usage...</option>
+            </select>
+            {switchFormUsage === "other" && (
+                <input
+                  type="text"
+                  placeholder="Enter custom usage"
+                  onBlur={(e) => {
+                    const customUsage = e.target.value.trim();
+                    if (customUsage) {
+                      if (!usageOptions.includes(customUsage)) {
+                        usageOptions.push(customUsage); // Dynamically add to available options
+                      }
+                      setSwitchFormUsage(customUsage);
+                    } else {
+                      setSwitchFormUsage(""); // Reset if input is cleared
+                    }
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            )}
             <textarea
               placeholder="Description (Optional)"
               value={switchFormDesc}
@@ -365,6 +439,7 @@ function SwitchList({
                     setSwitchFormSourcePort("");
                     setSwitchFormModel("");
                     setSwitchFormDesc("");
+                    setSwitchFormUsage(""); // Reset usage field
                     setIsAddSwitchFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -422,6 +497,10 @@ function SwitchList({
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
                 {_switch.model || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center"> {/* New field: Switch Usage */}
+                <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
+                {_switch.usage || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
                 <Info

@@ -11,6 +11,7 @@ import {
   Laptop,
   Link,
   MapPin,
+  Columns, // Icon for Racks
 } from "lucide-react";
 
 // Base URL for the backend API.
@@ -24,6 +25,7 @@ function SettingsPage({ showMessage }) {
 
   const entityTypes = [
     { id: "locations", name: "Locations", icon: <MapPin size={20} /> },
+    { id: "racks", name: "Racks", icon: <Columns size={20} /> }, // New entity type
     { id: "pcs", name: "PCs", icon: <Laptop size={20} /> },
     { id: "patch_panels", name: "Patch Panels", icon: <Split size={20} /> },
     { id: "switches", name: "Switches", icon: <Server size={20} /> },
@@ -167,7 +169,7 @@ function SettingsPage({ showMessage }) {
         <p className="text-gray-700 mb-4">
           Upload a CSV file to import data. Ensure the CSV format matches the
           exported format. Existing records with matching unique names (for
-          Locations, PCs, Patch Panels, Switches) or matching PC/Switch/Switch
+          Locations, PCs, Patch Panels, Switches, Racks) or matching PC/Switch/Switch
           Port combinations (for Connections) will be skipped.
         </p>
         <form onSubmit={handleImport} className="space-y-4">

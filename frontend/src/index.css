@@ -269,4 +269,12 @@ body {
     /* For checkbox rows */
     margin-bottom: 0.4cm !important; /* Increased space below checkboxes */
   }
+
+  /* New: Print-specific styles for Rack section (similar to other sections) */
+  section.bg-blue-50.rack-print-section { /* Assuming a class for Rack section */
+    background-color: #fff !important;
+    border-color: #ccc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

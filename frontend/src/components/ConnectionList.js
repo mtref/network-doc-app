@@ -25,6 +25,8 @@ import {
   HardDrive,
   Router,
   Building2,
+  Tag, // New icon for cable label
+  Palette, // New icon for cable color
 } from "lucide-react";
 import SearchBar from "./SearchBar"; // Import the SearchBar component
 
@@ -58,6 +60,26 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             </span>
           </div>
 
+          {/* Dynamically render compact view of cable color/label for direct connection to switch */}
+          {connection.cable_color && (
+            <>
+              <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
+              <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
+                <Palette size={16} className="text-purple-500 mr-1 flex-shrink-0" />
+                <span className="font-medium">{connection.cable_color}</span>
+              </div>
+            </>
+          )}
+          {connection.cable_label && (
+            <>
+              <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
+              <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
+                <Tag size={16} className="text-orange-500 mr-1 flex-shrink-0" />
+                <span className="font-medium">{connection.cable_label}</span>
+              </div>
+            </>
+          )}
+
           {/* Dynamically render compact view of patch panel hops */}
           {connection.hops.map((hop, index) => (
             <React.Fragment key={index}>
@@ -76,6 +98,18 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                   {hop.patch_panel?.location_name && (
                     <span className="ml-1">
                       ({hop.patch_panel.location_name})
+                    </span>
+                  )}
+                  {hop.cable_color && (
+                    <span className="ml-1 flex items-center">
+                      <Palette size={12} className="text-purple-500 mr-0.5" />
+                      {hop.cable_color}
+                    </span>
+                  )}
+                  {hop.cable_label && (
+                    <span className="ml-1 flex items-center">
+                      <Tag size={12} className="text-orange-500 mr-0.5" />
+                      {hop.cable_label}
                     </span>
                   )}
                   {hop.is_port_up ? (
@@ -234,15 +268,25 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               {connection.pc?.operating_system || "N/A"}
             </p>
             <p className="flex items-center">
-              <Columns size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Ports:</span>{" "}
-              {connection.pc?.ports_name || "N/A"}
+              <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">Model:</span>{" "}
+              {connection.pc?.model || "N/A"}
             </p>
             <p className="flex items-center">
               <Building2 size={16} className="text-gray-500 mr-2" />{" "}
               <span className="font-medium">Office:</span>{" "}
               {connection.pc?.office || "N/A"}
-            </p>{" "}
+            </p>
+            <p className="flex items-center"> {/* New field: PC Type */}
+              <Info size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">Type:</span>{" "}
+              {connection.pc?.type || "N/A"}
+            </p>
+            <p className="flex items-center"> {/* New field: PC Usage */}
+              <Info size={16} className="text-gray-500 mr-2" />{" "}
+              <span className="font-medium">Usage:</span>{" "}
+              {connection.pc?.usage || "N/A"}
+            </p>
             <p className="flex items-start col-span-full">
               <Info
                 size={16}
@@ -251,6 +295,23 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               <span className="font-medium">Description:</span>{" "}
               {connection.pc?.description || "No description"}
             </p>
+          </div>
+
+          {/* Connection Cable Details (for direct Switch connection) */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h4 className="font-semibold text-blue-700 mb-2">Connection Cable Details:</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                <p className="flex items-center">
+                    <Palette size={16} className="text-purple-500 mr-2" />{" "}
+                    <span className="font-medium">Color:</span>{" "}
+                    {connection.cable_color || "N/A"}
+                </p>
+                <p className="flex items-center">
+                    <Tag size={16} className="text-orange-500 mr-2" />{" "}
+                    <span className="font-medium">Label:</span>{" "}
+                    {connection.cable_label || "N/A"}
+                </p>
+            </div>
           </div>
 
           {/* Patch Panel Hops Details */}
@@ -272,14 +333,17 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                   <MapPin size={16} className="text-gray-500 mr-2" />{" "}
                   <span className="font-medium">Location:</span>{" "}
                   {hop.patch_panel?.location_name || "N/A"}
+                  {hop.patch_panel?.location?.door_number && ( // Display door number
+                    <span className="ml-1"> (Door: {hop.patch_panel.location.door_number})</span>
+                  )}
                 </p>
                 <p className="flex items-center">
-                  <Columns size={16} className="text-gray-500 mr-2" />{" "}
+                  <Server size={16} className="text-gray-500 mr-2" />{" "}
                   <span className="font-medium">Row:</span>{" "}
                   {hop.patch_panel?.row_in_rack || "N/A"}
                 </p>
                 <p className="flex items-center">
-                  <Server size={16} className="text-gray-500 mr-2" />{" "}
+                  <Columns size={16} className="text-gray-500 mr-2" />{" "}
                   <span className="font-medium">Rack:</span>{" "}
                   {hop.patch_panel?.rack_name || "N/A"}
                 </p>
@@ -293,6 +357,16 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                   <span className="font-medium">Port:</span>{" "}
                   {hop.patch_panel_port || "N/A"} - Status:{" "}
                   {hop.is_port_up ? "Up" : "Down"}
+                </p>
+                <p className="flex items-center"> {/* New field: Cable Color for hop */}
+                    <Palette size={16} className="text-purple-500 mr-2" />{" "}
+                    <span className="font-medium">Cable Color:</span>{" "}
+                    {hop.cable_color || "N/A"}
+                </p>
+                <p className="flex items-center"> {/* New field: Cable Label for hop */}
+                    <Tag size={16} className="text-orange-500 mr-2" />{" "}
+                    <span className="font-medium">Cable Label:</span>{" "}
+                    {hop.cable_label || "N/A"}
                 </p>
                 <p className="flex items-start col-span-full">
                   <Info
@@ -324,6 +398,9 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 <MapPin size={16} className="text-gray-500 mr-2" />{" "}
                 <span className="font-medium">Location:</span>{" "}
                 {connection.switch?.location_name || "N/A"}
+                {connection.switch?.location?.door_number && ( // Display door number
+                    <span className="ml-1"> (Door: {connection.switch.location.door_number})</span>
+                )}
               </p>
               <p className="flex items-center">
                 <Columns size={16} className="text-gray-500 mr-2" />{" "}
@@ -349,6 +426,11 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 <Info size={16} className="text-gray-500 mr-2" />{" "}
                 <span className="font-medium">Model:</span>{" "}
                 {connection.switch?.model || "N/A"}
+              </p>
+              <p className="flex items-center"> {/* New field: Switch Usage */}
+                <Info size={16} className="text-gray-500 mr-2" />{" "}
+                <span className="font-medium">Usage:</span>{" "}
+                {connection.switch?.usage || "N/A"}
               </p>
               <p className="flex items-start col-span-full">
                 <Info
@@ -397,7 +479,7 @@ function ConnectionList({ connections, onDelete, onEdit }) {
         (connection.pc?.operating_system || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.ports_name || "")
+        (connection.pc?.model || "") // Updated from ports_name
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
         (connection.pc?.office || "")
@@ -405,7 +487,21 @@ function ConnectionList({ connections, onDelete, onEdit }) {
           .includes(lowerCaseSearchTerm) ||
         (connection.pc?.description || "")
           .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.multi_port ? "multi-port" : "single-port").includes(
+          lowerCaseSearchTerm
+        ) ||
+        (connection.pc?.type || "") // New: search by type
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.usage || "") // New: search by usage
+          .toLowerCase()
           .includes(lowerCaseSearchTerm);
+
+      // Check Connection Cable details
+      const connectionCableMatches =
+        (connection.cable_color || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (connection.cable_label || "").toLowerCase().includes(lowerCaseSearchTerm);
 
       // Check Patch Panel hop details
       const hopMatches = connection.hops.some(
@@ -419,6 +515,9 @@ function ConnectionList({ connections, onDelete, onEdit }) {
           (hop.patch_panel?.location_name || "")
             .toLowerCase()
             .includes(lowerCaseSearchTerm) ||
+          (hop.patch_panel?.location?.door_number || "") // New: search by location door number
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
           (hop.patch_panel?.rack_name || "")
             .toLowerCase()
             .includes(lowerCaseSearchTerm) ||
@@ -426,6 +525,12 @@ function ConnectionList({ connections, onDelete, onEdit }) {
             .toLowerCase()
             .includes(lowerCaseSearchTerm) ||
           (hop.patch_panel?.description || "")
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.cable_color || "") // New: search by hop cable color
+            .toLowerCase()
+            .includes(lowerCaseSearchTerm) ||
+          (hop.cable_label || "") // New: search by hop cable label
             .toLowerCase()
             .includes(lowerCaseSearchTerm)
       );
@@ -444,6 +549,9 @@ function ConnectionList({ connections, onDelete, onEdit }) {
         (connection.switch?.location_name || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.location?.door_number || "") // New: search by location door number
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
         (connection.switch?.rack_name || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
@@ -455,9 +563,12 @@ function ConnectionList({ connections, onDelete, onEdit }) {
           .includes(lowerCaseSearchTerm) ||
         (connection.switch?.description || "")
           .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.switch?.usage || "") // New: search by usage
+          .toLowerCase()
           .includes(lowerCaseSearchTerm);
 
-      return pcMatches || hopMatches || switchMatches;
+      return pcMatches || connectionCableMatches || hopMatches || switchMatches;
     });
     setFilteredConnections(filtered);
     setCurrentPage(1); // Reset to first page on new search/filter
@@ -503,7 +614,7 @@ function ConnectionList({ connections, onDelete, onEdit }) {
       <SearchBar
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        placeholder="Search connections (PC, Patch Panel, Switch details...)"
+        placeholder="Search connections (PC, Patch Panel, Switch details, cable color/label...)"
       />
 
       {/* Display current connections */}
@@ -520,7 +631,7 @@ function ConnectionList({ connections, onDelete, onEdit }) {
         </div>
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
-          {searchTerm || connections.length > 0
+          {searchTerm
             ? "No connections match your search criteria."
             : "No connections found. Start by adding one in the form above."}
         </p>

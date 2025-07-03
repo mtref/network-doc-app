@@ -29,7 +29,10 @@ import {
   Server, // Lucide icon for Server/Switch
   Laptop, // Lucide icon for PC
   Split, // Lucide icon for Patch Panel
-  Info, // Example for other icons if needed
+  MonitorCheck, // New: Icon for PC type: Workstation
+  HardDrive, // New: Icon for PC type: Server
+  Tag, // New icon for cable label
+  Palette, // New icon for cable color
   Download, // New icon for download feature
 } from "lucide-react";
 
@@ -90,11 +93,13 @@ const drawArrow = (ctx, points, color) => {
 const NodeTooltip = ({ x, y, text, visible }) => {
   if (!visible || !text) return null;
 
-  // Calculate tooltip dimensions based on text length
-  // Fix: text.measureText is not a function on string. Use approximate width or a Konva.Text ref.
-  // For simplicity, using an approximation based on character count.
-  const approximateTextWidth = (text ? text.length : 0) * 6 + 20; // Approximate width based on font size 10
-  const textHeight = 20; // Fixed height
+  // Split text into lines to calculate accurate dimensions
+  const lines = text.split('\n');
+  const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), '');
+  
+  // Approximate width based on average character width (adjust as needed)
+  const approximateTextWidth = longestLine.length * 5.5 + 20; // 5.5px per char + padding
+  const textHeight = lines.length * 12 + 10; // 12px per line + padding
 
   return (
     <Group x={x + NODE_WIDTH / 2 + 10} y={y + NODE_HEIGHT / 2 - textHeight / 2}>
@@ -125,12 +130,26 @@ const SwitchNodeKonva = ({
 }) => {
   const rectRef = useRef();
 
+  // New fields: row_in_rack, rack_name, source_port, model, description, usage
+  const labelText = `${node.label}\n(${node.data.location_name || "N/A"})\n${
+    node.data.model || "N/A"
+  }`;
+  const tooltipText = `Name: ${node.label}\nIP: ${
+    node.data.ip_address || "N/A"
+  }\nLocation: ${node.data.location_name || "N/A"}${node.data.location?.door_number ? ` (Door: ${node.data.location.door_number})` : ''}\nRack: ${
+    node.data.rack_name || "N/A"
+  } (Row: ${node.data.row_in_rack || "N/A"})\nModel: ${
+    node.data.model || "N/A"
+  }\nTotal Ports: ${node.data.total_ports}\nSource Port: ${
+    node.data.source_port || "N/A"
+  }\nUsage: ${node.data.usage || "N/A"}\nDescription: ${node.data.description || "N/A"}`;
+
   return (
     <Group
       x={node.position.x}
       y={node.position.y}
       draggable
-      onMouseEnter={() => onNodeHover(node)}
+      onMouseEnter={() => onNodeHover({ ...node, text: tooltipText })}
       onMouseLeave={onNodeLeave}
       onDragEnd={(e) => onNodeDragEnd(node.id, e.target.x(), e.target.y())}
     >
@@ -163,7 +182,7 @@ const SwitchNodeKonva = ({
         />
       )}
       <Text
-        text={`${node.label}\n(${node.data.location_name || "N/A"})`}
+        text={labelText}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -186,16 +205,30 @@ const PcNodeKonva = ({
   onNodeHover,
   onNodeLeave,
   onNodeDragEnd,
-  iconImage,
+  iconImage, // This will now be dynamically chosen based on PC type
 }) => {
   const rectRef = useRef();
+
+  // New fields: username, in_domain, operating_system, model (replaces ports_name), office, multi_port, type, usage
+  const labelText = `${node.label}\n(${node.data.office || "N/A"})\n${
+    node.data.operating_system || "N/A"
+  }`;
+  const tooltipText = `Name: ${node.label}\nIP: ${
+    node.data.ip_address || "N/A"
+  }\nUsername: ${node.data.username || "N/A"}\nIn Domain: ${
+    node.data.in_domain ? "Yes" : "No"
+  }\nOS: ${node.data.operating_system || "N/A"}\nModel: ${
+    node.data.model || "N/A"
+  }\nOffice: ${node.data.office || "N/A"}\nMulti-Port: ${
+    node.data.multi_port ? "Yes" : "No"
+  }\nType: ${node.data.type || "N/A"}\nUsage: ${node.data.usage || "N/A"}\nDescription: ${node.data.description || "N/A"}`;
 
   return (
     <Group
       x={node.position.x}
       y={node.position.y}
       draggable
-      onMouseEnter={() => onNodeHover(node)}
+      onMouseEnter={() => onNodeHover({ ...node, text: tooltipText })}
       onMouseLeave={onNodeLeave}
       onDragEnd={(e) => onNodeDragEnd(node.id, e.target.x(), e.target.y())}
     >
@@ -228,7 +261,7 @@ const PcNodeKonva = ({
         />
       )}
       <Text
-        text={`${node.label}\n(${node.data.office || "N/A"})`}
+        text={labelText}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -281,12 +314,24 @@ const PatchPanelNodeKonva = ({
 }) => {
   const rectRef = useRef();
 
+  // New fields: row_in_rack, rack_name, description, location.door_number (via location)
+  const labelText = `${node.label}\n(${node.data.location_name || "N/A"})\n${
+    node.data.rack_name || "N/A"
+  }`;
+  const tooltipText = `Name: ${node.label}\nLocation: ${
+    node.data.location_name || "N/A"
+  }${node.data.location?.door_number ? ` (Door: ${node.data.location.door_number})` : ''}\nRack: ${
+    node.data.rack_name || "N/A"
+  } (Row: ${node.data.row_in_rack || "N/A"})\nTotal Ports: ${
+    node.data.total_ports
+  }\nDescription: ${node.data.description || "N/A"}`;
+
   return (
     <Group
       x={node.position.x}
       y={node.position.y}
       draggable
-      onMouseEnter={() => onNodeHover(node)}
+      onMouseEnter={() => onNodeHover({ ...node, text: tooltipText })}
       onMouseLeave={onNodeLeave}
       onDragEnd={(e) => onNodeDragEnd(node.id, e.target.x(), e.target.y())}
     >
@@ -319,7 +364,7 @@ const PatchPanelNodeKonva = ({
         />
       )}
       <Text
-        text={`${node.label}\n(${node.data.location_name || "N/A"})`}
+        text={labelText}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -356,7 +401,8 @@ function SwitchDiagramModal({
   const animationRef = useRef(null); // Ref for Konva Animation
 
   // States for loaded icon images
-  const [pcIconImage, setPcIconImage] = useState(null);
+  const [workstationIconImage, setWorkstationIconImage] = useState(null); // New icon for Workstation
+  const [serverIconImage, setServerIconImage] = useState(null); // New icon for Server
   const [switchIconImage, setSwitchIconImage] = useState(null);
   const [ppIconImage, setPpIconImage] = useState(null);
 
@@ -377,17 +423,22 @@ function SwitchDiagramModal({
       // Using a fixed color for icons for better visibility on colored nodes
       const iconColor = "white";
 
-      const pcIconUrl = getSvgDataUrl(Laptop, iconColor);
+      // Load new PC type icons
+      const workstationIconUrl = getSvgDataUrl(MonitorCheck, iconColor);
+      const serverIconUrl = getSvgDataUrl(HardDrive, iconColor);
+
       const switchIconUrl = getSvgDataUrl(Server, iconColor);
       const ppIconUrl = getSvgDataUrl(Split, iconColor);
 
-      const [pcImg, switchImg, ppImg] = await Promise.all([
-        loadImage(pcIconUrl),
+      const [workstationImg, serverImg, switchImg, ppImg] = await Promise.all([
+        loadImage(workstationIconUrl),
+        loadImage(serverIconUrl),
         loadImage(switchIconUrl),
         loadImage(ppIconUrl),
       ]);
 
-      setPcIconImage(pcImg);
+      setWorkstationIconImage(workstationImg); // Set new state
+      setServerIconImage(serverImg); // Set new state
       setSwitchIconImage(switchImg);
       setPpIconImage(ppImg);
     };
@@ -405,20 +456,13 @@ function SwitchDiagramModal({
 
   // Handle node hover to show tooltip
   const handleNodeHover = useCallback((node) => {
-    let tooltipText = "";
-    if (node.type === "switch") {
-      tooltipText = `${node.label} (IP: ${node.data.ip_address || "N/A"})`;
-    } else if (node.type === "pc") {
-      tooltipText = `${node.label} (IP: ${node.data.ip_address || "N/A"})`;
-    } else if (node.type === "patchPanel") {
-      tooltipText = `${node.label} (Ports: ${node.data.total_ports || "N/A"})`;
-    }
-
+    // The `node` object passed here now directly includes the `text` property
+    // that was pre-formatted in the Konva node components (SwitchNodeKonva, etc.).
     setTooltip({
       visible: true,
       x: node.position.x,
       y: node.position.y,
-      text: tooltipText,
+      text: node.text, // Use the pre-formatted text from the node
     });
     setNodesData((prevNodes) =>
       prevNodes.map((n) => (n.id === node.id ? { ...n, isHovered: true } : n))
@@ -596,6 +640,8 @@ function SwitchDiagramModal({
           let strokeWidth = 2;
           let strokeDasharray = [];
           let isPortUp = true;
+          let currentSegmentCableColor = ""; // Default for segment
+          let currentSegmentCableLabel = ""; // Default for segment
 
           // Determine edge details based on the connection and hop data
           if (
@@ -605,6 +651,8 @@ function SwitchDiagramModal({
             const hop = conn.hops[0]; // First hop
             edgeLabel = `S:${conn.switch_port} -> PP:${hop.patch_panel_port}`;
             isPortUp = hop.is_port_up;
+            currentSegmentCableColor = conn.cable_color; // Color from main connection
+            currentSegmentCableLabel = conn.cable_label; // Label from main connection
             edgeColor = isPortUp ? "#10B981" : "#EF4444";
             if (!isPortUp) strokeDasharray = [5, 5];
           } else if (
@@ -622,6 +670,8 @@ function SwitchDiagramModal({
                 sourceSegment.hopData?.patch_panel_port || ""
               } -> PP:${nextHop.patch_panel_port}`;
               isPortUp = nextHop.is_port_up;
+              currentSegmentCableColor = nextHop.cable_color; // Color from the next hop
+              currentSegmentCableLabel = nextHop.cable_label; // Label from the next hop
               edgeColor = isPortUp ? "#10B981" : "#EF4444";
               if (!isPortUp) strokeDasharray = [5, 5];
             }
@@ -632,6 +682,8 @@ function SwitchDiagramModal({
             const lastHop = conn.hops[conn.hops.length - 1]; // Last hop in the chain
             edgeLabel = `PP:${lastHop.patch_panel_port} -> PC`;
             isPortUp = conn.is_switch_port_up; // Status of the entire connection to PC
+            currentSegmentCableColor = lastHop.cable_color; // Color from the last hop
+            currentSegmentCableLabel = lastHop.cable_label; // Label from the last hop
             edgeColor = isPortUp ? "#10B981" : "#EF4444";
             if (!isPortUp) strokeDasharray = [5, 5];
           } else if (
@@ -641,6 +693,8 @@ function SwitchDiagramModal({
             // Direct Switch to PC connection (no patch panels)
             edgeLabel = `S:${conn.switch_port} -> PC`;
             isPortUp = conn.is_switch_port_up;
+            currentSegmentCableColor = conn.cable_color; // Color from main connection
+            currentSegmentCableLabel = conn.cable_label; // Label from main connection
             edgeColor = isPortUp ? "#10B981" : "#EF4444";
             if (!isPortUp) strokeDasharray = [5, 5];
           }
@@ -652,6 +706,8 @@ function SwitchDiagramModal({
             strokeWidth: strokeWidth,
             dash: strokeDasharray,
             label: edgeLabel,
+            cable_color: currentSegmentCableColor, // Include new fields in edge data
+            cable_label: currentSegmentCableLabel, // Include new fields in edge data
             isPortUp: isPortUp,
             dashOffset: 0,
           });
@@ -687,6 +743,7 @@ function SwitchDiagramModal({
       position: { x: 0, y: NODE_HEIGHT / 2 }, // Temporary X, will be centered later
       data: selectedSwitch,
       isHovered: false,
+      text: "", // Tooltip text will be populated by component
     };
     initialNodes.push(switchNode);
     nodeMap.set(switchNodeId, switchNode);
@@ -743,6 +800,7 @@ function SwitchDiagramModal({
           },
           data: ppData.data,
           isHovered: false,
+          text: "", // Tooltip text will be populated by component
         };
         initialNodes.push(ppNode);
         nodeMap.set(ppNodeId, ppNode);
@@ -769,6 +827,7 @@ function SwitchDiagramModal({
             data: pcData.data,
             isPortUp: pcData.isPortUp,
             isHovered: false,
+            text: "", // Tooltip text will be populated by component
           };
           initialNodes.push(pcNode);
           nodeMap.set(pcId, pcNode);
@@ -821,6 +880,7 @@ function SwitchDiagramModal({
             data: pcData.data,
             isPortUp: pcData.isPortUp,
             isHovered: false,
+            text: "", // Tooltip text will be populated by component
           };
           initialNodes.push(pcNode);
           nodeMap.set(pcNodeId, pcNode);
@@ -853,24 +913,23 @@ function SwitchDiagramModal({
         maxYFinal = Math.max(maxYFinal, node.position.y + NODE_HEIGHT);
       });
 
-      const diagramWidth = maxXFinal - minXFinal;
-      const diagramHeight = maxYFinal - minYFinal;
+      const diagramWidth = maxXFinal - minXFinal + NODE_WIDTH; // Add node width to ensure padding
+      const diagramHeight = maxYFinal - minYFinal + NODE_HEIGHT; // Add node height to ensure padding
 
-      const paddingFactor = 10;
+      const paddingFactor = 0.9; // 10% padding
       const scaleX = (containerDimensions.width / diagramWidth) * paddingFactor;
       const scaleY =
         (containerDimensions.height / diagramHeight) * paddingFactor;
-      const newScale = Math.min(scaleX, scaleY);
+      const newScale = Math.min(scaleX, scaleY, 1.0); // Limit max zoom to 1.0 (no scaling up past actual size)
 
-      const centeredX =
-        containerDimensions.width / 2 -
-        (minXFinal + diagramWidth / 2) * newScale;
-      const centeredY =
-        containerDimensions.height / 2 -
-        (minYFinal + diagramHeight / 2) * newScale;
+      const centerX = (minXFinal + maxXFinal) / 2;
+      const centerY = (minYFinal + maxYFinal) / 2;
+
+      const newPosX = containerDimensions.width / 2 - centerX * newScale;
+      const newPosY = containerDimensions.height / 2 - centerY * newScale;
 
       setStageScale(newScale);
-      setStagePos({ x: centeredX, y: centeredY });
+      setStagePos({ x: newPosX, y: newPosY });
     } else {
       setStageScale(1);
       setStagePos({ x: 0, y: 0 });
@@ -1017,22 +1076,23 @@ function SwitchDiagramModal({
         maxY = Math.max(maxY, node.position.y + NODE_HEIGHT);
       });
 
-      const diagramWidth = maxX - minX;
-      const diagramHeight = maxY - minY;
+      const diagramWidth = maxX - minX + NODE_WIDTH; // Add node width to ensure padding
+      const diagramHeight = maxY - minY + NODE_HEIGHT; // Add node height to ensure padding
 
       const paddingFactor = 0.95; // Add 10% padding
       const scaleX = (containerDimensions.width / diagramWidth) * paddingFactor;
       const scaleY =
         (containerDimensions.height / diagramHeight) * paddingFactor;
-      const newScale = Math.min(scaleX, scaleY);
+      const newScale = Math.min(scaleX, scaleY, 1.0); // Limit max zoom to 1.0 (no scaling up past actual size)
 
-      const centeredX =
-        containerDimensions.width / 2 - (minX + diagramWidth / 2) * newScale;
-      const centeredY =
-        containerDimensions.height / 2 - (minY + diagramHeight / 2) * newScale;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const newPosX = containerDimensions.width / 2 - centerX * newScale;
+      const newPosY = containerDimensions.height / 2 - centerY * newScale;
 
       setStageScale(newScale);
-      setStagePos({ x: centeredX, y: centeredY });
+      setStagePos({ x: newPosX, y: newPosY });
     } else {
       setStageScale(1);
       setStagePos({ x: 0, y: 0 });
@@ -1193,48 +1253,47 @@ function SwitchDiagramModal({
 
                     {/* Render Nodes */}
                     {nodesData.map((node) => {
+                      let iconToUse = null;
                       if (node.type === "switch") {
-                        return (
-                          <SwitchNodeKonva
-                            key={node.id}
-                            node={node}
-                            onNodeHover={handleNodeHover}
-                            onNodeLeave={handleNodeLeave}
-                            onNodeDragEnd={handleNodeDragEnd}
-                            iconImage={switchIconImage}
-                          />
-                        );
+                        iconToUse = switchIconImage;
                       } else if (node.type === "pc") {
-                        return (
-                          <PcNodeKonva
-                            key={node.id}
-                            node={node}
-                            onNodeHover={handleNodeHover}
-                            onNodeLeave={handleNodeLeave}
-                            onNodeDragEnd={handleNodeDragEnd}
-                            iconImage={pcIconImage}
-                          />
-                        );
+                        // Choose PC icon based on type
+                        iconToUse = node.data.type === "Server" ? serverIconImage : workstationIconImage;
                       } else if (node.type === "patchPanel") {
-                        return (
-                          <PatchPanelNodeKonva
-                            key={node.id}
-                            node={node}
-                            onNodeHover={handleNodeHover}
-                            onNodeLeave={handleNodeLeave}
-                            onNodeDragEnd={handleNodeDragEnd}
-                            iconImage={ppIconImage}
-                          />
-                        );
+                        iconToUse = ppIconImage;
                       }
-                      return null;
+                      
+                      const NodeComponent = 
+                        node.type === "switch" ? SwitchNodeKonva :
+                        node.type === "pc" ? PcNodeKonva :
+                        PatchPanelNodeKonva;
+
+                      return (
+                        <NodeComponent
+                          key={node.id}
+                          node={node}
+                          onNodeHover={handleNodeHover}
+                          onNodeLeave={handleNodeLeave}
+                          onNodeDragEnd={handleNodeDragEnd}
+                          iconImage={iconToUse} // Pass dynamically selected icon
+                        />
+                      );
                     })}
 
-                    {/* Render Edge Labels (Port information) */}
+                    {/* Render Edge Labels (Port information + Cable info) */}
                     {edgesData.map((edge) => {
                       // Calculate midpoint of the line for label positioning
                       const midX = (edge.points[0] + edge.points[2]) / 2;
                       const midY = (edge.points[1] + edge.points[3]) / 2;
+
+                      // Combine label, color, and label info
+                      let fullLabel = edge.label;
+                      if (edge.cable_color) {
+                        fullLabel += ` [${edge.cable_color}]`;
+                      }
+                      if (edge.cable_label) {
+                        fullLabel += ` (${edge.cable_label})`;
+                      }
 
                       // Calculate angle for rotating the text along the line
                       const angleRad = Math.atan2(
@@ -1252,7 +1311,7 @@ function SwitchDiagramModal({
                       return (
                         <Text
                           key={`label-${edge.id}`}
-                          text={edge.label}
+                          text={fullLabel} // Use combined label
                           x={midX}
                           y={midY - 10} // Offset slightly above the line
                           fontSize={9}
@@ -1260,7 +1319,7 @@ function SwitchDiagramModal({
                           align="center"
                           rotation={rotation}
                           // Adjust offsets based on rotation and desired alignment
-                          offsetX={(edge.label.length * 9) / 2} // Approximate center based on font size
+                          offsetX={(fullLabel.length * 9) / 2} // Approximate center based on font size
                           offsetY={-5}
                         />
                       );
@@ -1310,10 +1369,19 @@ function SwitchDiagramModal({
             <Server size={16} className="text-red-500 mr-1" /> Switch
           </div>
           <div className="flex items-center">
-            <Laptop size={16} className="text-indigo-500 mr-1" /> PC
+            <Laptop size={16} className="text-indigo-500 mr-1" /> Workstation
+          </div>
+          <div className="flex items-center">
+            <HardDrive size={16} className="text-indigo-500 mr-1" /> Server
           </div>
           <div className="flex items-center">
             <Split size={16} className="text-gray-500 mr-1" /> Via Patch Panel
+          </div>
+          <div className="flex items-center">
+            <Palette size={16} className="text-purple-500 mr-1" /> Cable Color
+          </div>
+          <div className="flex items-center">
+            <Tag size={16} className="text-orange-500 mr-1" /> Cable Label
           </div>
         </div>
       </div>

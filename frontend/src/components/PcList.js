@@ -1,7 +1,7 @@
 // frontend/src/components/PcList.js
 // This component displays a searchable list of PCs in a card format,
-// now including filter options by In Domain, OS, and Office.
-// Added multi_port field to PC creation/edit form and display.
+// now including filter options by In Domain, OS, Office, Type, and Usage.
+// Added multi_port, type, model (replaces ports_name), and usage fields to PC creation/edit form and display.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -19,7 +19,9 @@ import {
   Monitor,
   Building2,
   Filter,
-  Link, // New icon for filter
+  Link, // Icon for multi-port
+  Server, // Icon for PC type: Server
+  MonitorCheck, // Icon for PC type: Workstation (assuming it fits)
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -31,10 +33,13 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [pcFormUsername, setPcFormUsername] = useState("");
   const [pcFormInDomain, setPcFormInDomain] = useState(false);
   const [pcFormOs, setPcFormOs] = useState("");
-  const [pcFormPortsName, setPcFormPortsName] = useState("");
+  const [pcFormModel, setPcFormModel] = useState(""); // Renamed from pcFormPortsName to pcFormModel
   const [pcFormOffice, setPcFormOffice] = useState("");
   const [pcFormDesc, setPcFormDesc] = useState("");
-  const [pcFormMultiPort, setPcFormMultiPort] = useState(false); // New state for multi_port
+  const [pcFormMultiPort, setPcFormMultiPort] = useState(false);
+  const [pcFormType, setPcFormType] = useState("Workstation"); // New state for PC type
+  const [pcFormUsage, setPcFormUsage] = useState(""); // New state for PC usage
+
 
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false);
 
@@ -42,14 +47,23 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
   const [selectedDomainFilter, setSelectedDomainFilter] = useState("all"); // 'all', 'true', 'false'
   const [selectedOsFilter, setSelectedOsFilter] = useState("all");
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState("all");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState("all"); // New filter for PC Type
+  const [selectedUsageFilter, setSelectedUsageFilter] = useState("all"); // New filter for PC Usage
+  const [selectedModelFilter, setSelectedModelFilter] = useState("all"); // ADDED: State for Model filter
 
   // States to hold available unique options for filters
   const [availableOsOptions, setAvailableOsOptions] = useState([]);
   const [availableOfficeOptions, setAvailableOfficeOptions] = useState([]);
+  const [availableModelOptions, setAvailableModelOptions] = useState([]); // New filter options for Model
+  const [availableUsageOptions, setAvailableUsageOptions] = useState([]); // New filter options for Usage
 
   // IP Address Regex for validation
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+  // Dropdown options for Usage
+  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"];
+
 
   // Effect to extract unique filter options whenever 'pcs' data changes
   useEffect(() => {
@@ -62,6 +76,16 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       ...new Set(pcs.map((pc) => pc.office).filter(Boolean)),
     ].sort();
     setAvailableOfficeOptions(uniqueOffice);
+
+    const uniqueModels = [ // New filter options for Model
+      ...new Set(pcs.map((pc) => pc.model).filter(Boolean)),
+    ].sort();
+    setAvailableModelOptions(uniqueModels);
+
+    const uniqueUsage = [ // New filter options for Usage
+      ...new Set(pcs.map((pc) => pc.usage).filter(Boolean)),
+    ].sort();
+    setAvailableUsageOptions(uniqueUsage);
   }, [pcs]);
 
   // Filter PCs based on search term and filter selections
@@ -77,12 +101,15 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
         (pc.operating_system || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
-        (pc.ports_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.model || "").toLowerCase().includes(lowerCaseSearchTerm) || // Updated from ports_name
         (pc.office || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.description || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.multi_port ? "multi-port" : "single-port").includes(
           lowerCaseSearchTerm
-        ); // New: search by multi-port status
+        ) ||
+        (pc.type || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pc.usage || "").toLowerCase().includes(lowerCaseSearchTerm);
+
 
       // "In Domain" filter
       const matchesDomain =
@@ -97,8 +124,21 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       // Office filter
       const matchesOffice =
         selectedOfficeFilter === "all" || pc.office === selectedOfficeFilter;
+      
+      // Type filter
+      const matchesType =
+        selectedTypeFilter === "all" || pc.type === selectedTypeFilter;
 
-      return matchesSearch && matchesDomain && matchesOs && matchesOffice;
+      // Usage filter
+      const matchesUsage =
+        selectedUsageFilter === "all" || pc.usage === selectedUsageFilter;
+
+      // Model filter
+      const matchesModel =
+        selectedModelFilter === "all" || pc.model === selectedModelFilter;
+
+
+      return matchesSearch && matchesDomain && matchesOs && matchesOffice && matchesType && matchesUsage && matchesModel;
     });
     setFilteredPcs(filtered);
   }, [
@@ -107,6 +147,9 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     selectedDomainFilter,
     selectedOsFilter,
     selectedOfficeFilter,
+    selectedTypeFilter,
+    selectedUsageFilter,
+    selectedModelFilter, // ADDED: Dependency for useEffect
   ]);
 
   // Handle edit initiation
@@ -117,10 +160,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormUsername(pc.username || "");
     setPcFormInDomain(pc.in_domain || false);
     setPcFormOs(pc.operating_system || "");
-    setPcFormPortsName(pc.ports_name || "");
+    setPcFormModel(pc.model || ""); // Updated to model
     setPcFormOffice(pc.office || "");
     setPcFormDesc(pc.description || "");
-    setPcFormMultiPort(pc.multi_port || false); // Set multi_port state for editing
+    setPcFormMultiPort(pc.multi_port || false);
+    setPcFormType(pc.type || "Workstation"); // Set PC type for editing
+    setPcFormUsage(pc.usage || ""); // Set PC usage for editing
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
 
@@ -140,10 +185,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
       username: pcFormUsername,
       in_domain: pcFormInDomain,
       operating_system: pcFormOs,
-      ports_name: pcFormPortsName,
+      model: pcFormModel, // Updated to model
       office: pcFormOffice,
       description: pcFormDesc,
-      multi_port: pcFormMultiPort, // Include multi_port in data
+      multi_port: pcFormMultiPort,
+      type: pcFormType, // Include PC type in data
+      usage: pcFormUsage, // Include PC usage in data
     };
 
     if (editingPc) {
@@ -157,10 +204,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
     setPcFormUsername("");
     setPcFormInDomain(false);
     setPcFormOs("");
-    setPcFormPortsName("");
-    setPcFormOffice(""); // Corrected from setNewPcOffice
+    setPcFormModel(""); // Reset new field
+    setPcFormOffice("");
     setPcFormDesc("");
     setPcFormMultiPort(false); // Reset multi_port
+    setPcFormType("Workstation"); // Reset new field
+    setPcFormUsage(""); // Reset new field
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
 
@@ -239,6 +288,72 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
             ))}
           </select>
         </div>
+
+        {/* PC Type Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="pc-type-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Type:
+          </label>
+          <select
+            id="pc-type-filter"
+            value={selectedTypeFilter}
+            onChange={(e) => setSelectedTypeFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="Workstation">Workstation</option>
+            <option value="Server">Server</option>
+          </select>
+        </div>
+
+        {/* PC Usage Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="pc-usage-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Usage:
+          </label>
+          <select
+            id="pc-usage-filter"
+            value={selectedUsageFilter}
+            onChange={(e) => setSelectedUsageFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableUsageOptions.map((usage) => (
+              <option key={usage} value={usage}>
+                {usage}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* PC Model Filter */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+          <label
+            htmlFor="pc-model-filter"
+            className="text-sm font-medium text-gray-700"
+          >
+            Model:
+          </label>
+          <select
+            id="pc-model-filter"
+            value={selectedModelFilter}
+            onChange={(e) => setSelectedModelFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+          >
+            <option value="all">All</option>
+            {availableModelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Add/Edit PC Form (Collapsible) */}
@@ -285,50 +400,89 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
               onChange={(e) => setPcFormUsername(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
-            <div className="flex items-center">
-              <input
-                id="pc-in-domain"
-                type="checkbox"
-                checked={pcFormInDomain}
-                onChange={(e) => setPcFormInDomain(e.target.checked)}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label
-                htmlFor="pc-in-domain"
-                className="ml-2 block text-sm text-gray-900"
-              >
-                In Domain
-              </label>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center">
+                <input
+                  id="pc-in-domain"
+                  type="checkbox"
+                  checked={pcFormInDomain}
+                  onChange={(e) => setPcFormInDomain(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="pc-in-domain"
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  In Domain
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="pc-multi-port"
+                  type="checkbox"
+                  checked={pcFormMultiPort}
+                  onChange={(e) => setPcFormMultiPort(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="pc-multi-port"
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  Multi-Port PC (Can have multiple connections)
+                </label>
+              </div>
             </div>
-            <div className="flex items-center">
-              {" "}
-              {/* New: Multi-Port checkbox */}
-              <input
-                id="pc-multi-port"
-                type="checkbox"
-                checked={pcFormMultiPort}
-                onChange={(e) => setPcFormMultiPort(e.target.checked)}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label
-                htmlFor="pc-multi-port"
-                className="ml-2 block text-sm text-gray-900"
-              >
-                Multi-Port PC (Can have multiple connections)
-              </label>
-            </div>
+            <select // PC Type dropdown
+                value={pcFormType}
+                onChange={(e) => setPcFormType(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+            >
+                <option value="Workstation">Workstation</option>
+                <option value="Server">Server</option>
+            </select>
+            <select // PC Usage dropdown
+                value={pcFormUsage}
+                onChange={(e) => setPcFormUsage(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+                <option value="">-- Select Usage (Optional) --</option>
+                {usageOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+                {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
+                <option value="other">Add Custom Usage...</option>
+            </select>
+            {pcFormUsage === "other" && (
+                <input
+                  type="text"
+                  placeholder="Enter custom usage"
+                  onBlur={(e) => {
+                    const customUsage = e.target.value.trim();
+                    if (customUsage) {
+                      if (!usageOptions.includes(customUsage)) {
+                        usageOptions.push(customUsage); // Dynamically add to available options
+                      }
+                      setPcFormUsage(customUsage);
+                    } else {
+                      setPcFormUsage(""); // Reset if input is cleared
+                    }
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            )}
+            <input
+              type="text"
+              placeholder="Model (e.g., Dell OptiPlex 7010)" // Updated from Ports Name
+              value={pcFormModel}
+              onChange={(e) => setPcFormModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
             <input
               type="text"
               placeholder="Operating System (Optional)"
               value={pcFormOs}
               onChange={(e) => setPcFormOs(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Ports Name (e.g., HDMI, USB, Eth)"
-              value={pcFormPortsName}
-              onChange={(e) => setPcFormPortsName(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
             <input
@@ -356,10 +510,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                     setPcFormUsername("");
                     setPcFormInDomain(false);
                     setPcFormOs("");
-                    setPcFormPortsName("");
+                    setPcFormModel(""); // Reset new field
                     setPcFormOffice("");
                     setPcFormDesc("");
                     setPcFormMultiPort(false); // Reset multi_port
+                    setPcFormType("Workstation"); // Reset new field
+                    setPcFormUsage(""); // Reset new field
                     setIsAddPcFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -387,7 +543,12 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
               className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200 p-5"
             >
               <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
-                <Laptop size={20} className="text-indigo-500 mr-2" /> {pc.name}
+                {pc.type === "Server" ? ( // Conditional icon display based on PC type
+                  <Server size={20} className="text-indigo-500 mr-2" />
+                ) : (
+                  <Laptop size={20} className="text-indigo-500 mr-2" />
+                )}{" "}
+                {pc.name}
               </h4>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Router size={16} className="text-gray-500 mr-2" /> IP:{" "}
@@ -406,7 +567,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                 In Domain: {pc.in_domain ? "Yes" : "No"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                {pc.multi_port ? ( // New: Display multi_port status
+                {pc.multi_port ? ( // Display multi_port status
                   <Link size={16} className="text-blue-500 mr-2" />
                 ) : (
                   <Info size={16} className="text-gray-500 mr-2" />
@@ -418,12 +579,20 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                 {pc.operating_system || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <HardDrive size={16} className="text-gray-500 mr-2" /> Ports:{" "}
-                {pc.ports_name || "N/A"}
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Model:{" "}
+                {pc.model || "N/A"} {/* Updated from Ports Name */}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Building2 size={16} className="text-gray-500 mr-2" /> Office:{" "}
                 {pc.office || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Info size={16} className="text-gray-500 mr-2" /> Type:{" "}
+                {pc.type || "N/A"}
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
+                {pc.usage || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
                 <Info

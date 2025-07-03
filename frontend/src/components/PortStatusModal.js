@@ -28,25 +28,29 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
   // Determine common fields for the summary line based on entityType
   const isSwitch = entityType === "switches";
   const ip = isSwitch ? data.ip_address || "N/A" : "N/A";
-  const location = data.patch_panel_location || data.switch_location || "N/A";
+  const locationName = data.patch_panel_location || data.switch_location || "N/A";
+  const doorNumber = data.door_number || "N/A"; // New field
   const row = data.row_in_rack || "N/A";
   const rack = data.rack_name || "N/A";
   const sourcePort = isSwitch ? data.source_port || "N/A" : "N/A";
   const model = isSwitch ? data.model || "N/A" : "N/A";
+  const usage = isSwitch ? data.usage || "N/A" : "N/A"; // New field
+  const description = data.description || "N/A"; // Common description field
 
   const toggleDetailedList = () => {
     setIsDetailedListExpanded(!isDetailedListExpanded);
   };
 
   const handlePrintDetailedList = () => {
+    // Corrected: Define connectedPorts and availablePorts here
+    const connectedPorts = ports.filter((p) => p.is_connected);
+    const availablePorts = ports.filter((p) => !p.is_connected);
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       alert("Please allow pop-ups for printing.");
       return;
     }
-
-    const connectedPorts = ports.filter((p) => p.is_connected);
-    const availablePorts = ports.filter((p) => !p.is_connected);
 
     // Render the content for printing
     const printableContent = (
@@ -71,16 +75,24 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
           {" "}
           {/* Adjusted margins */}
           {isSwitch ? (
-            <p>
-              IP: {ip} | Location: {location} | Row: {row} | Rack: {rack} |
-              Total Ports: {totalPorts} | Source Port: {sourcePort} | Model:{" "}
-              {model}
-            </p>
+            <>
+              <p>
+                IP: {ip} | Location: {locationName} {doorNumber !== "N/A" ? `(Door: ${doorNumber})` : ''} | Row: {row} | Rack: {rack}
+              </p>
+              <p>
+                Total Ports: {totalPorts} | Source Port: {sourcePort} | Model:{" "}
+                {model} | Usage: {usage}
+              </p>
+              <p>Description: {description}</p>
+            </>
           ) : (
-            <p>
-              Location: {location} | Row: {row} | Rack: {rack} | Total Ports:{" "}
-              {totalPorts}
-            </p>
+            <>
+              <p>
+                Location: {locationName} {doorNumber !== "N/A" ? `(Door: ${doorNumber})` : ''} | Row: {row} | Rack: {rack} | Total Ports:{" "}
+                {totalPorts}
+              </p>
+              <p>Description: {description}</p>
+            </>
           )}
         </div>
 
@@ -242,6 +254,26 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
                 {ports.filter((p) => !p.is_connected).length}
               </span>
             </p>
+            {/* New fields for on-screen summary */}
+            {isSwitch ? (
+              <div className="text-sm text-gray-700 mt-4">
+                <p>IP: {ip}</p>
+                <p>
+                  Location: {locationName} {doorNumber !== "N/A" ? `(Door: ${doorNumber})` : ''} | Row: {row} | Rack: {rack}
+                </p>
+                <p>
+                  Source Port: {sourcePort} | Model: {model} | Usage: {usage}
+                </p>
+                <p>Description: {description}</p>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-700 mt-4">
+                <p>
+                  Location: {locationName} {doorNumber !== "N/A" ? `(Door: ${doorNumber})` : ''} | Row: {row} | Rack: {rack}
+                </p>
+                <p>Description: {description}</p>
+              </div>
+            )}
           </div>
           {/* Always visible Port Grid */}
           <h3 className="text-xl font-semibold text-gray-700 mb-3">

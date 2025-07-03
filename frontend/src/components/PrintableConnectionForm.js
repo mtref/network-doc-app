@@ -57,19 +57,30 @@ function PrintableConnectionForm() {
             </div>
             <div className="space-y-2">
               <label className="block font-medium text-gray-700">
+                Type:
+              </label> {/* New field: Type */}
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Usage:
+              </label> {/* New field: Usage */}
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
                 Operating System:
               </label>
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
             </div>
             <div className="space-y-2">
               <label className="block font-medium text-gray-700">
-                Ports Name:
-              </label>
+                Model:
+              </label> {/* Renamed from Ports Name */}
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
             </div>
             <div className="space-y-2">
-              <label className="block font-medium text-gray-700">Office:</label>{" "}
-              {/* New field: Office  */}
+              <label className="block font-medium text-gray-700">Office:</label>
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
             </div>
             <div className="md:col-span-2 space-y-2">
@@ -81,6 +92,27 @@ function PrintableConnectionForm() {
           </div>
         </section>
 
+        {/* Connection Cable Details Section (for direct Switch connection) */}
+        <section className="p-6 border border-blue-300 rounded-lg bg-blue-50">
+          <h2 className="text-2xl font-bold text-blue-700 mb-4">
+            Connection Cable Details
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Cable Color:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Cable Label:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+          </div>
+        </section>
+
         {/* Patch Panel Hops Section */}
         <section className="p-6 border border-green-300 rounded-lg bg-green-50">
           <h2 className="text-2xl font-bold text-green-700 mb-4">
@@ -88,9 +120,9 @@ function PrintableConnectionForm() {
           </h2>
           {/* Render 3 hops, 2 in first row, 1 in second */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[0, 1].map(
+            {[0, 1, 2].map( // Render 3 hops
               (
-                hopIndex // First row with 2 hops
+                hopIndex // First row with 2 hops, third in next row
               ) => (
                 <div
                   key={hopIndex}
@@ -112,6 +144,18 @@ function PrintableConnectionForm() {
                       </label>
                       <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
                     </div>
+                    <div className="space-y-2">
+                      <label className="block font-medium text-gray-700">
+                        Cable Color:
+                      </label> {/* New field */}
+                      <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block font-medium text-gray-700">
+                        Cable Label:
+                      </label> {/* New field */}
+                      <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+                    </div>
                     <div>
                       <label className="block font-medium text-gray-700">
                         Port Status:
@@ -127,60 +171,39 @@ function PrintableConnectionForm() {
                     </div>
                     <div>
                       {" "}
-                      {/* New field: Location for Patch Panel Hop */}
+                      {/* New field: Location for Patch Panel Hop including door number */}
                       <label className="block font-medium text-gray-700">
                         Location:
                       </label>
                       <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+                      <label className="block text-sm text-gray-600 mt-1">
+                        (Door Number:
+                        <div className="inline-block border-b border-dashed border-gray-400 w-12 ml-1"></div>
+                        )
+                      </label>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block font-medium text-gray-700">
+                        Row in Rack:
+                      </label>
+                      <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block font-medium text-gray-700">
+                        Rack Name:
+                      </label>
+                      <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block font-medium text-gray-700">
+                        Description:
+                      </label>
+                      <div className="p-2 border border-gray-300 rounded-md bg-white h-20"></div>
                     </div>
                   </div>
                 </div>
               )
             )}
-          </div>
-          {/* Third hop in its own row (or could be in a new grid row if more hops are added later) */}
-          <div className="grid grid-cols-1 gap-4 mt-4">
-            {" "}
-            {/* New grid for the third hop */}
-            <div
-              key={2}
-              className="p-4 border border-gray-200 rounded-md bg-white shadow-sm space-y-2"
-            >
-              <h3 className="text-lg font-semibold text-gray-700">
-                Patch Panel Hop 3
-              </h3>
-              <div className="space-y-2">
-                <div>
-                  <label className="block font-medium text-gray-700">
-                    Patch Panel Name:
-                  </label>
-                  <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
-                </div>
-                <div>
-                  <label className="block font-medium text-gray-700">
-                    Port:
-                  </label>
-                  <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
-                </div>
-                <div>
-                  <label className="block font-medium text-gray-700">
-                    Port Status:
-                  </label>
-                  <div className="flex items-center p-2">
-                    <input type="checkbox" className="h-4 w-4 mr-2" /> Up
-                    <input type="checkbox" className="h-4 w-4 ml-4 mr-2" /> Down
-                  </div>
-                </div>
-                <div>
-                  {" "}
-                  {/* New field: Location for Patch Panel Hop */}
-                  <label className="block font-medium text-gray-700">
-                    Location:
-                  </label>
-                  <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -213,11 +236,50 @@ function PrintableConnectionForm() {
             </div>
             <div className="space-y-2">
               {" "}
-              {/* New field: Location for Switch */}
+              {/* New field: Location for Switch including door number */}
               <label className="block font-medium text-gray-700">
                 Location:
               </label>
               <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+              <label className="block text-sm text-gray-600 mt-1">
+                (Door Number:
+                <div className="inline-block border-b border-dashed border-gray-400 w-12 ml-1"></div>
+                )
+              </label>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Row in Rack:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Rack Name:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Source Port:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">Model:</label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="space-y-2">
+              <label className="block font-medium text-gray-700">
+                Usage:
+              </label> {/* New field: Usage */}
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-10"></div>
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <label className="block font-medium text-gray-700">
+                Description:
+              </label>
+              <div className="p-2 border border-gray-300 rounded-md bg-white h-20"></div>
             </div>
           </div>
         </section>

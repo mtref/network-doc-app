@@ -1,8 +1,8 @@
-"""Initial migration with multi_port
+"""Initial schema setup with all models and fields
 
-Revision ID: e488b42a4be6
+Revision ID: 00472ffbd096
 Revises: 
-Create Date: 2025-07-01 07:29:10.347642
+Create Date: 2025-07-03 20:09:56.325211
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'e488b42a4be6'
+revision = '00472ffbd096'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -21,6 +21,7 @@ def upgrade():
     op.create_table('locations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('door_number', sa.String(length=50), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -31,10 +32,12 @@ def upgrade():
     sa.Column('username', sa.String(length=100), nullable=True),
     sa.Column('in_domain', sa.Boolean(), nullable=False),
     sa.Column('operating_system', sa.String(length=100), nullable=True),
-    sa.Column('ports_name', sa.String(length=255), nullable=True),
+    sa.Column('model', sa.String(length=255), nullable=True),
     sa.Column('office', sa.String(length=100), nullable=True),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.Column('multi_port', sa.Boolean(), nullable=False),
+    sa.Column('type', sa.String(length=50), nullable=False),
+    sa.Column('usage', sa.String(length=100), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -45,6 +48,15 @@ def upgrade():
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
     sa.Column('rack_name', sa.String(length=100), nullable=True),
     sa.Column('total_ports', sa.Integer(), nullable=False),
+    sa.Column('description', sa.String(length=255), nullable=True),
+    sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('name')
+    )
+    op.create_table('racks',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('location_id', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -61,6 +73,7 @@ def upgrade():
     sa.Column('source_port', sa.String(length=100), nullable=True),
     sa.Column('model', sa.String(length=100), nullable=True),
     sa.Column('description', sa.String(length=255), nullable=True),
+    sa.Column('usage', sa.String(length=100), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
@@ -71,6 +84,8 @@ def upgrade():
     sa.Column('switch_id', sa.Integer(), nullable=False),
     sa.Column('switch_port', sa.String(length=50), nullable=False),
     sa.Column('is_switch_port_up', sa.Boolean(), nullable=False),
+    sa.Column('cable_color', sa.String(length=50), nullable=True),
+    sa.Column('cable_label', sa.String(length=100), nullable=True),
     sa.ForeignKeyConstraint(['pc_id'], ['pcs.id'], ),
     sa.ForeignKeyConstraint(['switch_id'], ['switches.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -82,6 +97,8 @@ def upgrade():
     sa.Column('patch_panel_port', sa.String(length=50), nullable=False),
     sa.Column('is_port_up', sa.Boolean(), nullable=False),
     sa.Column('sequence', sa.Integer(), nullable=False),
+    sa.Column('cable_color', sa.String(length=50), nullable=True),
+    sa.Column('cable_label', sa.String(length=100), nullable=True),
     sa.ForeignKeyConstraint(['connection_id'], ['connections.id'], ),
     sa.ForeignKeyConstraint(['patch_panel_id'], ['patch_panels.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -94,6 +111,7 @@ def downgrade():
     op.drop_table('connection_hops')
     op.drop_table('connections')
     op.drop_table('switches')
+    op.drop_table('racks')
     op.drop_table('patch_panels')
     op.drop_table('pcs')
     op.drop_table('locations')

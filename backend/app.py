@@ -33,11 +33,30 @@ class Location(db.Model):
     __tablename__ = 'locations'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    door_number = db.Column(db.String(50), nullable=True) # New field
 
     def to_dict(self):
         return {
             'id': self.id,
-            'name': self.name
+            'name': self.name,
+            'door_number': self.door_number
+        }
+
+class Rack(db.Model): # New Rack model
+    __tablename__ = 'racks'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=False)
+    location = db.relationship('Location', backref='racks_in_location', lazy=True)
+    description = db.Column(db.String(255), nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'location_id': self.location_id,
+            'location_name': self.location.name if self.location else None,
+            'description': self.description
         }
 
 class PC(db.Model):
@@ -45,13 +64,15 @@ class PC(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     ip_address = db.Column(db.String(100), nullable=True)
-    username = db.Column(db.String(100), nullable=True) # New field
-    in_domain = db.Column(db.Boolean, nullable=False, default=False) # New field
-    operating_system = db.Column(db.String(100), nullable=True) # New field
-    ports_name = db.Column(db.String(255), nullable=True) # New field
-    office = db.Column(db.String(100), nullable=True) # New field: Office
-    description = db.Column(db.String(255), nullable=True) # Changed to optional
-    multi_port = db.Column(db.Boolean, nullable=False, default=False) # New field: Multi-port PC
+    username = db.Column(db.String(100), nullable=True)
+    in_domain = db.Column(db.Boolean, nullable=False, default=False)
+    operating_system = db.Column(db.String(100), nullable=True)
+    model = db.Column(db.String(255), nullable=True) # Renamed from ports_name to model
+    office = db.Column(db.String(100), nullable=True)
+    description = db.Column(db.String(255), nullable=True)
+    multi_port = db.Column(db.Boolean, nullable=False, default=False)
+    type = db.Column(db.String(50), nullable=False, default='Workstation') # New field
+    usage = db.Column(db.String(100), nullable=True) # New field
 
     def to_dict(self):
         return {
@@ -61,10 +82,12 @@ class PC(db.Model):
             'username': self.username,
             'in_domain': self.in_domain,
             'operating_system': self.operating_system,
-            'ports_name': self.ports_name,
+            'model': self.model, # Updated to model
             'office': self.office,
             'description': self.description,
-            'multi_port': self.multi_port # Include new field
+            'multi_port': self.multi_port,
+            'type': self.type, # Include new field
+            'usage': self.usage # Include new field
         }
 
 class PatchPanel(db.Model):
@@ -73,10 +96,10 @@ class PatchPanel(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
-    row_in_rack = db.Column(db.String(50), nullable=True) # New field
-    rack_name = db.Column(db.String(100), nullable=True) # New field
+    row_in_rack = db.Column(db.String(50), nullable=True)
+    rack_name = db.Column(db.String(100), nullable=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
-    description = db.Column(db.String(255), nullable=True) # New field
+    description = db.Column(db.String(255), nullable=True)
 
     def to_dict(self):
         return {
@@ -94,15 +117,16 @@ class Switch(db.Model):
     __tablename__ = 'switches'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    ip_address = db.Column(db.String(100), nullable=True) # Changed to optional
+    ip_address = db.Column(db.String(100), nullable=True)
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='switches_in_location', lazy=True)
-    row_in_rack = db.Column(db.String(50), nullable=True) # New field
-    rack_name = db.Column(db.String(100), nullable=True) # New field
+    row_in_rack = db.Column(db.String(50), nullable=True)
+    rack_name = db.Column(db.String(100), nullable=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
-    source_port = db.Column(db.String(100), nullable=True) # New field
-    model = db.Column(db.String(100), nullable=True) # New field
-    description = db.Column(db.String(255), nullable=True) # New field
+    source_port = db.Column(db.String(100), nullable=True)
+    model = db.Column(db.String(100), nullable=True)
+    description = db.Column(db.String(255), nullable=True)
+    usage = db.Column(db.String(100), nullable=True) # New field
 
     def to_dict(self):
         return {
@@ -116,16 +140,19 @@ class Switch(db.Model):
             'total_ports': self.total_ports,
             'source_port': self.source_port,
             'model': self.model,
-            'description': self.description
+            'description': self.description,
+            'usage': self.usage # Include new field
         }
 
 class Connection(db.Model):
     __tablename__ = 'connections'
     id = db.Column(db.Integer, primary_key=True)
     pc_id = db.Column(db.Integer, db.ForeignKey('pcs.id'), nullable=False)
-    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False) # The column itself is here
+    switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
     switch_port = db.Column(db.String(50), nullable=False)
     is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
+    cable_color = db.Column(db.String(50), nullable=True) # New field
+    cable_label = db.Column(db.String(100), nullable=True) # New field
 
     pc = db.relationship('PC', backref='connections_as_pc', lazy=True)
     switch = db.relationship('Switch', backref='connections_as_switch', lazy=True)
@@ -135,13 +162,15 @@ class Connection(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'pc_id': self.pc_id,  # Add pc_id here
-            'switch_id': self.switch_id, # Add switch_id here
+            'pc_id': self.pc_id,
+            'switch_id': self.switch_id,
             'pc': self.pc.to_dict() if self.pc else None,
             'hops': [hop.to_dict() for hop in self.hops],
             'switch': self.switch.to_dict() if self.switch else None,
             'switch_port': self.switch_port,
-            'is_switch_port_up': self.is_switch_port_up
+            'is_switch_port_up': self.is_switch_port_up,
+            'cable_color': self.cable_color, # Include new field
+            'cable_label': self.cable_label # Include new field
         }
 
 class ConnectionHop(db.Model):
@@ -152,6 +181,8 @@ class ConnectionHop(db.Model):
     patch_panel_port = db.Column(db.String(50), nullable=False)
     is_port_up = db.Column(db.Boolean, nullable=False, default=True)
     sequence = db.Column(db.Integer, nullable=False)
+    cable_color = db.Column(db.String(50), nullable=True) # New field
+    cable_label = db.Column(db.String(100), nullable=True) # New field
 
     patch_panel = db.relationship('PatchPanel', backref='connection_hops', lazy=True)
 
@@ -161,7 +192,9 @@ class ConnectionHop(db.Model):
             'patch_panel': self.patch_panel.to_dict() if self.patch_panel else None,
             'patch_panel_port': self.patch_panel_port,
             'is_port_up': self.is_port_up,
-            'sequence': self.sequence
+            'sequence': self.sequence,
+            'cable_color': self.cable_color, # Include new field
+            'cable_label': self.cable_label # Include new field
         }
 
 # --- API Endpoints ---
@@ -203,7 +236,10 @@ def handle_locations():
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Location name is required'}), 400
-        new_location = Location(name=data['name'])
+        new_location = Location(
+            name=data['name'],
+            door_number=data.get('door_number') # Handle new field
+        )
         try:
             db.session.add(new_location)
             db.session.commit()
@@ -225,6 +261,7 @@ def handle_location_by_id(location_id):
         if not data or not data.get('name'):
             return jsonify({'error': 'Location name is required'}), 400
         location.name = data.get('name', location.name)
+        location.door_number = data.get('door_number', location.door_number) # Handle new field
         try:
             db.session.commit()
             return jsonify(location.to_dict())
@@ -236,6 +273,56 @@ def handle_location_by_id(location_id):
             db.session.delete(location)
             db.session.commit()
             return jsonify({'message': 'Location deleted successfully'}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+# Rack Endpoints (New)
+@app.route('/racks', methods=['GET', 'POST'])
+def handle_racks():
+    if request.method == 'POST':
+        data = request.json
+        if not data or not data.get('name') or not data.get('location_id'):
+            return jsonify({'error': 'Rack name and location_id are required'}), 400
+        new_rack = Rack(
+            name=data['name'],
+            location_id=data['location_id'],
+            description=data.get('description')
+        )
+        try:
+            db.session.add(new_rack)
+            db.session.commit()
+            return jsonify(new_rack.to_dict()), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    else: # GET
+        racks = Rack.query.options(joinedload(Rack.location)).all()
+        return jsonify([rack.to_dict() for rack in racks])
+
+@app.route('/racks/<int:rack_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_rack_by_id(rack_id):
+    rack = Rack.query.get_or_404(rack_id)
+    if request.method == 'GET':
+        return jsonify(rack.to_dict())
+    elif request.method == 'PUT':
+        data = request.json
+        if not data or not data.get('name') or not data.get('location_id'):
+            return jsonify({'error': 'Rack name and location_id are required'}), 400
+        rack.name = data.get('name', rack.name)
+        rack.location_id = data.get('location_id', rack.location_id)
+        rack.description = data.get('description', rack.description)
+        try:
+            db.session.commit()
+            return jsonify(rack.to_dict())
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    else: # DELETE
+        try:
+            db.session.delete(rack)
+            db.session.commit()
+            return jsonify({'message': 'Rack deleted successfully'}), 200
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
@@ -254,10 +341,12 @@ def handle_pcs():
             username=data.get('username'),
             in_domain=data.get('in_domain', False),
             operating_system=data.get('operating_system'),
-            ports_name=data.get('ports_name'),
-            office=data.get('office'), # Handle new field
+            model=data.get('model'), # Updated to model
+            office=data.get('office'),
             description=data.get('description'),
-            multi_port=data.get('multi_port', False) # Handle new field
+            multi_port=data.get('multi_port', False),
+            type=data.get('type', 'Workstation'), # Handle new field
+            usage=data.get('usage') # Handle new field
         )
         try:
             db.session.add(new_pc)
@@ -284,10 +373,12 @@ def handle_pc_by_id(pc_id):
         pc.username = data.get('username', pc.username)
         pc.in_domain = data.get('in_domain', pc.in_domain)
         pc.operating_system = data.get('operating_system', pc.operating_system)
-        pc.ports_name = data.get('ports_name', pc.ports_name)
-        pc.office = data.get('office', pc.office) # Handle new field
+        pc.model = data.get('model', pc.model) # Updated to model
+        pc.office = data.get('office', pc.office)
         pc.description = data.get('description', pc.description)
-        pc.multi_port = data.get('multi_port', pc.multi_port) # Handle new field
+        pc.multi_port = data.get('multi_port', pc.multi_port)
+        pc.type = data.get('type', pc.type) # Handle new field
+        pc.usage = data.get('usage', pc.usage) # Handle new field
         try:
             db.session.commit()
             return jsonify(pc.to_dict())
@@ -309,14 +400,14 @@ def get_available_pcs():
     all_pcs = PC.query.all()
     all_connections = Connection.query.all()
 
-    # Get IDs of PCs that are currently connected
-    connected_pc_ids = {conn.pc_id for conn in all_connections}
+    # Get IDs of PCs that are currently connected and are single-port
+    connected_single_port_pc_ids = {conn.pc_id for conn in all_connections if not conn.pc.multi_port}
 
     available_pcs = []
     for pc in all_pcs:
         # If PC is multi-port, it's always available
         # If PC is single-port, it's available only if not already connected
-        if pc.multi_port or pc.id not in connected_pc_ids:
+        if pc.multi_port or pc.id not in connected_single_port_pc_ids:
             available_pcs.append(pc.to_dict())
             
     return jsonify(available_pcs)
@@ -396,7 +487,8 @@ def handle_switches():
             total_ports=total_ports,
             source_port=data.get('source_port'),
             model=data.get('model'),
-            description=data.get('description')
+            description=data.get('description'),
+            usage=data.get('usage') # Handle new field
         )
         try:
             db.session.add(new_switch)
@@ -427,6 +519,7 @@ def handle_switch_by_id(switch_id):
         _switch.source_port = data.get('source_port', _switch.source_port)
         _switch.model = data.get('model', _switch.model)
         _switch.description = data.get('description', _switch.description)
+        _switch.usage = data.get('usage', _switch.usage) # Handle new field
         try:
             db.session.commit()
             return jsonify(_switch.to_dict())
@@ -471,7 +564,9 @@ def handle_connections():
             pc_id=data['pc_id'],
             switch_id=data['switch_id'],
             switch_port=data['switch_port'],
-            is_switch_port_up=data['is_switch_port_up']
+            is_switch_port_up=data['is_switch_port_up'],
+            cable_color=data.get('cable_color'), # Handle new field
+            cable_label=data.get('cable_label') # Handle new field
         )
         db.session.add(new_connection)
         db.session.flush() # Flush to get new_connection.id for hops
@@ -497,7 +592,9 @@ def handle_connections():
                 patch_panel_id=hop_data['patch_panel_id'],
                 patch_panel_port=hop_data['patch_panel_port'],
                 is_port_up=hop_data['is_port_up'],
-                sequence=idx
+                sequence=idx,
+                cable_color=hop_data.get('cable_color'), # Handle new field
+                cable_label=hop_data.get('cable_label') # Handle new field
             )
             db.session.add(new_hop)
 
@@ -559,6 +656,8 @@ def handle_connection_by_id(conn_id):
         connection.switch_id = data.get('switch_id', connection.switch_id)
         connection.switch_port = data.get('switch_port', connection.switch_port)
         connection.is_switch_port_up = data.get('is_switch_port_up', connection.is_switch_port_up)
+        connection.cable_color = data.get('cable_color', connection.cable_color) # Handle new field
+        connection.cable_label = data.get('cable_label', connection.cable_label) # Handle new field
 
         # Handle hops update: delete existing and re-add
         if 'hops' in data:
@@ -589,7 +688,9 @@ def handle_connection_by_id(conn_id):
                     patch_panel_id=hop_data['patch_panel_id'],
                     patch_panel_port=hop_data['patch_panel_port'],
                     is_port_up=hop_data['is_port_up'],
-                    sequence=idx
+                    sequence=idx,
+                    cable_color=hop_data.get('cable_color'), # Handle new field
+                    cable_label=hop_data.get('cable_label') # Handle new field
                 )
                 db.session.add(new_hop)
 
@@ -653,6 +754,9 @@ def get_patch_panel_ports(pp_id):
         'patch_panel_id': pp_id,
         'patch_panel_name': patch_panel.name,
         'patch_panel_location': patch_panel.location.name if patch_panel.location else None,
+        'row_in_rack': patch_panel.row_in_rack, # Include existing fields for modal
+        'rack_name': patch_panel.rack_name, # Include existing fields for modal
+        'description': patch_panel.description, # Include existing fields for modal
         'total_ports': patch_panel.total_ports,
         'ports': port_status
     })
@@ -700,6 +804,12 @@ def get_switch_ports(switch_id):
         'switch_id': switch_id,
         'switch_name': _switch.name,
         'switch_location': _switch.location.name if _switch.location else None,
+        'ip_address': _switch.ip_address, # Include existing fields for modal
+        'row_in_rack': _switch.row_in_rack, # Include existing fields for modal
+        'rack_name': _switch.rack_name, # Include existing fields for modal
+        'source_port': _switch.source_port, # Include existing fields for modal
+        'model': _switch.model, # Include existing fields for modal
+        'description': _switch.description, # Include existing fields for modal
         'total_ports': _switch.total_ports,
         'ports': port_status
     })
@@ -716,14 +826,19 @@ def export_data(entity_type):
 
     try:
         if entity_type == 'locations':
-            headers = ['id', 'name']
+            headers = ['id', 'name', 'door_number'] # Added door_number
             locations = Location.query.all()
-            data_rows = [[loc.id, loc.name] for loc in locations]
+            data_rows = [[loc.id, loc.name, loc.door_number] for loc in locations] # Added door_number
             filename = 'locations.csv'
+        elif entity_type == 'racks': # New export type
+            headers = ['id', 'name', 'location_id', 'location_name', 'description']
+            racks = Rack.query.options(joinedload(Rack.location)).all()
+            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.description] for r in racks]
+            filename = 'racks.csv'
         elif entity_type == 'pcs':
-            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'ports_name', 'office', 'description', 'multi_port'] # Added multi_port
+            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage'] # Updated 'ports_name' to 'model', added 'type', 'usage'
             pcs = PC.query.all()
-            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.ports_name, pc.office, pc.description, pc.multi_port] for pc in pcs] # Added multi_port
+            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage] for pc in pcs] # Updated
             filename = 'pcs.csv'
         elif entity_type == 'patch_panels':
             headers = ['id', 'name', 'location_id', 'location_name', 'row_in_rack', 'rack_name', 'total_ports', 'description']
@@ -731,21 +846,23 @@ def export_data(entity_type):
             data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.row_in_rack, pp.rack_name, pp.total_ports, pp.description] for pp in patch_panels]
             filename = 'patch_panels.csv'
         elif entity_type == 'switches':
-            headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'row_in_rack', 'rack_name', 'total_ports', 'source_port', 'model', 'description']
+            headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'row_in_rack', 'rack_name', 'total_ports', 'source_port', 'model', 'description', 'usage'] # Added 'usage'
             switches = Switch.query.options(joinedload(Switch.location)).all()
-            data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.row_in_rack, s.rack_name, s.total_ports, s.source_port, s.model, s.description] for s in switches]
+            data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.row_in_rack, s.rack_name, s.total_ports, s.source_port, s.model, s.description, s.usage] for s in switches] # Added 'usage'
             filename = 'switches.csv'
         elif entity_type == 'connections':
             # Complex export for connections: flatten hops into columns
             headers = [
-                'connection_id', 'pc_id', 'pc_name', 'pc_ip_address', 'switch_id', 'switch_name', 'switch_ip_address',
+                'connection_id', 'pc_id', 'pc_name', 'pc_ip_address', 'cable_color', 'cable_label', # Added cable_color, cable_label for connection
+                'switch_id', 'switch_name', 'switch_ip_address',
                 'switch_port', 'is_switch_port_up',
             ]
             # Dynamically add headers for up to N hops
             for i in range(MAX_HOPS):
                 headers.extend([
                     f'hop{i+1}_patch_panel_id', f'hop{i+1}_patch_panel_name',
-                    f'hop{i+1}_patch_panel_port', f'hop{i+1}_is_port_up'
+                    f'hop{i+1}_patch_panel_port', f'hop{i+1}_is_port_up',
+                    f'hop{i+1}_cable_color', f'hop{i+1}_cable_label' # Added cable_color, cable_label for hop
                 ])
 
             all_connections = Connection.query.options(
@@ -760,6 +877,8 @@ def export_data(entity_type):
                     conn.pc.id if conn.pc else '',
                     conn.pc.name if conn.pc else '',
                     conn.pc.ip_address if conn.pc else '',
+                    conn.cable_color, # Include new field
+                    conn.cable_label, # Include new field
                     conn.switch.id if conn.switch else '',
                     conn.switch.name if conn.switch else '',
                     conn.switch.ip_address if conn.switch else '',
@@ -773,10 +892,12 @@ def export_data(entity_type):
                             hop.patch_panel.id if hop.patch_panel else '',
                             hop.patch_panel.name if hop.patch_panel else '',
                             hop.patch_panel_port,
-                            hop.is_port_up
+                            hop.is_port_up,
+                            hop.cable_color, # Include new field
+                            hop.cable_label # Include new field
                         ])
                     else:
-                        row.extend(['', '', '', '']) # Fill with empty strings if no more hops
+                        row.extend(['', '', '', '', '', '']) # Fill with empty strings if no more hops
                 data_rows.append(row)
             filename = 'connections.csv'
         else:
@@ -823,14 +944,22 @@ def import_data(entity_type):
     # And conversion functions for specific types/relationships
     field_maps = {
         'locations': {
-            'name': 'name'
+            'name': 'name',
+            'door_number': 'door_number' # Added door_number
+        },
+        'racks': { # New import type
+            'name': 'name',
+            'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
+            'description': 'description'
         },
         'pcs': {
             'name': 'name', 'ip_address': 'ip_address', 'username': 'username',
-            'in_domain': lambda x: x.lower() == 'true', # Convert 'true'/'false' string to boolean
-            'operating_system': 'operating_system', 'ports_name': 'ports_name',
+            'in_domain': lambda x: x.lower() == 'true',
+            'operating_system': 'operating_system', 'model': 'model', # Updated from ports_name
             'office': 'office', 'description': 'description',
-            'multi_port': lambda x: x.lower() == 'true' # Handle new field
+            'multi_port': lambda x: x.lower() == 'true',
+            'type': 'type', # Added type
+            'usage': 'usage' # Added usage
         },
         'patch_panels': {
             'name': 'name', 'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None, # Convert name to ID
@@ -843,7 +972,8 @@ def import_data(entity_type):
             'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
             'row_in_rack': 'row_in_rack', 'rack_name': 'rack_name',
             'total_ports': lambda x: int(x) if x.isdigit() else 1,
-            'source_port': 'source_port', 'model': 'model', 'description': 'description'
+            'source_port': 'source_port', 'model': 'model', 'description': 'description',
+            'usage': 'usage' # Added usage
         },
         'connections': {
             # For connections, we need to map to existing PC/Switch/PatchPanel IDs
@@ -874,8 +1004,46 @@ def import_data(entity_type):
                     error_count += 1
                     continue
                 
-                new_item = Location(name=name)
+                new_item = Location(
+                    name=name,
+                    door_number=row_dict.get('door_number') # Added door_number
+                )
                 db.session.add(new_item)
+                success_count += 1
+            db.session.commit()
+
+        elif entity_type == 'racks': # New import type
+            for i, row_data in enumerate(reader):
+                if not row_data: continue
+                row_dict = dict(zip(header, row_data))
+
+                name = row_dict.get('name')
+                location_name = row_dict.get('location_name')
+
+                if not name or not location_name:
+                    errors.append(f"Row {i+2}: Missing 'name' or 'location_name' field. Skipped.")
+                    error_count += 1
+                    continue
+                
+                location = Location.query.filter_by(name=location_name).first()
+                if not location:
+                    errors.append(f"Row {i+2}: Location '{location_name}' not found for Rack '{name}'. Skipped.")
+                    error_count += 1
+                    continue
+
+                existing_rack = Rack.query.filter_by(name=name).first()
+                if existing_rack:
+                    errors.append(f"Row {i+2}: Rack '{name}' already exists. Skipped.")
+                    error_count += 1
+                    continue
+
+                new_item_data = {
+                    'name': name,
+                    'location_id': location.id,
+                    'description': row_dict.get('description')
+                }
+                new_rack = Rack(**new_item_data)
+                db.session.add(new_rack)
                 success_count += 1
             db.session.commit()
 
@@ -897,10 +1065,12 @@ def import_data(entity_type):
                     existing_pc.username = row_dict.get('username', existing_pc.username)
                     existing_pc.in_domain = row_dict.get('in_domain', str(existing_pc.in_domain)).lower() == 'true'
                     existing_pc.operating_system = row_dict.get('operating_system', existing_pc.operating_system)
-                    existing_pc.ports_name = row_dict.get('ports_name', existing_pc.ports_name)
+                    existing_pc.model = row_dict.get('model', existing_pc.model) # Updated to model
                     existing_pc.office = row_dict.get('office', existing_pc.office)
                     existing_pc.description = row_dict.get('description', existing_pc.description)
                     existing_pc.multi_port = row_dict.get('multi_port', str(existing_pc.multi_port)).lower() == 'true'
+                    existing_pc.type = row_dict.get('type', existing_pc.type) # Added type
+                    existing_pc.usage = row_dict.get('usage', existing_pc.usage) # Added usage
                     success_count += 1 # Count as success for update
                     continue # Skip to next row
 
@@ -1007,6 +1177,9 @@ def import_data(entity_type):
                 switch_name = row_dict.get('switch_name')
                 switch_port = row_dict.get('switch_port')
                 is_switch_port_up = row_dict.get('is_switch_port_up', 'True').lower() == 'true'
+                cable_color = row_dict.get('cable_color') # Added cable_color
+                cable_label = row_dict.get('cable_label') # Added cable_label
+
 
                 if not pc_name or not switch_name or not switch_port:
                     errors.append(f"Row {i+2}: Missing 'pc_name', 'switch_name', or 'switch_port'. Skipped.")
@@ -1041,7 +1214,9 @@ def import_data(entity_type):
                     pc_id=pc.id,
                     switch_id=_switch.id,
                     switch_port=switch_port,
-                    is_switch_port_up=is_switch_port_up
+                    is_switch_port_up=is_switch_port_up,
+                    cable_color=cable_color, # Added cable_color
+                    cable_label=cable_label # Added cable_label
                 )
                 db.session.add(new_connection)
                 db.session.flush() # Get the new connection's ID before processing hops
@@ -1053,10 +1228,16 @@ def import_data(entity_type):
                     pp_name_col = f'hop{j+1}_patch_panel_name'
                     pp_port_col = f'hop{j+1}_patch_panel_port'
                     is_hop_port_up_col = f'hop{j+1}_is_port_up'
+                    hop_cable_color_col = f'hop{j+1}_cable_color' # Added cable_color
+                    hop_cable_label_col = f'hop{j+1}_cable_label' # Added cable_label
+
 
                     pp_name = row_dict.get(pp_name_col)
                     pp_port = row_dict.get(pp_port_col)
                     is_hop_port_up = row_dict.get(is_hop_port_up_col, 'True').lower() == 'true'
+                    hop_cable_color = row_dict.get(hop_cable_color_col) # Added cable_color
+                    hop_cable_label = row_dict.get(hop_cable_label_col) # Added cable_label
+
 
                     if pp_name and pp_port:
                         patch_panel = PatchPanel.query.filter_by(name=pp_name).first()
@@ -1068,7 +1249,9 @@ def import_data(entity_type):
                             patch_panel_id=patch_panel.id,
                             patch_panel_port=pp_port,
                             is_port_up=is_hop_port_up,
-                            sequence=j
+                            sequence=j,
+                            cable_color=hop_cable_color, # Added cable_color
+                            cable_label=hop_cable_label # Added cable_label
                         ))
                 
                 for hop in hops_to_add:
