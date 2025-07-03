@@ -538,31 +538,35 @@ function SwitchDiagramModal({
       );
 
       relevantConnections.forEach((conn) => {
+        // Create a temporary array of segments for this connection's path
         const pathSegments = [];
+        // Start with the switch node
         pathSegments.push({
           id: currentSwitchNode.id,
           type: "switch",
           position: currentSwitchNode.position,
-          data: currentSwitchNode.data, // Include data for getKonvaNodeConnectionPoint
+          data: currentSwitchNode.data,
         });
 
+        // Add all intermediate patch panel hops
         conn.hops.forEach((hop) => {
-          const patchPanel = currentNodesData.find(
+          const patchPanelNode = currentNodesData.find(
             (n) => n.id === `pp-${hop.patch_panel.id}`
           );
-          if (patchPanel) {
+          if (patchPanelNode) {
             pathSegments.push({
-              id: patchPanel.id,
+              id: patchPanelNode.id,
               type: "patchPanel",
-              label: patchPanel.label,
-              data: patchPanel.data,
+              label: patchPanelNode.label,
+              data: patchPanelNode.data,
               isPortUp: hop.is_port_up,
               hopData: hop,
-              position: patchPanel.position, // Use updated position
+              position: patchPanelNode.position,
             });
           }
         });
 
+        // End with the PC node
         const pcNode = currentNodesData.find(
           (n) => n.id === `pc-${conn.pc_id}-${conn.id}`
         );
@@ -573,16 +577,17 @@ function SwitchDiagramModal({
             label: pcNode.label,
             data: pcNode.data,
             isPortUp: conn.is_switch_port_up,
-            position: pcNode.position, // Use updated position
+            position: pcNode.position,
           });
         }
 
+        // Generate edges for each segment in the path
         for (let i = 0; i < pathSegments.length - 1; i++) {
           const sourceSegment = pathSegments[i];
           const targetSegment = pathSegments[i + 1];
 
           const { source, target } = getKonvaNodeConnectionPoint(
-            sourceSegment, // Use segments with updated positions
+            sourceSegment,
             targetSegment
           );
 
@@ -592,25 +597,26 @@ function SwitchDiagramModal({
           let strokeDasharray = [];
           let isPortUp = true;
 
-          // Logic to determine edge details (color, label, animation)
-          // This part is the same as before
+          // Determine edge details based on the connection and hop data
           if (
             sourceSegment.type === "switch" &&
             targetSegment.type === "patchPanel"
           ) {
-            const hop = conn.hops[0];
+            const hop = conn.hops[0]; // First hop
             edgeLabel = `S:${conn.switch_port} -> PP:${hop.patch_panel_port}`;
             isPortUp = hop.is_port_up;
-            edgeColor = isPortUp ? "#10B981" : "#EF4444"; // Green/Red
+            edgeColor = isPortUp ? "#10B981" : "#EF4444";
             if (!isPortUp) strokeDasharray = [5, 5];
           } else if (
             sourceSegment.type === "patchPanel" &&
             targetSegment.type === "patchPanel"
           ) {
-            const hopIndex = conn.hops.findIndex(
+            // Find the current hop in the connection's hops array
+            const currentHopIndex = conn.hops.findIndex(
               (h) => `pp-${h.patch_panel.id}` === sourceSegment.id
             );
-            const nextHop = conn.hops[hopIndex + 1];
+            const nextHop = conn.hops[currentHopIndex + 1]; // The next hop in the sequence
+
             if (nextHop) {
               edgeLabel = `PP:${
                 sourceSegment.hopData?.patch_panel_port || ""
@@ -623,16 +629,16 @@ function SwitchDiagramModal({
             sourceSegment.type === "patchPanel" &&
             targetSegment.type === "pc"
           ) {
-            const lastHop = conn.hops[conn.hops.length - 1];
+            const lastHop = conn.hops[conn.hops.length - 1]; // Last hop in the chain
             edgeLabel = `PP:${lastHop.patch_panel_port} -> PC`;
-            isPortUp = conn.is_switch_port_up; // Connection status to PC
+            isPortUp = conn.is_switch_port_up; // Status of the entire connection to PC
             edgeColor = isPortUp ? "#10B981" : "#EF4444";
             if (!isPortUp) strokeDasharray = [5, 5];
           } else if (
             sourceSegment.type === "switch" &&
             targetSegment.type === "pc"
           ) {
-            // Direct Switch to PC connection
+            // Direct Switch to PC connection (no patch panels)
             edgeLabel = `S:${conn.switch_port} -> PC`;
             isPortUp = conn.is_switch_port_up;
             edgeColor = isPortUp ? "#10B981" : "#EF4444";
@@ -656,7 +662,7 @@ function SwitchDiagramModal({
     [connections, pcs, getKonvaNodeConnectionPoint]
   );
 
-  // Effect to generate initial nodes and edges data
+  // Effect to generate initial nodes and edges data with hierarchical layout
   useEffect(() => {
     if (
       !isOpen ||
@@ -670,124 +676,185 @@ function SwitchDiagramModal({
     }
 
     const initialNodes = [];
-    const addedNodeIds = new Set();
+    const nodeMap = new Map(); // To store nodes by ID for quick lookup and avoid duplicates
 
+    // Add the central Switch node
     const switchNodeId = String(selectedSwitch.id);
-    const switchNodePos = {
-      x: containerDimensions.width / 2 - NODE_WIDTH / 2,
-      y: containerDimensions.height / 2 - NODE_HEIGHT / 2,
-    };
-    initialNodes.push({
+    const switchNode = {
       id: switchNodeId,
       type: "switch",
       label: selectedSwitch.name,
-      position: switchNodePos,
+      position: { x: 0, y: NODE_HEIGHT / 2 }, // Temporary X, will be centered later
       data: selectedSwitch,
       isHovered: false,
-    });
-    addedNodeIds.add(switchNodeId);
+    };
+    initialNodes.push(switchNode);
+    nodeMap.set(switchNodeId, switchNode);
 
     const relevantConnections = connections.filter(
       (conn) => conn.switch_id === selectedSwitch.id
     );
 
-    const angleIncrement = (2 * Math.PI) / (relevantConnections.length || 1);
-    const radialOffsetPerHop = 200;
+    const layerSpacingY = NODE_HEIGHT * 2.5; // Vertical spacing between layers
+    const horizontalSpacing = NODE_WIDTH * 1.5; // Base horizontal spacing
 
-    relevantConnections.forEach((conn, connIndex) => {
-      const baseAngle = angleIncrement * connIndex;
-      const pc = pcs.find((p) => p.id === conn.pc_id);
-      if (!pc) return;
+    // --- Phase 1: Identify all unique Patch Panels and PCs involved ---
+    const uniquePatchPanels = new Map(); // Map: pp_id -> pp_data
+    const uniquePcs = new Map(); // Map: pc_id -> pc_data
 
-      const pathSegments = [];
-      pathSegments.push({
-        id: switchNodeId,
-        type: "switch",
-        position: switchNodePos,
-      });
-
+    relevantConnections.forEach((conn) => {
       conn.hops.forEach((hop) => {
-        const patchPanel = hop.patch_panel;
-        if (patchPanel) {
-          const ppNodeId = `pp-${patchPanel.id}`;
-          pathSegments.push({
-            id: ppNodeId,
-            type: "patchPanel",
-            label: patchPanel.name,
-            data: patchPanel,
-            isPortUp: hop.is_port_up,
-            hopData: hop,
+        const ppId = `pp-${hop.patch_panel.id}`;
+        if (!uniquePatchPanels.has(ppId)) {
+          uniquePatchPanels.set(ppId, { data: hop.patch_panel });
+        }
+      });
+      const pcId = `pc-${conn.pc_id}-${conn.id}`; // Use conn.id for unique PC node if it's connected multiple times
+      if (!uniquePcs.has(pcId)) {
+        const pcData = pcs.find((p) => p.id === conn.pc_id);
+        if (pcData) {
+          uniquePcs.set(pcId, {
+            data: pcData,
+            isPortUp: conn.is_switch_port_up,
+            connectionId: conn.id,
           });
         }
+      }
+    });
+
+    // --- Phase 2: Position nodes hierarchically ---
+    // Layer 1: Switch (already added and positioned)
+
+    // Layer 2: Patch Panels and direct PCs
+    const layer2Nodes = [];
+    let currentLayer2X = 0; // Temp X for layout calculation
+
+    // Add unique Patch Panels to layer 2
+    Array.from(uniquePatchPanels.entries())
+      .sort((a, b) => a[1].data.name.localeCompare(b[1].data.name))
+      .forEach(([ppNodeId, ppData]) => {
+        const ppNode = {
+          id: ppNodeId,
+          type: "patchPanel",
+          label: ppData.data.name,
+          position: {
+            x: currentLayer2X,
+            y: switchNode.position.y + layerSpacingY,
+          },
+          data: ppData.data,
+          isHovered: false,
+        };
+        initialNodes.push(ppNode);
+        nodeMap.set(ppNodeId, ppNode);
+        layer2Nodes.push(ppNode);
+        currentLayer2X += horizontalSpacing;
       });
 
-      const pcNodeId = `pc-${pc.id}-${conn.id}`;
-      pathSegments.push({
-        id: pcNodeId,
-        type: "pc",
-        label: pc.name,
-        data: pc,
-        isPortUp: conn.is_switch_port_up,
-      });
-
-      pathSegments.forEach((segment, segmentIndex) => {
-        let xPos = 0;
-        let yPos = 0;
-
-        if (segmentIndex > 0) {
-          const currentDistance = segmentIndex * radialOffsetPerHop;
-          xPos =
-            containerDimensions.width / 2 +
-            currentDistance * Math.cos(baseAngle + 0.1 * segmentIndex) -
-            NODE_WIDTH / 2;
-          yPos =
-            containerDimensions.height / 2 +
-            currentDistance * Math.sin(baseAngle + 0.1 * segmentIndex) -
-            NODE_HEIGHT / 2;
-        } else {
-          xPos = switchNodePos.x;
-          yPos = switchNodePos.y;
-        }
-
-        if (!addedNodeIds.has(segment.id)) {
-          const nodeToAdd = {
-            id: segment.id,
-            type: segment.type,
-            label: segment.label,
-            position: { x: xPos, y: yPos },
-            data: segment.data,
+    // Add direct PCs (connections with no hops) to layer 2
+    relevantConnections
+      .filter((conn) => conn.hops.length === 0)
+      .forEach((conn) => {
+        const pcId = `pc-${conn.pc_id}-${conn.id}`;
+        const pcData = uniquePcs.get(pcId);
+        if (pcData && !nodeMap.has(pcId)) {
+          // Ensure it's not already added
+          const pcNode = {
+            id: pcId,
+            type: "pc",
+            label: pcData.data.name,
+            position: {
+              x: currentLayer2X,
+              y: switchNode.position.y + layerSpacingY,
+            },
+            data: pcData.data,
+            isPortUp: pcData.isPortUp,
             isHovered: false,
           };
-          if (segment.type !== "switch") {
-            nodeToAdd.data = { ...nodeToAdd.data, isPortUp: segment.isPortUp };
-          }
-          initialNodes.push(nodeToAdd);
-          addedNodeIds.add(segment.id);
+          initialNodes.push(pcNode);
+          nodeMap.set(pcId, pcNode);
+          layer2Nodes.push(pcNode);
+          currentLayer2X += horizontalSpacing;
         }
       });
+
+    // Center Layer 2 nodes
+    const totalLayer2Width = layer2Nodes.length * horizontalSpacing;
+    const layer2OffsetX = (containerDimensions.width - totalLayer2Width) / 2;
+    layer2Nodes.forEach((node, index) => {
+      node.position.x = layer2OffsetX + index * horizontalSpacing;
+    });
+
+    // Layer 3: PCs connected via Patch Panels (only if they are not direct PCs)
+    const layer3Nodes = [];
+    let currentLayer3X = 0; // Temp X for layout calculation
+
+    // Collect PCs that are connected via patch panels
+    const pcsConnectedViaPp = new Map(); // Map: pc_id -> pc_data
+    relevantConnections
+      .filter((conn) => conn.hops.length > 0)
+      .forEach((conn) => {
+        const pcId = `pc-${conn.pc_id}-${conn.id}`;
+        const pcData = uniquePcs.get(pcId);
+        if (pcData && !pcsConnectedViaPp.has(pcId)) {
+          pcsConnectedViaPp.set(pcId, pcData);
+        }
+      });
+
+    Array.from(pcsConnectedViaPp.entries())
+      .sort((a, b) => a[1].data.name.localeCompare(b[1].data.name))
+      .forEach(([pcNodeId, pcData]) => {
+        // Ensure this PC isn't already placed in Layer 2 as a direct connection
+        const isDirectPc = relevantConnections.some(
+          (conn) =>
+            conn.hops.length === 0 && `pc-${conn.pc_id}-${conn.id}` === pcNodeId
+        );
+        if (!isDirectPc && !nodeMap.has(pcNodeId)) {
+          // Also check nodeMap to prevent true duplicates
+          const pcNode = {
+            id: pcNodeId,
+            type: "pc",
+            label: pcData.data.name,
+            position: {
+              x: currentLayer3X,
+              y: switchNode.position.y + layerSpacingY * 2,
+            },
+            data: pcData.data,
+            isPortUp: pcData.isPortUp,
+            isHovered: false,
+          };
+          initialNodes.push(pcNode);
+          nodeMap.set(pcNodeId, pcNode);
+          layer3Nodes.push(pcNode);
+          currentLayer3X += horizontalSpacing;
+        }
+      });
+
+    // Center Layer 3 nodes
+    const totalLayer3Width = layer3Nodes.length * horizontalSpacing;
+    const layer3OffsetX = (containerDimensions.width - totalLayer3Width) / 2;
+    layer3Nodes.forEach((node, index) => {
+      node.position.x = layer3OffsetX + index * horizontalSpacing;
     });
 
     setNodesData(initialNodes);
-    // Now, call updateEdges to calculate and set the edges based on these initial nodes
-    // This will update the edgesData state
-    updateEdges(initialNodes);
+    updateEdges(initialNodes); // Call updateEdges with the fully positioned nodes
 
     // Auto-fit view logic for Konva - ONLY on initial load/switch change
     if (initialNodes.length > 0) {
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
+      let minXFinal = Infinity,
+        minYFinal = Infinity,
+        maxXFinal = -Infinity,
+        maxYFinal = -Infinity;
 
       initialNodes.forEach((node) => {
-        minX = Math.min(minX, node.position.x);
-        minY = Math.min(minY, node.position.y);
-        maxX = Math.max(maxX, node.position.x + NODE_WIDTH);
-        maxY = Math.max(maxY, node.position.y + NODE_HEIGHT);
+        minXFinal = Math.min(minXFinal, node.position.x);
+        minYFinal = Math.min(minYFinal, node.position.y);
+        maxXFinal = Math.max(maxXFinal, node.position.x + NODE_WIDTH);
+        maxYFinal = Math.max(maxYFinal, node.position.y + NODE_HEIGHT);
       });
 
-      const diagramWidth = maxX - minX;
-      const diagramHeight = maxY - minY;
+      const diagramWidth = maxXFinal - minXFinal;
+      const diagramHeight = maxYFinal - minYFinal;
 
       const paddingFactor = 1.1;
       const scaleX = (containerDimensions.width / diagramWidth) * paddingFactor;
@@ -796,9 +863,11 @@ function SwitchDiagramModal({
       const newScale = Math.min(scaleX, scaleY);
 
       const centeredX =
-        containerDimensions.width / 2 - (minX + diagramWidth / 2) * newScale;
+        containerDimensions.width / 2 -
+        (minXFinal + diagramWidth / 2) * newScale;
       const centeredY =
-        containerDimensions.height / 2 - (minY + diagramHeight / 2) * newScale;
+        containerDimensions.height / 2 -
+        (minYFinal + diagramHeight / 2) * newScale;
 
       setStageScale(newScale);
       setStagePos({ x: centeredX, y: centeredY });
