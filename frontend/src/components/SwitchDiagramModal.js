@@ -163,7 +163,7 @@ const SwitchNodeKonva = ({
         />
       )}
       <Text
-        text={node.label}
+        text={`${node.label}\n(${node.data.location_name || "N/A"})`}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -172,7 +172,7 @@ const SwitchNodeKonva = ({
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
+        y={NODE_HEIGHT / 2 + NODE_PADDING - 5} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
@@ -228,7 +228,7 @@ const PcNodeKonva = ({
         />
       )}
       <Text
-        text={node.label}
+        text={`${node.label}\n(${node.data.office || "N/A"})`}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -237,7 +237,7 @@ const PcNodeKonva = ({
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
+        y={NODE_HEIGHT / 2 + NODE_PADDING - 5} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
@@ -319,7 +319,7 @@ const PatchPanelNodeKonva = ({
         />
       )}
       <Text
-        text="PP"
+        text={`${node.label}\n(${node.data.location_name || "N/A"})`}
         fontSize={FONT_SIZE_LABEL}
         fontFamily="Arial"
         fill="white"
@@ -328,7 +328,7 @@ const PatchPanelNodeKonva = ({
         width={NODE_WIDTH - NODE_PADDING}
         height={NODE_HEIGHT / 2}
         x={NODE_PADDING / 2}
-        y={NODE_HEIGHT / 2 + NODE_PADDING} // Position text below icon
+        y={NODE_HEIGHT / 2 + NODE_PADDING - 5} // Position text below icon
         wrap="word"
         ellipsis={true}
       />
