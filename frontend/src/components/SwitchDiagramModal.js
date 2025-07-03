@@ -856,7 +856,7 @@ function SwitchDiagramModal({
       const diagramWidth = maxXFinal - minXFinal;
       const diagramHeight = maxYFinal - minYFinal;
 
-      const paddingFactor = 1.1;
+      const paddingFactor = 10;
       const scaleX = (containerDimensions.width / diagramWidth) * paddingFactor;
       const scaleY =
         (containerDimensions.height / diagramHeight) * paddingFactor;
@@ -1020,7 +1020,7 @@ function SwitchDiagramModal({
       const diagramWidth = maxX - minX;
       const diagramHeight = maxY - minY;
 
-      const paddingFactor = 1.1; // Add 10% padding
+      const paddingFactor = 0.95; // Add 10% padding
       const scaleX = (containerDimensions.width / diagramWidth) * paddingFactor;
       const scaleY =
         (containerDimensions.height / diagramHeight) * paddingFactor;
