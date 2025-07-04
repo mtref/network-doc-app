@@ -253,6 +253,13 @@ function App() {
       if (type === "locations") setLocations(prev => [...prev, newEntity]);
       if (type === "racks") setRacks(prev => [...prev, newEntity]);
       await fetchData("connections", setConnections); // Connections might depend on any new entity
+
+      // For `racks` and other entities, ensure the full related objects are loaded
+      // This is a simplified approach, a more robust solution might involve specific refetch for the new entity
+      if (type === "racks") await fetchData("racks", setRacks); 
+      if (type === "patch_panels") await fetchData("patch_panels", setPatchPanels);
+      if (type === "switches") await fetchData("switches", setSwitches);
+
       return { success: true, entity: newEntity };
     } catch (error) {
       console.error(`Error adding ${type}:`, error);
@@ -274,6 +281,7 @@ function App() {
         return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
       }
       showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
+      // Re-fetch data for relevant lists
       if (type === "pcs") await fetchData("pcs", setPcs);
       if (type === "patch_panels")
         await fetchData("patch_panels", setPatchPanels);
@@ -311,6 +319,7 @@ function App() {
         );
       }
       showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
+      // Re-fetch data for relevant lists
       if (type === "pcs") await fetchData("pcs", setPcs);
       if (type === "patch_panels")
         await fetchData("patch_panels", setPatchPanels);
@@ -715,6 +724,8 @@ function App() {
               <RackList
                 racks={racks}
                 locations={locations}
+                switches={switches} 
+                patchPanels={patchPanels} 
                 onAddEntity={handleAddEntity}
                 onUpdateEntity={handleUpdateEntity}
                 onDeleteEntity={handleDeleteEntity}

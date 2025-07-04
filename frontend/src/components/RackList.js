@@ -1,8 +1,8 @@
 // frontend/src/components/RackList.js
 // This component displays a searchable list of Racks in a card format,
-// including filter options by Location.
+// including filter options by Location, and now a visual representation of each rack.
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
 import {
   Columns, // Icon for Rack
@@ -11,16 +11,98 @@ import {
   PlusCircle, // Icon for Add button
   ChevronDown, // Icon for Collapse
   ChevronUp, // Icon for Expand
-  Filter, // ADDED: Icon for Filter
+  Filter, // Icon for Filter
+  Server, // Icon for Switch
+  Split, // Icon for Patch Panel
+  HardDrive, // Generic device icon for unknown type
 } from "lucide-react";
 
-function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity }) {
+// New sub-component for visualizing a single Rack
+const RackVisualizer = ({ rack, switches, patchPanels }) => {
+  if (!rack || !rack.total_units) {
+    return (
+      <div className="text-sm text-gray-500 mt-2">
+        No rack unit information available.
+      </div>
+    );
+  }
+
+  const rackUnits = Array.from({ length: rack.total_units }, (_, i) => i + 1); // Units from 1 to total_units
+
+  // Create a map of occupied units for quick lookup
+  const occupiedUnits = new Map(); // Map: unitNumber -> { type: 'switch'|'patchPanel', name: 'DeviceName' }
+
+  // Switches in this rack
+  switches.filter(s => s.rack_id === rack.id && s.row_in_rack)
+          .forEach(s => {
+              const unit = parseInt(s.row_in_rack);
+              if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
+                  // Assuming a switch takes 1U, adjust if multi-U devices are needed
+                  occupiedUnits.set(unit, { type: 'switch', name: s.name, id: s.id, total_ports: s.total_ports });
+              }
+          });
+
+  // Patch Panels in this rack
+  patchPanels.filter(pp => pp.rack_id === rack.id && pp.row_in_rack)
+             .forEach(pp => {
+                 const unit = parseInt(pp.row_in_rack);
+                 if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
+                     occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
+                 }
+             });
+  
+  // Reverse the units for display (Unit 1 at the bottom)
+  const displayUnits = [...rackUnits].reverse();
+
+  return (
+    <div className="mt-4 border border-gray-300 rounded-md p-2 bg-gray-50 max-h-64 overflow-y-auto">
+      <h5 className="text-md font-semibold text-gray-700 mb-2 border-b pb-1">
+        Rack Units ({rack.total_units}U)
+      </h5>
+      <div className="space-y-0.5">
+        {displayUnits.map((unit) => {
+          const content = occupiedUnits.get(unit);
+          let unitClass = "bg-gray-200 text-gray-600"; // Free slot
+          let unitContent = `U${unit}: Free`;
+          let Icon = HardDrive; // Default icon
+
+          if (content) {
+            if (content.type === 'switch') {
+              unitClass = "bg-red-100 text-red-800 border border-red-300";
+              unitContent = `U${unit}: ${content.name} (SW)`;
+              Icon = Server;
+            } else if (content.type === 'patchPanel') {
+              unitClass = "bg-green-100 text-green-800 border border-green-300";
+              unitContent = `U${unit}: ${content.name} (PP)`;
+              Icon = Split;
+            }
+          }
+
+          return (
+            <div
+              key={unit}
+              className={`flex items-center text-xs p-1 rounded ${unitClass}`}
+              title={content ? `${content.name} (${content.type === 'switch' ? 'Switch' : 'Patch Panel'})` : `U${unit}: Free`}
+            >
+              <Icon size={12} className="mr-1 flex-shrink-0" />
+              <span className="flex-grow truncate">{unitContent}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
+function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity, switches, patchPanels }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
   const [editingRack, setEditingRack] = useState(null); // State for editing a Rack
   const [rackFormName, setRackFormName] = useState("");
   const [rackFormLocationId, setRackFormLocationId] = useState("");
   const [rackFormDescription, setRackFormDescription] = useState("");
+  const [rackFormTotalUnits, setRackFormTotalUnits] = useState(42); // NEW: State for total_units
 
   const [isAddRackFormExpanded, setIsAddRackFormExpanded] = useState(false);
 
@@ -32,28 +114,34 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
 
   // Effect to extract unique filter options whenever 'racks' or 'locations' data changes
   useEffect(() => {
-    // Combine location name and door number for display in filters
     const uniqueLocations = [
       ...new Set(locations.map(loc => loc.name + (loc.door_number ? ` (Door: ${loc.door_number})` : ''))),
     ].sort();
     setAvailableLocationOptions(uniqueLocations);
-  }, [racks, locations]); // Added locations to dependency array
+  }, [racks, locations]);
 
   // Filter Racks based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = racks.filter((rack) => {
+    const currentRacks = Array.isArray(racks) ? racks : []; // Defensive check
+    const currentLocations = Array.isArray(locations) ? locations : []; // Defensive check
+
+    const filtered = currentRacks.filter((rack) => {
+      // Safely get location door number for search
+      const rackLocationDoorNumber = rack.location?.door_number || "";
+
       // Text search filter
       const matchesSearch =
         (rack.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (rack.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (locations.find(loc => loc.id === rack.location_id)?.door_number || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by door number
-        (rack.description || "").toLowerCase().includes(lowerCaseSearchTerm);
+        (rackLocationDoorNumber).toLowerCase().includes(lowerCaseSearchTerm) || // Search by door number
+        (rack.description || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (typeof rack.total_units === 'number' && String(rack.total_units).includes(lowerCaseSearchTerm)); // Search by total_units
 
       // Location filter
       const matchesLocation =
         selectedLocationFilter === "all" ||
-        (rack.location_name + (locations.find(loc => loc.id === rack.location_id)?.door_number ? ` (Door: ${locations.find(loc => loc.id === rack.location_id).door_number})` : '')) === selectedLocationFilter;
+        (rack.location_name + (rackLocationDoorNumber ? ` (Door: ${rackLocationDoorNumber})` : '')) === selectedLocationFilter;
 
       return matchesSearch && matchesLocation;
     });
@@ -62,17 +150,18 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
     racks,
     searchTerm,
     selectedLocationFilter,
-    locations, // Added locations to dependency array
+    locations,
   ]);
 
   // Handle edit initiation
-  const handleEdit = (rack) => {
+  const handleEdit = useCallback((rack) => {
     setEditingRack(rack);
     setRackFormName(rack.name);
     setRackFormLocationId(rack.location_id || "");
     setRackFormDescription(rack.description || "");
+    setRackFormTotalUnits(rack.total_units || 42); // NEW: Set total_units for editing
     setIsAddRackFormExpanded(true); // Expand form when editing
-  };
+  }, []);
 
   // Handle form submission for Add/Update Rack
   const handleRackFormSubmit = async (e) => {
@@ -81,11 +170,17 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
       alert("Rack Name and Location are required.");
       return;
     }
+    // Basic validation for total_units
+    if (isNaN(parseInt(rackFormTotalUnits)) || parseInt(rackFormTotalUnits) < 1 || parseInt(rackFormTotalUnits) > 50) {
+        alert("Total Units must be a number between 1 and 50.");
+        return;
+    }
 
     const rackData = {
       name: rackFormName,
       location_id: parseInt(rackFormLocationId),
       description: rackFormDescription,
+      total_units: parseInt(rackFormTotalUnits), // NEW: Include total_units in data
     };
 
     if (editingRack) {
@@ -97,8 +192,11 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
     setRackFormName(""); // Clear form fields
     setRackFormLocationId("");
     setRackFormDescription("");
+    setRackFormTotalUnits(42); // NEW: Reset total_units
     setIsAddRackFormExpanded(false); // Collapse form after submission
   };
+
+  const sortedLocations = Array.isArray(locations) ? [...locations].sort((a,b) => a.name.localeCompare(b.name)) : [];
 
   return (
     <div className="space-y-6">
@@ -171,7 +269,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
               required
             >
               <option value="">-- Select Location --</option>
-              {locations.map((loc) => (
+              {sortedLocations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
                   {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                 </option>
@@ -182,6 +280,16 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                 Please add a location first (Go to Locations tab) to add a Rack.
               </p>
             )}
+            <input
+              type="number"
+              placeholder="Total Units (e.g., 42)"
+              value={rackFormTotalUnits}
+              onChange={(e) => setRackFormTotalUnits(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              min="1"
+              max="50"
+              required
+            />
             <textarea
               placeholder="Description (Optional)"
               value={rackFormDescription}
@@ -198,6 +306,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                     setRackFormName("");
                     setRackFormLocationId("");
                     setRackFormDescription("");
+                    setRackFormTotalUnits(42); // Reset total_units
                     setIsAddRackFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -238,7 +347,11 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                 />{" "}
                 Description: {rack.description || "No description"}
               </p>
-              <div className="flex justify-end space-x-2">
+
+              {/* NEW: Rack Visualizer Component */}
+              <RackVisualizer rack={rack} switches={switches} patchPanels={patchPanels} />
+              
+              <div className="flex justify-end space-x-2 mt-4"> {/* Added mt-4 for spacing */}
                 <button
                   onClick={() => handleEdit(rack)}
                   className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
