@@ -1,12 +1,27 @@
 // frontend/src/components/ConnectionForm.js
 // This component provides forms to add new PCs, Patch Panels, Switches,
 // and to create or edit network connections between them.
-// Now, the "Add New" entity forms are collapsible for a cleaner UI, and
-// Patch Panel and Switch creation/editing use a location dropdown.
-// PC selection for connections now filters based on multi-port status.
+// Now, the PC selection/creation is Step 1, and connection details are Step 2.
+// "Add New" forms for Patch Panel and Switch are accessible via dropdowns in Step 2.
 
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
-import { ChevronDown, ChevronUp, PlusCircle } from "lucide-react"; // Import icons for expand/collapse and add buttons
+import {
+  ChevronDown,
+  ChevronUp,
+  PlusCircle,
+  Laptop, // Icon for PC (still used for existing PC display)
+  Server, // Icon for Switch
+  Split, // Icon for Patch Panel
+  Cable, // Icon for Connection Cable
+  Wifi, // Icon for Port Up
+  WifiOff, // Icon for Port Down
+  CircleDot, // Icon for Available Port
+  Tag, // Icon for Cable Label
+  Palette, // Icon for Cable Color
+  ArrowRight, // For navigation
+  HardDrive, // For PC type Server
+  MonitorCheck, // For PC type Workstation
+} from "lucide-react";
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -14,9 +29,10 @@ const API_BASE_URL =
 
 // Wrap the component with memo to prevent unnecessary re-renders
 const ConnectionForm = memo(function ConnectionForm({
-  pcs, // This 'pcs' prop will now represent ALL PCs for display purposes in the 'Add New PC' section
+  pcs,
   patchPanels,
   switches,
+  connections,
   onAddConnection,
   onUpdateConnection,
   editingConnection,
@@ -24,22 +40,21 @@ const ConnectionForm = memo(function ConnectionForm({
   onAddEntity,
   onShowPortStatus,
   locations,
-  showMessage, // Added showMessage prop
+  showMessage,
 }) {
+  const [currentStep, setCurrentStep] = useState(1); // 1: PC selection/creation, 2: Connection details
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
   const [switchId, setSwitchId] = useState("");
   const [hops, setHops] = useState([]);
-  const [cableColor, setCableColor] = useState(""); // New: Main connection cable color
-  const [cableLabel, setCableLabel] = useState(""); // New: Main connection cable label
+  const [cableColor, setCableColor] = useState("");
+  const [cableLabel, setCableLabel] = useState("");
 
-  // State for available PCs for the connection dropdown (filtered by multi-port status)
   const [availablePcsForConnection, setAvailablePcsForConnection] = useState(
     []
   );
 
-  // State for managing the available cable color options
   const [cableColorOptions, setCableColorOptions] = useState([
     "Blue",
     "Green",
@@ -51,27 +66,26 @@ const ConnectionForm = memo(function ConnectionForm({
     "Grey",
     "Purple",
     "Brown",
-  ]);
+  ].sort());
   const [showAddColorInput, setShowAddColorInput] = useState(false);
   const [newCustomColor, setNewCustomColor] = useState("");
 
-  // States for managing the expanded/collapsed state of each "Add New" section
-  const [isNewPcExpanded, setIsNewPcExpanded] = useState(false);
+  const [isNewPcExpanded, setIsNewPcExpanded] = useState(false); // Re-added
   const [isNewPpExpanded, setIsNewPpExpanded] = useState(false);
   const [isNewSwitchExpanded, setIsNewSwitchExpanded] = useState(false);
 
-  // State for new entity forms (these states are ONLY for the collapsible add forms)
+  // Re-added PC-related state variables
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
   const [newPcUsername, setNewPcUsername] = useState("");
   const [newPcInDomain, setNewPcInDomain] = useState(false);
   const [newPcOs, setNewPcOs] = useState("");
-  const [newPcModel, setNewPcModel] = useState(""); // Corrected: Renamed from newPcPortsName to newPcModel
+  const [newPcModel, setNewPcModel] = useState("");
   const [newPcOffice, setNewPcOffice] = useState("");
   const [newPcDesc, setNewPcDesc] = useState("");
-  const [newPcMultiPort, setNewPcMultiPort] = useState(false); // New state for multi_port
-  const [newPcType, setNewPcType] = useState("Workstation"); // New state for PC type
-  const [newPcUsage, setNewPcUsage] = useState(""); // New state for PC usage
+  const [newPcMultiPort, setNewPcMultiPort] = useState(false);
+  const [newPcType, setNewPcType] = useState("Workstation");
+  const [newPcUsage, setNewPcUsage] = useState("");
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
@@ -90,11 +104,9 @@ const ConnectionForm = memo(function ConnectionForm({
   const [newSwitchModel, setNewSwitchModel] = useState("");
   const [newSwitchDesc, setNewSwitchDesc] = useState("");
 
-  // IP Address Regex for validation
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
-  // Fetch available PCs for connection dropdown
   const fetchAvailablePcs = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/available_pcs`);
@@ -102,25 +114,21 @@ const ConnectionForm = memo(function ConnectionForm({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setAvailablePcsForConnection(data);
+      setAvailablePcsForConnection(data.sort((a,b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Failed to fetch available PCs:", error);
       showMessage(`Error fetching available PCs: ${error.message}`, 5000);
     }
-  }, [showMessage]); // showMessage is a dependency
+  }, [showMessage]);
 
   useEffect(() => {
     fetchAvailablePcs();
-  }, [fetchAvailablePcs, pcs]);
+  }, [fetchAvailablePcs]);
 
-  const isInitialRenderRef = useRef(true);
+  // Ref for auto-selection of newly created PC
+  const lastCreatedPcIdRef = useRef(null);
 
   useEffect(() => {
-    if (isInitialRenderRef.current) {
-        isInitialRenderRef.current = false;
-        return;
-    }
-
     if (editingConnection) {
       setPcId(editingConnection.pc_id || "");
       setSwitchId(editingConnection.switch_id || "");
@@ -142,12 +150,16 @@ const ConnectionForm = memo(function ConnectionForm({
         })) || []
       );
 
-      if (
-        editingConnection.pc &&
-        !availablePcsForConnection.find((p) => p.id === editingConnection.pc.id)
-      ) {
-        setAvailablePcsForConnection((prev) => [...prev, editingConnection.pc]);
-      }
+      setAvailablePcsForConnection((prev) => {
+        if (
+          editingConnection.pc &&
+          !prev.some((p) => p.id === editingConnection.pc.id)
+        ) {
+          return [...prev, editingConnection.pc].sort((a,b) => a.name.localeCompare(b.name));
+        }
+        return prev;
+      });
+      setCurrentStep(2); // Go to step 2 when editing an existing connection
     } else {
       setPcId("");
       setSwitchId("");
@@ -156,6 +168,9 @@ const ConnectionForm = memo(function ConnectionForm({
       setCableColor("");
       setCableLabel("");
       setHops([]);
+      setCurrentStep(1); // Always start at step 1 for new connections
+
+      // Reset new entity form fields as well
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
@@ -184,8 +199,24 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewSwitchSourcePort("");
       setNewSwitchModel("");
       setNewSwitchDesc("");
+
+      fetchAvailablePcs(); // Re-fetch available PCs when not editing
     }
-  }, [editingConnection, availablePcsForConnection, pcs]);
+  }, [editingConnection, fetchAvailablePcs]);
+
+  // Effect for auto-selection of a newly created PC (triggered by availablePcsForConnection update)
+  useEffect(() => {
+    if (
+      lastCreatedPcIdRef.current !== null &&
+      availablePcsForConnection.some(
+        (pc) => pc.id === lastCreatedPcIdRef.current
+      )
+    ) {
+      setPcId(lastCreatedPcIdRef.current.toString());
+      lastCreatedPcIdRef.current = null;
+      setCurrentStep(2); // Advance to step 2 after selecting
+    }
+  }, [availablePcsForConnection]);
 
   const handleHopPatchPanelChange = (index, value) => {
     const updatedHops = [...hops];
@@ -236,7 +267,7 @@ const ConnectionForm = memo(function ConnectionForm({
 
   const handleAddCustomColor = () => {
     if (newCustomColor.trim() && !cableColorOptions.includes(newCustomColor.trim())) {
-        setCableColorOptions((prev) => [...prev, newCustomColor.trim()]);
+        setCableColorOptions((prev) => [...prev, newCustomColor.trim()].sort());
         setCableColor(newCustomColor.trim());
         setNewCustomColor("");
         setShowAddColorInput(false);
@@ -247,11 +278,16 @@ const ConnectionForm = memo(function ConnectionForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!pcId || !switchId || !switchPort.trim()) {
+      showMessage("Please select a PC, Switch, and provide a Switch Port.", 3000);
+      return;
+    }
     const allHopsValid = hops.every(
       (hop) => hop.patch_panel_id && hop.patch_panel_port.trim()
     );
     if (!allHopsValid) {
-      alert("Please fill out all patch panel details for each hop.");
+      showMessage("Please fill out all patch panel details for each hop.", 3000);
       return;
     }
 
@@ -278,7 +314,6 @@ const ConnectionForm = memo(function ConnectionForm({
       result = await onAddConnection(connectionData);
     }
 
-    // Only clear the form if the operation was successful
     if (result.success) {
       setPcId("");
       setSwitchId("");
@@ -288,10 +323,8 @@ const ConnectionForm = memo(function ConnectionForm({
       setCableLabel("");
       setHops([]);
       setEditingConnection(null);
-      fetchAvailablePcs();
+      setCurrentStep(1); // Reset to step 1 after successful submission
     }
-    // If not successful, the form fields will retain their values,
-    // and App.js will display the error message.
   };
 
   const handleCancelEdit = () => {
@@ -303,18 +336,18 @@ const ConnectionForm = memo(function ConnectionForm({
     setCableColor("");
     setCableLabel("");
     setHops([]);
-    fetchAvailablePcs();
+    setCurrentStep(1); // Reset to step 1
   };
 
-  const handleAddPc = async (e) => {
+  const handleNewPcSaveAndContinue = async (e) => { // Re-added this handler
     e.preventDefault();
     if (newPcIp && !ipRegex.test(newPcIp)) {
-      alert("Please enter a valid IP address for PC (e.g., 192.168.1.1).");
+      showMessage("Please enter a valid IP address for PC (e.g., 192.168.1.1).", 5000);
       return;
     }
     if (newPcName.trim()) {
       try {
-        await onAddEntity("pcs", {
+        const result = await onAddEntity("pcs", {
           name: newPcName,
           ip_address: newPcIp,
           username: newPcUsername,
@@ -327,24 +360,30 @@ const ConnectionForm = memo(function ConnectionForm({
           type: newPcType,
           usage: newPcUsage,
         });
-        setNewPcName("");
-        setNewPcIp("");
-        setNewPcUsername("");
-        setNewPcInDomain(false);
-        setNewPcOs("");
-        setNewPcModel("");
-        setNewPcOffice("");
-        setNewPcDesc("");
-        setNewPcMultiPort(false);
-        setNewPcType("Workstation");
-        setNewPcUsage("");
-        setIsNewPcExpanded(false);
-        fetchAvailablePcs();
+
+        if (result.success && result.entity) {
+          lastCreatedPcIdRef.current = result.entity.id;
+          await fetchAvailablePcs(); // Re-fetch to ensure the new PC is in the dropdown options
+
+          setNewPcName("");
+          setNewPcIp("");
+          setNewPcUsername("");
+          setNewPcInDomain(false);
+          setNewPcOs("");
+          setNewPcModel("");
+          setNewPcOffice("");
+          setNewPcDesc("");
+          setNewPcMultiPort(false);
+          setNewPcType("Workstation");
+          setNewPcUsage("");
+          setIsNewPcExpanded(false);
+          // setCurrentStep(2) is now handled by the lastCreatedPcIdRef useEffect
+        }
       } catch (error) {
-        // Error message already shown by onAddEntity
+        // showMessage handled by onAddEntity
       }
     } else {
-      alert("PC Name is required.");
+      showMessage("PC Name is required.", 3000);
     }
   };
 
@@ -368,17 +407,17 @@ const ConnectionForm = memo(function ConnectionForm({
         setNewPpDesc("");
         setIsNewPpExpanded(false);
       } catch (error) {
-        // Error message already shown by onAddEntity
+        showMessage(`Error adding patch panel: ${error.message}`, 5000);
       }
     } else {
-      alert("Patch Panel Name and Location are required.");
+      showMessage("Patch Panel Name and Location are required.", 3000);
     }
   };
 
   const handleAddSwitch = async (e) => {
     e.preventDefault();
     if (newSwitchIp && !ipRegex.test(newSwitchIp)) {
-      alert("Please enter a valid IP address for Switch (e.g., 192.168.1.1).");
+      showMessage("Please enter a valid IP address for Switch (e.g., 192.168.1.1).", 5000);
       return;
     }
     if (newSwitchName.trim() && newSwitchLocationId) {
@@ -405,367 +444,88 @@ const ConnectionForm = memo(function ConnectionForm({
         setNewSwitchDesc("");
         setIsNewSwitchExpanded(false);
       } catch (error) {
-        // Error message already shown by onAddEntity
+        showMessage(`Error adding switch: ${error.message}`, 5000);
       }
     } else {
-      alert("Switch Name and Location are required.");
+      showMessage("Switch Name and Location are required.", 3000);
     }
   };
 
+  const getPortStatusSummary = useCallback((entityType, entityId) => {
+    const entity = (entityType === 'switches' ? switches : patchPanels)
+      .find(e => e.id === parseInt(entityId));
+
+    if (!entity) {
+      return null;
+    }
+
+    let connectedCount = 0;
+    if (entityType === 'switches') {
+      const connectedPorts = new Set(
+        connections
+          .filter(c => c.switch_id === entity.id)
+          .map(c => c.switch_port)
+      );
+      connectedCount = connectedPorts.size;
+    } else { // entityType === 'patch_panels'
+      const connectedPortsSet = new Set();
+      connections.forEach(connection => {
+        if (connection.hops && Array.isArray(connection.hops)) {
+          connection.hops.forEach(hop => {
+            // Corrected: Access hop.patch_panel.id
+            if (hop.patch_panel && hop.patch_panel.id === entity.id) {
+              connectedPortsSet.add(hop.patch_panel_port);
+            }
+          });
+        }
+      });
+      connectedCount = connectedPortsSet.size;
+    }
+
+    const availableCount = (entity.total_ports || 0) - connectedCount;
+
+    return { connected: connectedCount, available: availableCount };
+  }, [switches, patchPanels, connections]);
+
+  const sortedSwitches = [...switches].sort((a,b) => a.name.localeCompare(b.name));
+  const sortedPatchPanels = [...patchPanels].sort((a,b) => a.name.localeCompare(b.name));
+  const sortedLocations = [...locations].sort((a,b) => a.name.localeCompare(b.name));
+
   return (
     <div className="space-y-8">
-      {/* Collapsible Forms to Add New Entities */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Add New PC Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
-          <div
-            className="flex justify-between items-center p-5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
-            onClick={() => setIsNewPcExpanded(!isNewPcExpanded)}
-          >
-            <h3 className="text-lg font-semibold text-indigo-700 flex items-center">
-              <PlusCircle size={20} className="mr-2" /> Add New PC
-            </h3>
-            {isNewPcExpanded ? (
-              <ChevronUp size={20} />
-            ) : (
-              <ChevronDown size={20} />
-            )}
-          </div>
-          <div
-            className={`collapsible-content ${
-              isNewPcExpanded ? "expanded" : ""
-            }`}
-          >
-            <form onSubmit={handleAddPc} className="p-5 space-y-3">
-              <input
-                type="text"
-                placeholder="PC Name"
-                value={newPcName}
-                onChange={(e) => setNewPcName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-              <input
-                type="text"
-                placeholder="IP Address (e.g., 192.168.1.1)"
-                value={newPcIp}
-                onChange={(e) => setNewPcIp(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Username (Optional)"
-                value={newPcUsername}
-                onChange={(e) => setNewPcUsername(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center">
-                  <input
-                    id="new-pc-in-domain"
-                    type="checkbox"
-                    checked={newPcInDomain}
-                    onChange={(e) => setNewPcInDomain(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label
-                    htmlFor="new-pc-in-domain"
-                    className="ml-2 block text-sm text-gray-900"
-                  >
-                    In Domain
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    id="new-pc-multi-port"
-                    type="checkbox"
-                    checked={newPcMultiPort}
-                    onChange={(e) => setNewPcMultiPort(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label
-                    htmlFor="new-pc-multi-port"
-                    className="ml-2 block text-sm text-gray-900"
-                  >
-                    Multi-Port PC (Can have multiple connections)
-                  </label>
-                </div>
-              </div>
-              <select
-                value={newPcType}
-                onChange={(e) => setNewPcType(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="Workstation">Workstation</option>
-                <option value="Server">Server</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Operating System (Optional)"
-                value={newPcOs}
-                onChange={(e) => setNewPcOs(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Model (e.g., Dell OptiPlex 7010)"
-                value={newPcModel}
-                onChange={(e) => setNewPcModel(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Office (Optional)"
-                value={newPcOffice}
-                onChange={(e) => setNewPcOffice(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Usage (Optional)"
-                value={newPcUsage}
-                onChange={(e) => setNewPcUsage(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <textarea
-                placeholder="Description (Optional)"
-                value={newPcDesc}
-                onChange={(e) => setNewPcDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                rows="3"
-              ></textarea>
-              <button
-                type="submit"
-                className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Add PC
-              </button>
-            </form>
-          </div>
-        </div>
+      {/* PC Selection / Creation Step */}
+      {currentStep === 1 && (
+        <section className="p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
+          <h2 className="text-2xl font-bold text-blue-700 mb-6 text-center flex items-center justify-center">
+            <Laptop size={24} className="mr-2" /> Step 1: Select or Create PC
+          </h2>
 
-        {/* Add New Patch Panel Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
-          <div
-            className="flex justify-between items-center p-5 cursor-pointer bg-green-50 hover:bg-green-100 transition-colors duration-200 rounded-t-lg"
-            onClick={() => setIsNewPpExpanded(!isNewPpExpanded)}
-          >
-            <h3 className="text-lg font-semibold text-green-700 flex items-center">
-              <PlusCircle size={20} className="mr-2" /> Add New Patch Panel
+          {/* Select Existing PC */}
+          <div className="mb-6 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+              Select Existing PC:
             </h3>
-            {isNewPpExpanded ? (
-              <ChevronUp size={20} />
-            ) : (
-              <ChevronDown size={20} />
-            )}
-          </div>
-          <div
-            className={`collapsible-content ${
-              isNewPpExpanded ? "expanded" : ""
-            }`}
-          >
-            <form onSubmit={handleAddPp} className="p-5 space-y-3">
-              <input
-                type="text"
-                placeholder="Patch Panel Name"
-                value={newPpName}
-                onChange={(e) => setNewPpName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-              <select
-                value={newPpLocationId}
-                onChange={(e) => setNewPpLocationId(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">-- Select Location --</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                  </option>
-                ))}
-              </select>
-              {locations.length === 0 && (
-                <p className="text-sm text-red-500 mt-1">
-                  Please add a location first (Go to Locations tab).
-                </p>
-              )}
-              <input
-                type="text"
-                placeholder="Row in Rack (Optional)"
-                value={newPpRowInRack}
-                onChange={(e) => setNewPpRowInRack(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Rack Name (Optional)"
-                value={newPpRackName}
-                onChange={(e) => setNewPpRackName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="number"
-                placeholder="Total Ports (e.g., 24)"
-                value={newPpTotalPorts}
-                onChange={(e) => setNewPpTotalPorts(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                min="1"
-                required
-              />
-              <textarea
-                placeholder="Description (Optional)"
-                value={newPpDesc}
-                onChange={(e) => setNewPpDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                rows="3"
-              ></textarea>
-              <button
-                type="submit"
-                className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                Add Patch Panel
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Add New Switch Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100">
-          <div
-            className="flex justify-between items-center p-5 cursor-pointer bg-red-50 hover:bg-red-100 transition-colors duration-200 rounded-t-lg"
-            onClick={() => setIsNewSwitchExpanded(!isNewSwitchExpanded)}
-          >
-            <h3 className="text-lg font-semibold text-red-700 flex items-center">
-              <PlusCircle size={20} className="mr-2" /> Add New Switch
-            </h3>
-            {isNewSwitchExpanded ? (
-              <ChevronUp size={20} />
-            ) : (
-              <ChevronDown size={20} />
-            )}
-          </div>
-          <div
-            className={`collapsible-content ${
-              isNewSwitchExpanded ? "expanded" : ""
-            }`}
-          >
-            <form onSubmit={handleAddSwitch} className="p-5 space-y-3">
-              <input
-                type="text"
-                placeholder="Switch Name"
-                value={newSwitchName}
-                onChange={(e) => setNewSwitchName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-              <input
-                type="text"
-                placeholder="IP Address (e.g., 192.168.1.1)"
-                value={newSwitchIp}
-                onChange={(e) => setNewSwitchIp(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <select
-                value={newSwitchLocationId}
-                onChange={(e) => setNewSwitchLocationId(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">-- Select Location --</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                  </option>
-                ))}
-              </select>
-              {locations.length === 0 && (
-                <p className="text-sm text-red-500 mt-1">
-                  Please add a location first (Go to Locations tab).
-                </p>
-              )}
-              <input
-                type="text"
-                placeholder="Row in Rack (Optional)"
-                value={newSwitchRowInRack}
-                onChange={(e) => setNewSwitchRowInRack(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Rack Name (Optional)"
-                value={newSwitchRackName}
-                onChange={(e) => setNewSwitchRackName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="number"
-                placeholder="Total Ports (e.g., 4)"
-                value={newSwitchTotalPorts}
-                onChange={(e) => setNewSwitchTotalPorts(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                min="1"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Source Port (Optional)"
-                value={newSwitchSourcePort}
-                onChange={(e) => setNewSwitchSourcePort(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Model (Optional)"
-                value={newSwitchModel}
-                onChange={(e) => setNewSwitchModel(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <textarea
-                placeholder="Description (Optional)"
-                value={newSwitchDesc}
-                onChange={(e) => setNewSwitchDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                rows="3"
-              ></textarea>
-              <button
-                type="submit"
-                className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                Add Switch
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Connection Form */}
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6 p-6 bg-white rounded-lg shadow-md border border-blue-200"
-      >
-        <h3 className="text-xl font-bold text-blue-700 text-center">
-          {editingConnection
-            ? "Edit Existing Connection"
-            : "Create New Connection"}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* PC Selection */}
-          <div>
             <label
               htmlFor="pc-select"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Select PC:
+              Choose from existing PCs:
             </label>
             <select
               id="pc-select"
               value={pcId}
-              onChange={(e) => setPcId(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === "add-new-pc") {
+                  setIsNewPcExpanded(true);
+                  document.getElementById('new-pc-creation-section')?.scrollIntoView({ behavior: 'smooth' });
+                  setPcId(""); // Clear current selection
+                } else {
+                  setPcId(e.target.value);
+                  setCurrentStep(2); // Advance to step 2 after selecting existing PC
+                }
+              }}
               className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
+              required={currentStep === 1 && !isNewPcExpanded} // Required only if not creating new PC
             >
               <option value="">-- Select a PC --</option>
               {availablePcsForConnection.map((pc) => (
@@ -774,363 +534,564 @@ const ConnectionForm = memo(function ConnectionForm({
                   {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
                 </option>
               ))}
+              <option value="add-new-pc" className="italic text-blue-600">-- Add New PC --</option>
             </select>
             {availablePcsForConnection.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
-                No available PCs. Add a new PC or ensure single-port PCs are not
-                already connected.
+                No available PCs. Create a new one below.
               </p>
             )}
           </div>
 
-          {/* Switch Selection */}
-          <div>
-            <label
-              htmlFor="switch-select"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Select Switch:
-            </label>
-            <select
-              id="switch-select"
-              value={switchId}
-              onChange={(e) => setSwitchId(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">-- Select a Switch --</option>
-              {switches.map((_switch) => (
-                <option key={_switch.id} value={_switch.id}>
-                  {_switch.name} ({_switch.ip_address})
-                </option>
-              ))}
-            </select>
-            {switches.length === 0 && (
-              <p className="text-sm text-red-500 mt-1">
-                Please add a Switch first.
-              </p>
-            )}
+          {/* Divider */}
+          <div className="relative flex py-5 items-center">
+            <div className="flex-grow border-t border-gray-300"></div>
+            <span className="flex-shrink mx-4 text-gray-500">OR</span>
+            <div className="flex-grow border-t border-gray-300"></div>
           </div>
 
-          {/* Switch Port Input and Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
-            <div>
-              <label
-                htmlFor="switch-port"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Switch Port:
-              </label>
-              <input
-                id="switch-port"
-                type="text"
-                placeholder="e.g., Eth0/1, GigaPort-03"
-                value={switchPort}
-                onChange={(e) => setSwitchPort(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+          {/* Create New PC Section (Collapsible) */}
+          <div id="new-pc-creation-section" className="bg-white rounded-lg shadow-sm border border-gray-100">
+            <div
+              className="flex justify-between items-center p-5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
+              onClick={() => setIsNewPcExpanded(!isNewPcExpanded)}
+            >
+              <h3 className="text-lg font-semibold text-indigo-700 flex items-center">
+                <PlusCircle size={20} className="mr-2" /> Create New PC
+              </h3>
+              {isNewPcExpanded ? (
+                <ChevronUp size={20} />
+              ) : (
+                <ChevronDown size={20} />
+              )}
             </div>
-            <div className="flex items-center pt-5">
-              <input
-                id="is-switch-port-up"
-                type="checkbox"
-                checked={isSwitchPortUp}
-                onChange={(e) => setIsSwitchPortUp(e.target.checked)}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label
-                htmlFor="is-switch-port-up"
-                className="ml-2 block text-sm text-gray-900"
-              >
-                Port Up
-              </label>
-            </div>
-            {switchId && switches.find((s) => s.id === parseInt(switchId)) && (
-              <button
-                type="button"
-                onClick={() => onShowPortStatus("switches", switchId)}
-                className="mt-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 col-span-full"
-              >
-                View Switch Port Status (
-                {switches.find((s) => s.id === parseInt(switchId))?.name})
-              </button>
-            )}
-          </div>
-
-          {/* Main Connection Cable Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
-            <div>
-              <label
-                htmlFor="cable-color"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Cable Color:
-              </label>
-              <div className="flex items-center space-x-2">
+            <div
+              className={`collapsible-content ${
+                isNewPcExpanded ? "expanded" : ""
+              }`}
+            >
+              <form onSubmit={handleNewPcSaveAndContinue} className="p-5 space-y-3">
+                <input
+                  type="text"
+                  placeholder="PC Name"
+                  value={newPcName}
+                  onChange={(e) => setNewPcName(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="IP Address (e.g., 192.168.1.1)"
+                  value={newPcIp}
+                  onChange={(e) => setNewPcIp(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Username (Optional)"
+                  value={newPcUsername}
+                  onChange={(e) => setNewPcUsername(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <input
+                      id="new-pc-in-domain"
+                      type="checkbox"
+                      checked={newPcInDomain}
+                      onChange={(e) => setNewPcInDomain(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label
+                      htmlFor="new-pc-in-domain"
+                      className="ml-2 block text-sm text-gray-900"
+                    >
+                      In Domain
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="new-pc-multi-port"
+                      type="checkbox"
+                      checked={newPcMultiPort}
+                      onChange={(e) => setNewPcMultiPort(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label
+                      htmlFor="new-pc-multi-port"
+                      className="ml-2 block text-sm text-gray-900"
+                    >
+                      Multi-Port PC (Can have multiple connections)
+                    </label>
+                  </div>
+                </div>
                 <select
-                  id="cable-color"
-                  value={cableColor}
-                  onChange={(e) => {
-                    if (e.target.value === "add-new") {
-                        setShowAddColorInput(true);
-                        setNewCustomColor("");
+                  value={newPcType}
+                  onChange={(e) => setNewPcType(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="Workstation">Workstation</option>
+                  <option value="Server">Server</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Operating System (Optional)"
+                  value={newPcOs}
+                  onChange={(e) => setNewPcOs(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Model (Optional)"
+                  value={newPcModel}
+                  onChange={(e) => setNewPcModel(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Office (Optional)"
+                  value={newPcOffice}
+                  onChange={(e) => setNewPcOffice(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Usage (Optional)"
+                  value={newPcUsage}
+                  onChange={(e) => setNewPcUsage(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <textarea
+                  placeholder="Description (Optional)"
+                  value={newPcDesc}
+                  onChange={(e) => setNewPcDesc(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  rows="3"
+                ></textarea>
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Save PC and Continue
+                </button>
+              </form>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Connection Details Step */}
+      {currentStep === 2 && (
+        <section className="p-6 bg-white rounded-lg shadow-md border border-blue-200">
+          <h2 className="text-2xl font-bold text-blue-700 mb-6 text-center flex items-center justify-center">
+            <ArrowRight size={24} className="mr-2" /> Step 2: Connection Details
+          </h2>
+
+          <div className="mb-6 flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+            <span className="font-semibold text-gray-700">Selected PC:</span>
+            {pcId ? (
+              <span className="text-blue-600 font-medium">
+                {availablePcsForConnection.find(pc => pc.id === parseInt(pcId))?.name || "N/A"}
+              </span>
+            ) : (
+              <span className="text-red-500">No PC selected</span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep(1);
+                // Optionally clear pcId if you want to force re-selection
+                // setPcId("");
+              }}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm"
+            >
+              Change PC
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* PC Selection is now implicitly done in Step 1, removed from Step 2 */}
+              {/* Switch Selection */}
+              <div>
+                <label
+                  htmlFor="switch-select"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Select Switch:
+                </label>
+                <select
+                  id="switch-select"
+                  value={switchId}
+                  onChange={async (e) => {
+                    if (e.target.value === "add-new-switch") {
+                      setIsNewSwitchExpanded(true);
+                      document.getElementById('new-switch-creation-section')?.scrollIntoView({ behavior: 'smooth' });
+                      setSwitchId(""); // Clear current selection
                     } else {
-                        setCableColor(e.target.value);
-                        setShowAddColorInput(false);
+                      setSwitchId(e.target.value);
                     }
                   }}
                   className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">-- Select Color (Optional) --</option>
-                  {cableColorOptions.map((color) => (
-                    <option key={color} value={color}>
-                      {color}
-                    </option>
-                  ))}
-                  <option value="add-new">-- Add New Color --</option>
-                </select>
-                {showAddColorInput && (
-                    <input
-                        type="text"
-                        placeholder="Enter new color"
-                        value={newCustomColor}
-                        onChange={(e) => setNewCustomColor(e.target.value)}
-                        onBlur={handleAddCustomColor}
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddCustomColor();
-                            }
-                        }}
-                        className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    />
-                )}
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor="cable-label"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Cable Label:
-              </label>
-              <input
-                id="cable-label"
-                type="text"
-                placeholder="e.g., A1-B2, Patch-CBL-001"
-                value={cableLabel}
-                onChange={(e) => setCableLabel(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Patch Panel Hops Section */}
-        <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
-          <h4 className="text-lg font-semibold text-gray-700 mb-3">
-            Patch Panel Hops (in sequence)
-          </h4>
-          {hops.length === 0 && (
-            <p className="text-sm text-gray-500 mt-2 text-center mb-4">
-              Click "Add Patch Panel Hop" to start building the path.
-            </p>
-          )}
-          {hops.map((hop, index) => (
-            <div
-              key={index}
-              className="flex flex-col md:flex-row items-end md:items-center space-y-3 md:space-y-0 md:space-x-3 mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm"
-            >
-              <div className="flex-grow w-full md:w-auto">
-                <label
-                  htmlFor={`pp-select-${index}`}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Patch Panel {index + 1}:
-                </label>
-                <select
-                  id={`pp-select-${index}`}
-                  value={hop.patch_panel_id}
-                  onChange={(e) =>
-                    handleHopPatchPanelChange(index, e.target.value)
-                  }
-                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                   required
                 >
-                  <option value="">-- Select Patch Panel --</option>
-                  {patchPanels.map((pp) => (
-                    <option key={pp.id} value={pp.id}>
-                      {pp.name} ({pp.location_name}{pp.location?.door_number && ` (Door: ${pp.location.door_number})`})
+                  <option value="">-- Select a Switch --</option>
+                  {sortedSwitches.map((_switch) => (
+                    <option key={_switch.id} value={_switch.id}>
+                      {_switch.name} ({_switch.ip_address})
                     </option>
                   ))}
+                  <option value="add-new-switch" className="italic text-red-600">-- Add New Switch --</option>
                 </select>
-                {patchPanels.length === 0 && (
-                  <p className="text-xs text-red-500 mt-1">
-                    Please add a Patch Panel first.
+                {switches.length === 0 && (
+                  <p className="text-sm text-red-500 mt-1">
+                    Please add a Switch first.
                   </p>
                 )}
-              </div>
-              <div className="flex-grow w-full md:w-auto">
-                <label
-                  htmlFor={`pp-port-${index}`}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Port:
-                </label>
-                <input
-                  id={`pp-port-${index}`}
-                  type="text"
-                  placeholder="Port"
-                  value={hop.patch_panel_port}
-                  onChange={(e) => handleHopPortChange(index, e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  required
-                />
-              </div>
-              <div className="flex items-center w-full md:w-auto md:pt-5">
-                <input
-                  id={`is-pp-port-up-${index}`}
-                  type="checkbox"
-                  checked={hop.is_port_up}
-                  onChange={(e) =>
-                    handleHopPortStatusChange(index, e.target.checked)
-                  }
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label
-                  htmlFor={`is-pp-port-up-${index}`}
-                  className="ml-2 block text-sm text-gray-900"
-                >
-                  Port Up
-                </label>
+                {/* Port Status Summary for Selected Switch */}
+                {switchId && switches.length > 0 && getPortStatusSummary('switches', switchId) && (
+                  <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
+                    <span className="flex items-center">
+                      <Wifi size={14} className="text-green-500 mr-1" />
+                      Connected: {getPortStatusSummary('switches', switchId).connected}
+                    </span>
+                    <span className="flex items-center">
+                      <CircleDot size={14} className="text-gray-500 mr-1" />
+                      Available: {getPortStatusSummary('switches', switchId).available}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onShowPortStatus("switches", switchId)}
+                      className="text-blue-500 hover:underline ml-auto"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* New: Cable Color for Hop */}
-              <div className="flex-grow w-full md:w-auto">
-                <label
-                  htmlFor={`hop-cable-color-${index}`}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Cable Color (Hop):
-                </label>
-                <div className="flex items-center space-x-2">
-                  <select
-                    id={`hop-cable-color-${index}`}
-                    value={hop.cable_color}
-                    onChange={(e) => {
-                        if (e.target.value === "add-new-hop-color") {
-                            setShowAddColorInput(true);
-                            setNewCustomColor("");
-                        } else {
-                            handleHopCableColorChange(index, e.target.value);
-                            setShowAddColorInput(false);
-                        }
-                    }}
-                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+              {/* Switch Port Input and Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
+                <div>
+                  <label
+                    htmlFor="switch-port"
+                    className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    <option value="">-- Select Color (Optional) --</option>
-                    {cableColorOptions.map((color) => (
-                      <option key={color} value={color}>
-                        {color}
-                      </option>
-                    ))}
-                    <option value="add-new-hop-color">-- Add New Color --</option>
-                  </select>
-                  {showAddColorInput && (
-                    <input
-                        type="text"
-                        placeholder="Enter new color"
-                        value={newCustomColor}
-                        onChange={(e) => setNewCustomColor(e.target.value)}
-                        onBlur={handleAddCustomColor}
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddCustomColor();
-                            }
-                        }}
-                        className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    />
-                )}
+                    Switch Port:
+                  </label>
+                  <input
+                    id="switch-port"
+                    type="text"
+                    placeholder="e.g., Eth0/1, GigaPort-03"
+                    value={switchPort}
+                    onChange={(e) => setSwitchPort(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div className="flex items-center pt-5">
+                  <input
+                    id="is-switch-port-up"
+                    type="checkbox"
+                    checked={isSwitchPortUp}
+                    onChange={(e) => setIsSwitchPortUp(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="is-switch-port-up"
+                    className="ml-2 block text-sm text-gray-900"
+                    >
+                    Port Up
+                  </label>
                 </div>
               </div>
 
-              {/* New: Cable Label for Hop */}
-              <div className="flex-grow w-full md:w-auto">
-                <label
-                  htmlFor={`hop-cable-label-${index}`}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Cable Label (Hop):
-                </label>
-                <input
-                  id={`hop-cable-label-${index}`}
-                  type="text"
-                  placeholder="e.g., PP1-Port5"
-                  value={hop.cable_label}
-                  onChange={(e) => handleHopCableLabelChange(index, e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+              {/* Main Connection Cable Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full border-t pt-4 mt-4 border-gray-100">
+                <h4 className="text-lg font-semibold text-blue-700 col-span-full flex items-center mb-2">
+                    <Cable size={20} className="mr-2" /> Connection Cable Details
+                </h4>
+                <div>
+                  <label
+                    htmlFor="cable-color"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                    Cable Color:
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      id="cable-color"
+                      value={cableColor}
+                      onChange={(e) => {
+                        if (e.target.value === "add-new") {
+                            setShowAddColorInput(true);
+                            setNewCustomColor("");
+                        } else {
+                            setCableColor(e.target.value);
+                            setShowAddColorInput(false);
+                        }
+                      }}
+                      className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- Select Color (Optional) --</option>
+                      {cableColorOptions.map((color) => (
+                        <option key={color} value={color}>
+                          {color}
+                        </option>
+                      ))}
+                      <option value="add-new">-- Add New Color --</option>
+                    </select>
+                    {showAddColorInput && (
+                        <input
+                            type="text"
+                            placeholder="Enter new color"
+                            value={newCustomColor}
+                            onChange={(e) => setNewCustomColor(e.target.value)}
+                            onBlur={handleAddCustomColor}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddCustomColor();
+                                }
+                            }}
+                            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="cable-label"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Cable Label:
+                  </label>
+                  <input
+                    id="cable-label"
+                    type="text"
+                    placeholder="e.g., A1-B2, Patch-CBL-001"
+                    value={cableLabel}
+                    onChange={(e) => setCableLabel(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => removeHop(index)}
-                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm flex-shrink-0"
-              >
-                Remove
-              </button>
-              {hop.patch_panel_id &&
-                patchPanels.find(
-                  (pp) => pp.id === parseInt(hop.patch_panel_id)
-                ) && (
+            {/* Dynamic Patch Panel Hops Section */}
+            <div className="p-4 border border-gray-200 rounded-md bg-gray-50 mt-6">
+              <h4 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+                <Split size={20} className="mr-2" /> Patch Panel Hops (in sequence)
+              </h4>
+              {hops.length === 0 && (
+                <p className="text-sm text-gray-500 mt-2 text-center mb-4">
+                  Click "Add Patch Panel Hop" to start building the path.
+                </p>
+              )}
+              {hops.map((hop, index) => (
+                <div
+                  key={index}
+                  className="flex flex-col md:flex-row items-end md:items-center space-y-3 md:space-y-0 md:space-x-3 mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm"
+                >
+                  <div className="flex-grow w-full md:w-auto">
+                    <label
+                      htmlFor={`pp-select-${index}`}
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Patch Panel {index + 1}:
+                    </label>
+                    <select
+                      id={`pp-select-${index}`}
+                      value={hop.patch_panel_id}
+                      onChange={async (e) => {
+                        if (e.target.value === "add-new-pp") {
+                          setIsNewPpExpanded(true);
+                          document.getElementById('new-pp-creation-section')?.scrollIntoView({ behavior: 'smooth' });
+                          handleHopPatchPanelChange(index, ""); // Clear current selection
+                        } else {
+                          handleHopPatchPanelChange(index, e.target.value);
+                        }
+                      }}
+                      className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      required
+                    >
+                      <option value="">-- Select Patch Panel --</option>
+                      {sortedPatchPanels.map((pp) => (
+                        <option key={pp.id} value={pp.id}>
+                          {pp.name} ({pp.location_name}{pp.location?.door_number && ` (Door: ${pp.location.door_number})`})
+                        </option>
+                      ))}
+                      <option value="add-new-pp" className="italic text-green-600">-- Add New Patch Panel --</option>
+                    </select>
+                    {patchPanels.length === 0 && (
+                      <p className="text-sm text-red-500 mt-1">
+                        Please add a Patch Panel first.
+                      </p>
+                    )}
+                    {/* Port Status Summary for Selected Patch Panel */}
+                    {hop.patch_panel_id && patchPanels.length > 0 && getPortStatusSummary('patch_panels', hop.patch_panel_id) && (
+                      <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
+                        <span className="flex items-center">
+                          <Wifi size={14} className="text-green-500 mr-1" />
+                          Connected: {getPortStatusSummary('patch_panels', hop.patch_panel_id).connected}
+                        </span>
+                        <span className="flex items-center">
+                          <CircleDot size={14} className="text-gray-500 mr-1" />
+                          Available: {getPortStatusSummary('patch_panels', hop.patch_panel_id).available}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onShowPortStatus("patch_panels", hop.patch_panel_id)}
+                          className="text-blue-500 hover:underline ml-auto"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-grow w-full md:w-auto">
+                    <label
+                      htmlFor={`pp-port-${index}`}
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Port:
+                    </label>
+                    <input
+                      id={`pp-port-${index}`}
+                      type="text"
+                      placeholder="Port"
+                      value={hop.patch_panel_port}
+                      onChange={(e) => handleHopPortChange(index, e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center w-full md:w-auto md:pt-5">
+                    <input
+                      id={`is-pp-port-up-${index}`}
+                      type="checkbox"
+                      checked={hop.is_port_up}
+                      onChange={(e) =>
+                        handleHopPortStatusChange(index, e.target.checked)
+                      }
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label
+                      htmlFor={`is-pp-port-up-${index}`}
+                      className="ml-2 block text-sm text-gray-900"
+                    >
+                      Port Up
+                    </label>
+                  </div>
+
+                  {/* New: Cable Color for Hop */}
+                  <div className="flex-grow w-full md:w-auto">
+                    <label
+                      htmlFor={`hop-cable-color-${index}`}
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Cable Color (Hop):
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <select
+                        id={`hop-cable-color-${index}`}
+                        value={hop.cable_color}
+                        onChange={(e) => {
+                            if (e.target.value === "add-new-hop-color") {
+                                setShowAddColorInput(true);
+                                setNewCustomColor("");
+                            } else {
+                                handleHopCableColorChange(index, e.target.value);
+                                setShowAddColorInput(false);
+                            }
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      >
+                        <option value="">-- Select Color (Optional) --</option>
+                        {cableColorOptions.map((color) => (
+                          <option key={color} value={color}>
+                            {color}
+                          </option>
+                        ))}
+                        <option value="add-new-hop-color">-- Add New Color --</option>
+                      </select>
+                      {showAddColorInput && (
+                        <input
+                            type="text"
+                            placeholder="Enter new color"
+                            value={newCustomColor}
+                            onChange={(e) => setNewCustomColor(e.target.value)}
+                            onBlur={handleAddCustomColor}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddCustomColor();
+                                }
+                            }}
+                            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    )}
+                    </div>
+                  </div>
+
+                  {/* New: Cable Label for Hop */}
+                  <div className="flex-grow w-full md:w-auto">
+                    <label
+                      htmlFor={`hop-cable-label-${index}`}
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Cable Label (Hop):
+                    </label>
+                    <input
+                      id={`hop-cable-label-${index}`}
+                      type="text"
+                      placeholder="e.g., PP1-Port5"
+                      value={hop.cable_label}
+                      onChange={(e) => handleHopCableLabelChange(index, e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() =>
-                      onShowPortStatus("patch_panels", hop.patch_panel_id)
-                    }
-                    className="w-full md:w-auto mt-2 md:mt-0 px-3 py-2 bg-blue-500 text-white text-xs font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex-shrink-0"
+                    onClick={() => removeHop(index)}
+                    className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm flex-shrink-0"
                   >
-                    View Ports (
-                    {
-                      patchPanels.find(
-                        (pp) => pp.id === parseInt(hop.patch_panel_id)
-                      )?.name
-                    }
-                    )
+                    Remove
                   </button>
-                )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addHop}
+                className="w-full mt-2 py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Add Patch Panel Hop
+              </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={addHop}
-            className="w-full mt-2 py-2 px-4 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Add Patch Panel Hop
-          </button>
-        </div>
 
-        {/* Action Buttons for Connection Form */}
-        <div className="flex justify-end space-x-3 mt-6">
-          {editingConnection && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="px-5 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-colors duration-200"
-            >
-              Cancel Edit
-            </button>
-          )}
-          <button
-            type="submit"
-            className="px-5 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-          >
-            {editingConnection ? "Update Connection" : "Add Connection"}
-          </button>
-        </div>
-      </form>
+            {/* Action Buttons for Connection Form */}
+            <div className="flex justify-end space-x-3 mt-6">
+              {editingConnection && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-5 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-colors duration-200"
+                >
+                  Cancel Edit
+                </button>
+              )}
+              <button
+                type="submit"
+                className="px-5 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              >
+                {editingConnection ? "Update Connection" : "Add Connection"}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
     </div>
   );
 });

@@ -525,7 +525,7 @@ function App() {
           {/* Conditional Tab Content Rendering */}
           {activeTab === "connections" && (
             <>
-              <section className="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
+<section className="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
                 <h2 className="text-2xl font-bold text-blue-700 mb-4">
                   Add/Edit Connection
                 </h2>
@@ -533,6 +533,7 @@ function App() {
                   pcs={pcs}
                   patchPanels={patchPanels}
                   switches={switches}
+                  connections={connections}
                   onAddConnection={handleAddConnection}
                   onUpdateConnection={handleUpdateConnection}
                   editingConnection={editingConnection}

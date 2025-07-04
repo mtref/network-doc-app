@@ -18,7 +18,8 @@ services:
       FLASK_ENV: development
     # In a multi-container setup, the backend service usually just runs Flask
     # without Nginx. Nginx is in the frontend container and proxies to 'backend:5000'.
-    command: sh -c "flask db upgrade && flask run --host=0.0.0.0"
+    # command: sh -c "flask db upgrade && flask run --host=0.0.0.0"
+    command: sh -c "flask db upgrade && gunicorn -w 4 -b 0.0.0.0:5000 app:app"
 
   frontend:
     build:
