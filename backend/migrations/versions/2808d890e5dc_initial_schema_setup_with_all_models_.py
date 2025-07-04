@@ -1,8 +1,8 @@
 """Initial schema setup with all models and fields
 
-Revision ID: 00472ffbd096
+Revision ID: 2808d890e5dc
 Revises: 
-Create Date: 2025-07-03 20:09:56.325211
+Create Date: 2025-07-04 21:20:35.139380
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '00472ffbd096'
+revision = '2808d890e5dc'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -41,24 +41,28 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
+    op.create_table('racks',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('location_id', sa.Integer(), nullable=False),
+    sa.Column('description', sa.String(length=255), nullable=True),
+    sa.Column('total_units', sa.Integer(), nullable=False),
+    sa.Column('orientation', sa.String(length=50), nullable=False),
+    sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('name')
+    )
     op.create_table('patch_panels',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('location_id', sa.Integer(), nullable=True),
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
     sa.Column('rack_name', sa.String(length=100), nullable=True),
+    sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name')
-    )
-    op.create_table('racks',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('location_id', sa.Integer(), nullable=False),
-    sa.Column('description', sa.String(length=255), nullable=True),
-    sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
+    sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -69,12 +73,14 @@ def upgrade():
     sa.Column('location_id', sa.Integer(), nullable=True),
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
     sa.Column('rack_name', sa.String(length=100), nullable=True),
+    sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('source_port', sa.String(length=100), nullable=True),
     sa.Column('model', sa.String(length=100), nullable=True),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.Column('usage', sa.String(length=100), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
+    sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -111,8 +117,8 @@ def downgrade():
     op.drop_table('connection_hops')
     op.drop_table('connections')
     op.drop_table('switches')
-    op.drop_table('racks')
     op.drop_table('patch_panels')
+    op.drop_table('racks')
     op.drop_table('pcs')
     op.drop_table('locations')
     # ### end Alembic commands ###

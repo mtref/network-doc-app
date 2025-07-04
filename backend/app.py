@@ -50,6 +50,7 @@ class Rack(db.Model): # New Rack model
     location = db.relationship('Location', backref='racks_in_location', lazy=True)
     description = db.Column(db.String(255), nullable=True)
     total_units = db.Column(db.Integer, nullable=False, default=42) # NEW FIELD: Total U units in the rack
+    orientation = db.Column(db.String(50), nullable=False, default='bottom-up') # NEW FIELD: 'bottom-up' or 'top-down'
 
     def to_dict(self):
         return {
@@ -60,6 +61,7 @@ class Rack(db.Model): # New Rack model
             'location': self.location.to_dict() if self.location else None, # Include full location object for frontend filtering
             'description': self.description,
             'total_units': self.total_units, # NEW: Include total_units
+            'orientation': self.orientation, # NEW: Include orientation
         }
 
 class PC(db.Model):
@@ -101,7 +103,7 @@ class PatchPanel(db.Model):
     location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
     row_in_rack = db.Column(db.String(50), nullable=True)
     rack_name = db.Column(db.String(100), nullable=True) # Kept for older data compatibility/display
-    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True) # New field
+    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True) # New field to link to Rack
     rack = db.relationship('Rack', backref='patch_panels_in_rack', lazy=True) # Relationship to Rack
     total_ports = db.Column(db.Integer, nullable=False, default=1)
     description = db.Column(db.String(255), nullable=True)
@@ -311,6 +313,7 @@ def handle_racks():
             location_id=data['location_id'],
             description=data.get('description'),
             total_units=total_units, # NEW: Set total_units
+            orientation=data.get('orientation', 'bottom-up') # NEW: Set orientation
         )
         try:
             db.session.add(new_rack)
@@ -349,6 +352,7 @@ def handle_rack_by_id(rack_id):
         rack.name = data.get('name', rack.name)
         rack.location_id = data.get('location_id', rack.location_id)
         rack.description = data.get('description', rack.description)
+        rack.orientation = data.get('orientation', rack.orientation) # NEW: Update orientation
         try:
             db.session.commit()
             db.session.refresh(rack) # Refresh to load updated location relationship if needed
@@ -884,9 +888,9 @@ def export_data(entity_type):
             data_rows = [[loc.id, loc.name, loc.door_number] for loc in locations]
             filename = 'locations.csv'
         elif entity_type == 'racks':
-            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units'] # NEW: total_units
+            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation'] # NEW: total_units, orientation
             racks = Rack.query.options(joinedload(Rack.location)).all()
-            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units] for r in racks] # NEW: total_units
+            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in racks] # NEW: total_units, orientation
             filename = 'racks.csv'
         elif entity_type == 'pcs':
             headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage']
@@ -971,7 +975,7 @@ def export_data(entity_type):
 
     except Exception as e:
         app.logger.error(f"Error during CSV export for {entity_type}: {str(e)}")
-        return jsonify({'error': f'Failed to export {entity_type} data: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to export {entity_type} data: {str(e)}', 'details': errors}), 500
 
 
 # --- New CSV Import Endpoint ---
@@ -1006,6 +1010,7 @@ def import_data(entity_type):
             'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
             'description': 'description',
             'total_units': lambda x: int(x) if x.isdigit() else 42, # NEW: import total_units
+            'orientation': lambda x: x if x in ['bottom-up', 'top-down'] else 'bottom-up', # NEW: import orientation
         },
         'pcs': {
             'name': 'name', 'ip_address': 'ip_address', 'username': 'username',
@@ -1100,6 +1105,7 @@ def import_data(entity_type):
                     'location_id': location.id,
                     'description': row_dict.get('description'),
                     'total_units': field_maps['racks']['total_units'](row_dict.get('total_units')), # NEW: import total_units
+                    'orientation': field_maps['racks']['orientation'](row_dict.get('orientation')), # NEW: import orientation
                 }
                 new_rack = Rack(**new_item_data)
                 db.session.add(new_rack)

@@ -15,6 +15,8 @@ import {
   Server, // Icon for Switch
   Split, // Icon for Patch Panel
   HardDrive, // Generic device icon for unknown type
+  ArrowDownNarrowWide, // Icon for top-down orientation
+  ArrowUpWideNarrow, // Icon for bottom-up orientation
 } from "lucide-react";
 
 // New sub-component for visualizing a single Rack
@@ -27,53 +29,67 @@ const RackVisualizer = ({ rack, switches, patchPanels }) => {
     );
   }
 
-  const rackUnits = Array.from({ length: rack.total_units }, (_, i) => i + 1); // Units from 1 to total_units
+  // Create an array of units from 1 to total_units
+  const rawUnits = Array.from({ length: rack.total_units }, (_, i) => i + 1);
+
+  // Reverse the units for display if orientation is 'bottom-up' (standard rack view)
+  // Or keep as is if 'top-down'
+  const displayUnits = rack.orientation === 'top-down' ? rawUnits : [...rawUnits].reverse();
 
   // Create a map of occupied units for quick lookup
-  const occupiedUnits = new Map(); // Map: unitNumber -> { type: 'switch'|'patchPanel', name: 'DeviceName' }
+  const occupiedUnits = new Map(); // Map: unitNumber -> { type: 'switch'|'patchPanel', name: 'DeviceName', id: deviceId, total_ports: number }
 
   // Switches in this rack
-  switches.filter(s => s.rack_id === rack.id && s.row_in_rack)
+  Array.isArray(switches) && switches.filter(s => s.rack_id === rack.id && s.row_in_rack)
           .forEach(s => {
               const unit = parseInt(s.row_in_rack);
+              // Assuming devices occupy 1U from their row_in_rack position for simplicity
               if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-                  // Assuming a switch takes 1U, adjust if multi-U devices are needed
                   occupiedUnits.set(unit, { type: 'switch', name: s.name, id: s.id, total_ports: s.total_ports });
               }
           });
 
   // Patch Panels in this rack
-  patchPanels.filter(pp => pp.rack_id === rack.id && pp.row_in_rack)
+  Array.isArray(patchPanels) && patchPanels.filter(pp => pp.rack_id === rack.id && pp.row_in_rack)
              .forEach(pp => {
                  const unit = parseInt(pp.row_in_rack);
                  if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-                     occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
+                     // Check if a switch already occupies this unit to prioritize switch display if overlap (unlikely with 1U units)
+                     if (!occupiedUnits.has(unit)) {
+                        occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
+                     }
                  }
              });
   
-  // Reverse the units for display (Unit 1 at the bottom)
-  const displayUnits = [...rackUnits].reverse();
+  // Determine text color based on orientation
+  const orientationTextColor = rack.orientation === 'top-down' ? 'text-blue-600' : 'text-purple-600';
+  const OrientationIcon = rack.orientation === 'top-down' ? ArrowDownNarrowWide : ArrowUpWideNarrow;
+
 
   return (
     <div className="mt-4 border border-gray-300 rounded-md p-2 bg-gray-50 max-h-64 overflow-y-auto">
-      <h5 className="text-md font-semibold text-gray-700 mb-2 border-b pb-1">
-        Rack Units ({rack.total_units}U)
+      <h5 className="text-md font-semibold text-gray-700 mb-2 border-b pb-1 flex items-center justify-between">
+        <span>Rack Units ({rack.total_units}U)</span>
+        <span className={`text-xs font-normal flex items-center ${orientationTextColor}`}>
+            <OrientationIcon size={14} className="mr-1" />
+            {rack.orientation === 'top-down' ? 'Top-Down' : 'Bottom-Up'}
+        </span>
       </h5>
       <div className="space-y-0.5">
         {displayUnits.map((unit) => {
           const content = occupiedUnits.get(unit);
           let unitClass = "bg-gray-200 text-gray-600"; // Free slot
           let unitContent = `U${unit}: Free`;
-          let Icon = HardDrive; // Default icon
+          let Icon = HardDrive; // Default generic icon
 
           if (content) {
             if (content.type === 'switch') {
               unitClass = "bg-red-100 text-red-800 border border-red-300";
-              unitContent = `U${unit}: ${content.name} (SW)`;
+              unitContent = `U${unit}: ${content.name} (SW - ${content.total_ports}p)`;
               Icon = Server;
             } else if (content.type === 'patchPanel') {
               unitClass = "bg-green-100 text-green-800 border border-green-300";
-              unitContent = `U${unit}: ${content.name} (PP)`;
+              unitContent = `U${unit}: ${content.name} (PP - ${content.total_ports}p)`;
               Icon = Split;
             }
           }
@@ -82,7 +98,7 @@ const RackVisualizer = ({ rack, switches, patchPanels }) => {
             <div
               key={unit}
               className={`flex items-center text-xs p-1 rounded ${unitClass}`}
-              title={content ? `${content.name} (${content.type === 'switch' ? 'Switch' : 'Patch Panel'})` : `U${unit}: Free`}
+              title={content ? `${content.name} (${content.type === 'switch' ? 'Switch' : 'Patch Panel'}) - ${content.total_ports} ports` : `U${unit}: Free`}
             >
               <Icon size={12} className="mr-1 flex-shrink-0" />
               <span className="flex-grow truncate">{unitContent}</span>
@@ -103,6 +119,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
   const [rackFormLocationId, setRackFormLocationId] = useState("");
   const [rackFormDescription, setRackFormDescription] = useState("");
   const [rackFormTotalUnits, setRackFormTotalUnits] = useState(42); // NEW: State for total_units
+  const [rackFormOrientation, setRackFormOrientation] = useState('bottom-up'); // NEW: State for orientation
 
   const [isAddRackFormExpanded, setIsAddRackFormExpanded] = useState(false);
 
@@ -136,7 +153,8 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
         (rack.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (rackLocationDoorNumber).toLowerCase().includes(lowerCaseSearchTerm) || // Search by door number
         (rack.description || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (typeof rack.total_units === 'number' && String(rack.total_units).includes(lowerCaseSearchTerm)); // Search by total_units
+        (typeof rack.total_units === 'number' && String(rack.total_units).includes(lowerCaseSearchTerm)) || // Search by total_units
+        (typeof rack.orientation === 'string' && rack.orientation.toLowerCase().includes(lowerCaseSearchTerm)); // NEW: Search by orientation
 
       // Location filter
       const matchesLocation =
@@ -160,6 +178,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
     setRackFormLocationId(rack.location_id || "");
     setRackFormDescription(rack.description || "");
     setRackFormTotalUnits(rack.total_units || 42); // NEW: Set total_units for editing
+    setRackFormOrientation(rack.orientation || 'bottom-up'); // NEW: Set orientation for editing
     setIsAddRackFormExpanded(true); // Expand form when editing
   }, []);
 
@@ -181,6 +200,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
       location_id: parseInt(rackFormLocationId),
       description: rackFormDescription,
       total_units: parseInt(rackFormTotalUnits), // NEW: Include total_units in data
+      orientation: rackFormOrientation, // NEW: Include orientation in data
     };
 
     if (editingRack) {
@@ -193,6 +213,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
     setRackFormLocationId("");
     setRackFormDescription("");
     setRackFormTotalUnits(42); // NEW: Reset total_units
+    setRackFormOrientation('bottom-up'); // NEW: Reset orientation
     setIsAddRackFormExpanded(false); // Collapse form after submission
   };
 
@@ -290,6 +311,25 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
               max="50"
               required
             />
+            {/* NEW: Orientation Selection */}
+            <div>
+              <label htmlFor="rack-orientation" className="block text-sm font-medium text-gray-700 mb-1">
+                Unit Numbering Orientation:
+              </label>
+              <select
+                id="rack-orientation"
+                value={rackFormOrientation}
+                onChange={(e) => setRackFormOrientation(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                required
+              >
+                <option value="bottom-up">Bottom-Up (Unit 1 at bottom)</option>
+                <option value="top-down">Top-Down (Unit 1 at top)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Determines how rack unit numbers are ordered visually. Standard is Bottom-Up.
+              </p>
+            </div>
             <textarea
               placeholder="Description (Optional)"
               value={rackFormDescription}
@@ -307,6 +347,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                     setRackFormLocationId("");
                     setRackFormDescription("");
                     setRackFormTotalUnits(42); // Reset total_units
+                    setRackFormOrientation('bottom-up'); // Reset orientation
                     setIsAddRackFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
