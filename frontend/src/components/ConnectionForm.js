@@ -30,26 +30,25 @@ const API_BASE_URL =
 
 // Wrap the component with memo to prevent unnecessary re-renders
 const ConnectionForm = memo(function ConnectionForm({
-  pcs,
+  pcs, // This prop contains the updated list of PCs
   patchPanels,
   switches,
-  connections,
+  connections, // This prop contains the updated list of connections
   onAddConnection,
   onUpdateConnection,
   editingConnection,
   setEditingConnection,
   onAddEntity,
   onShowPortStatus,
-  locations, // locations prop is crucial here
+  locations,
   showMessage,
 }) {
-  const [currentStep, setCurrentStep] = useState(1); // 1: PC selection/creation, 2: Connection details
+  const [currentStep, setCurrentStep] = useState(1);
   const [pcId, setPcId] = useState("");
   const [switchPort, setSwitchPort] = useState("");
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
   const [switchId, setSwitchId] = useState("");
-  // Each hop object will now contain its own `location_id`
-  const [hops, setHops] = useState([]); // { patch_panel_id, patch_panel_port, is_port_up, cable_color, cable_label, location_id }
+  const [hops, setHops] = useState([]);
   const [cableColor, setCableColor] = useState("");
   const [cableLabel, setCableLabel] = useState("");
 
@@ -57,13 +56,11 @@ const ConnectionForm = memo(function ConnectionForm({
     []
   );
 
-  // State for selected location to filter switches
   const [selectedLocationIdForSwitch, setSelectedLocationIdForSwitch] = useState("");
   const [filteredSwitchesByLocation, setFilteredSwitchesByLocation] = useState([]);
 
-
   const [cableColorOptions, setCableColorOptions] = useState(
-    ["Blue", "Green", "Red", "Yellow", "Orange", "Black", "White", "Grey", "Purple", "Brown",].sort()
+    ["Blue", "Green", "Red", "Yellow", "Orange", "Black", "White", "Grey", "Purple", "Brown"].sort()
   );
   const [showAddColorInput, setShowAddColorInput] = useState(false);
   const [newCustomColor, setNewCustomColor] = useState("");
@@ -72,7 +69,6 @@ const ConnectionForm = memo(function ConnectionForm({
   const [isNewPpExpanded, setIsNewPpExpanded] = useState(false);
   const [isNewSwitchExpanded, setIsNewSwitchExpanded] = useState(false);
 
-  // PC-related state variables
   const [newPcName, setNewPcName] = useState("");
   const [newPcIp, setNewPcIp] = useState("");
   const [newPcUsername, setNewPcUsername] = useState("");
@@ -105,25 +101,39 @@ const ConnectionForm = memo(function ConnectionForm({
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
 
+  // IMPORTANT: The fetchAvailablePcs callback now depends on 'pcs' and 'connections' props.
+  // This ensures it gets recreated and re-executed when these underlying data change.
   const fetchAvailablePcs = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/available_pcs`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const all_pcs = pcs; // Use the pcs prop directly
+      const all_connections = connections; // Use the connections prop directly
+
+      // This logic must exactly match your backend's /available_pcs endpoint
+      // for consistent filtering on the frontend without extra API calls here.
+      const connected_single_port_pc_ids = new Set(
+        all_connections.filter(conn => !conn.pc.multi_port).map(conn => conn.pc.id)
+      );
+
+      const filteredPcs = [];
+      for (const pc of all_pcs) {
+          if (pc.multi_port || !connected_single_port_pc_ids.has(pc.id)) {
+              filteredPcs.push(pc);
+          }
       }
-      const data = await response.json();
+
       setAvailablePcsForConnection(
-        data.sort((a, b) => a.name.localeCompare(b.name))
+        filteredPcs.sort((a, b) => a.name.localeCompare(b.name))
       );
     } catch (error) {
-      console.error("Failed to fetch available PCs:", error);
-      showMessage(`Error fetching available PCs: ${error.message}`, 5000);
+      console.error("Failed to filter available PCs on frontend:", error);
+      showMessage(`Error filtering available PCs: ${error.message}`, 5000);
     }
-  }, [showMessage]);
+  }, [pcs, connections, showMessage]); // Dependencies: pcs and connections props
 
+  // This useEffect now correctly re-runs fetchAvailablePcs when pcs or connections change
   useEffect(() => {
     fetchAvailablePcs();
-  }, [fetchAvailablePcs]);
+  }, [fetchAvailablePcs]); // Dependency: the memoized callback itself
 
   // Filter switches based on selectedLocationIdForSwitch
   useEffect(() => {
@@ -135,21 +145,19 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       setFilteredSwitchesByLocation(filtered);
     }
-    // Reset selected switch if its location no longer matches the filter
     if (switchId && selectedLocationIdForSwitch !== "" &&
         !switches.some(s => String(s.id) === switchId && String(s.location_id) === selectedLocationIdForSwitch)) {
         setSwitchId("");
     }
-  }, [selectedLocationIdForSwitch, switches]);
+  }, [selectedLocationIdForSwitch, switches, switchId]); // Added switchId to dependencies
 
-  // Ref for auto-selection of newly created PC
+
   const lastCreatedPcIdRef = useRef(null);
 
   useEffect(() => {
     if (editingConnection) {
       setPcId(editingConnection.pc_id || "");
       setSwitchId(editingConnection.switch_id || "");
-      // Set the location filter for the switch being edited
       if (editingConnection.switch?.location_id) {
         setSelectedLocationIdForSwitch(String(editingConnection.switch.location_id));
       } else {
@@ -164,7 +172,6 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       setCableColor(editingConnection.cable_color || "");
       setCableLabel(editingConnection.cable_label || "");
-      // Crucially, for editing, we must hydrate the `location_id` for each hop from the patch_panel object
       setHops(
         editingConnection.hops.map((hop) => ({
           patch_panel_id: hop.patch_panel?.id || "",
@@ -172,11 +179,13 @@ const ConnectionForm = memo(function ConnectionForm({
           is_port_up: hop.is_port_up,
           cable_color: hop.cable_color || "",
           cable_label: hop.cable_label || "",
-          // Add location_id to hop object when editing
           location_id: hop.patch_panel?.location_id ? String(hop.patch_panel.location_id) : "",
         })) || []
       );
 
+      // When editing, ensure the current PC is always in the dropdown,
+      // even if it's a single-port PC that's now "unavailable" for new connections.
+      // This allows editing its own connection.
       setAvailablePcsForConnection((prev) => {
         if (
           editingConnection.pc &&
@@ -188,19 +197,19 @@ const ConnectionForm = memo(function ConnectionForm({
         }
         return prev;
       });
-      setCurrentStep(2); // Go to step 2 when editing an existing connection
+      setCurrentStep(2);
     } else {
       setPcId("");
       setSwitchId("");
-      setSelectedLocationIdForSwitch(""); // Reset location filter for switch
+      setSelectedLocationIdForSwitch("");
       setSwitchPort("");
       setIsSwitchPortUp(true);
       setCableColor("");
       setCableLabel("");
-      setHops([]); // Hops will be empty on new form, so no location_id to set initially
-      setCurrentStep(1); // Always start at step 1 for new connections
+      setHops([]);
+      setEditingConnection(null);
+      setCurrentStep(1);
 
-      // Reset new entity form fields as well
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
@@ -230,11 +239,10 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewSwitchModel("");
       setNewSwitchDesc("");
 
-      fetchAvailablePcs(); // Re-fetch available PCs when not editing
+      fetchAvailablePcs(); // Re-fetch available PCs when not editing (now this uses the current state of pcs/connections)
     }
-  }, [editingConnection, fetchAvailablePcs, switches, patchPanels]); // Add switches and patchPanels to dependencies
+  }, [editingConnection, pcs, connections, switches]); // Added pcs and connections to dependencies
 
-  // Effect for auto-selection of a newly created PC (triggered by availablePcsForConnection update)
   useEffect(() => {
     if (
       lastCreatedPcIdRef.current !== null &&
@@ -244,15 +252,13 @@ const ConnectionForm = memo(function ConnectionForm({
     ) {
       setPcId(lastCreatedPcIdRef.current.toString());
       lastCreatedPcIdRef.current = null;
-      setCurrentStep(2); // Advance to step 2 after selecting
+      setCurrentStep(2);
     }
   }, [availablePcsForConnection]);
 
-  // Handle location change for a specific hop
   const handleHopLocationChange = (index, value) => {
     const updatedHops = [...hops];
     updatedHops[index].location_id = value;
-    // If location changes, reset the selected patch panel for this hop
     updatedHops[index].patch_panel_id = "";
     setHops(updatedHops);
   };
@@ -291,7 +297,7 @@ const ConnectionForm = memo(function ConnectionForm({
     setHops([
       ...hops,
       {
-        location_id: "", // New: Initialize location_id for each new hop
+        location_id: "",
         patch_panel_id: "",
         patch_panel_port: "",
         is_port_up: true,
@@ -329,7 +335,6 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       return;
     }
-    // Validate each hop's location and patch panel selection
     const allHopsValid = hops.every(
       (hop) => hop.location_id && hop.patch_panel_id && hop.patch_panel_port.trim()
     );
@@ -351,7 +356,6 @@ const ConnectionForm = memo(function ConnectionForm({
         is_port_up: hop.is_port_up,
         cable_color: hop.cable_color,
         cable_label: hop.cable_label,
-        // location_id is not sent to backend for hop, as patch_panel_id is sufficient
       })),
     };
 
@@ -365,14 +369,14 @@ const ConnectionForm = memo(function ConnectionForm({
     if (result.success) {
       setPcId("");
       setSwitchId("");
-      setSelectedLocationIdForSwitch(""); // Reset location filter for switch
+      setSelectedLocationIdForSwitch("");
       setSwitchPort("");
       setIsSwitchPortUp(true);
       setCableColor("");
       setCableLabel("");
       setHops([]);
       setEditingConnection(null);
-      setCurrentStep(1); // Reset to step 1 after successful submission
+      setCurrentStep(1);
     }
   };
 
@@ -380,17 +384,16 @@ const ConnectionForm = memo(function ConnectionForm({
     setEditingConnection(null);
     setPcId("");
     setSwitchId("");
-    setSelectedLocationIdForSwitch(""); // Reset location filter for switch
+    setSelectedLocationIdForSwitch("");
     setSwitchPort("");
     setIsSwitchPortUp(true);
     setCableColor("");
     setCableLabel("");
     setHops([]);
-    setCurrentStep(1); // Reset to step 1
+    setCurrentStep(1);
   };
 
   const handleNewPcSaveAndContinue = async (e) => {
-    // Re-added this handler
     e.preventDefault();
     if (newPcIp && !ipRegex.test(newPcIp)) {
       showMessage(
@@ -417,8 +420,8 @@ const ConnectionForm = memo(function ConnectionForm({
 
         if (result.success && result.entity) {
           lastCreatedPcIdRef.current = result.entity.id;
-          await fetchAvailablePcs(); // Re-fetch to ensure the new PC is in the dropdown options
-
+          // No explicit fetchAvailablePcs() here,
+          // but the useEffect that depends on `pcs` prop will trigger it.
           setNewPcName("");
           setNewPcIp("");
           setNewPcUsername("");
@@ -431,7 +434,6 @@ const ConnectionForm = memo(function ConnectionForm({
           setNewPcType("Workstation");
           setNewPcUsage("");
           setIsNewPcExpanded(false);
-          // setCurrentStep(2) is now handled by the lastCreatedPcIdRef useEffect
         }
       } catch (error) {
         // showMessage handled by onAddEntity
@@ -529,7 +531,6 @@ const ConnectionForm = memo(function ConnectionForm({
       connections.forEach(connection => {
         if (connection.hops && Array.isArray(connection.hops)) {
           connection.hops.forEach(hop => {
-            // Corrected: Access hop.patch_panel.id
             if (hop.patch_panel && hop.patch_panel.id === entity.id) {
               connectedPortsSet.add(hop.patch_panel_port);
             }
@@ -1011,42 +1012,40 @@ const ConnectionForm = memo(function ConnectionForm({
                 return (
                   <div
                     key={index}
-                    // Outer container for each hop. Flex column to stack location on top,
-                    // then inner flex row for remaining inputs.
+                    // Outer container for each hop.
+                    // This div itself will be flex-col, containing two main "lines"
                     className="flex flex-col mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm"
                   >
-                    {/* First line: Location for Hop */}
-                    <div className="w-full mb-3"> {/* Use w-full and mb-3 to give it its own line and spacing */}
-                      <label
-                        htmlFor={`hop-location-select-${index}`}
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        <MapPin size={16} className="inline-block mr-1 text-gray-500" />Location for Hop {index + 1}:
-                      </label>
-                      <select
-                        id={`hop-location-select-${index}`}
-                        value={hop.location_id}
-                        onChange={(e) => handleHopLocationChange(index, e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        required
-                      >
-                        <option value="">-- Select Location --</option>
-                        {sortedLocations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                          </option>
-                        ))}
-                      </select>
-                      {locations.length === 0 && (
-                        <p className="text-sm text-red-500 mt-1">
-                          Please add locations first.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Second line: Rest of the inputs in a flex row */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 w-full"> {/* Use flex-wrap and gap */}
-                      <div className="flex-grow min-w-[150px] max-w-xs"> {/* Patch Panel select: flex-grow + max-w-xs to make it longer */}
+                    {/* First line: Location, Patch Panel, Port, Port Up */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 w-full mb-3"> {/* Added mb-3 for spacing */}
+                      <div className="flex-1 min-w-[150px] max-w-xs"> {/* Location dropdown */}
+                        <label
+                          htmlFor={`hop-location-select-${index}`}
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          <MapPin size={16} className="inline-block mr-1 text-gray-500" />Location for Hop {index + 1}:
+                        </label>
+                        <select
+                          id={`hop-location-select-${index}`}
+                          value={hop.location_id}
+                          onChange={(e) => handleHopLocationChange(index, e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          required
+                        >
+                          <option value="">-- Select Location --</option>
+                          {sortedLocations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                            </option>
+                          ))}
+                        </select>
+                        {locations.length === 0 && (
+                          <p className="text-sm text-red-500 mt-1">
+                            Please add locations first.
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex-grow min-w-[150px] max-w-xs"> {/* Patch Panel select */}
                         <label
                           htmlFor={`pp-select-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1174,10 +1173,11 @@ const ConnectionForm = memo(function ConnectionForm({
                           Port Up
                         </label>
                       </div>
+                    </div>
 
-                      {/* Cable Color (Hop) - smaller width */}
-                      {/* Using w-2/5 for ~40% width and w-3/5 for ~60% width on small screens, and w-1/4, w-1/3 on medium/large */}
-                      <div className="w-full sm:w-2/5 md:w-1/4">
+                    {/* Second line: Cable Color, Cable Label, Remove Button */}
+                    <div className="flex flex-wrap items-end gap-x-3 gap-y-3 w-full mt-3 pt-3 border-t border-gray-100"> {/* Added mt-3 pt-3 border-t for separation */}
+                      <div className="flex-1 min-w-[120px]"> {/* Cable Color */}
                         <label
                           htmlFor={`hop-cable-color-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1199,7 +1199,7 @@ const ConnectionForm = memo(function ConnectionForm({
                             }}
                             className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                           >
-                            <option value="">-- Select Color (Optional) --</option>
+                            <option value="">-- Select Color --</option>
                             {cableColorOptions.map((color) => (
                               <option key={color} value={color}>
                                 {color}
@@ -1228,8 +1228,7 @@ const ConnectionForm = memo(function ConnectionForm({
                         </div>
                       </div>
 
-                      {/* Cable Label (Hop) - smaller width */}
-                      <div className="w-full sm:w-3/5 md:w-1/3">
+                      <div className="flex-1 min-w-[120px]"> {/* Cable Label */}
                         <label
                           htmlFor={`hop-cable-label-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
