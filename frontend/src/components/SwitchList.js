@@ -13,7 +13,7 @@ import {
   PlusCircle,
   ChevronDown,
   ChevronUp,
-  Columns,
+  Columns, // Icon for Rack
   HardDrive,
   Link,
   Filter,
@@ -21,13 +21,14 @@ import {
 } from "lucide-react";
 
 function SwitchList({
-  switches,
+  switches, // Ensure this is always an array, passed from App.js
   onAddEntity,
   onUpdateEntity,
   onDeleteEntity,
   onShowPortStatus,
-  locations,
-  onViewDiagram, // New prop for viewing diagram
+  locations, // locations prop is crucial here
+  racks, // Make sure racks are passed as a prop from App.js
+  onViewDiagram,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredSwitches, setFilteredSwitches] = useState([]);
@@ -36,93 +37,87 @@ function SwitchList({
   const [switchFormIp, setSwitchFormIp] = useState("");
   const [switchFormLocationId, setSwitchFormLocationId] = useState("");
   const [switchFormRowInRack, setSwitchFormRowInRack] = useState("");
-  const [switchFormRackName, setSwitchFormRackName] = useState("");
+  const [switchFormRackId, setSwitchFormRackId] = useState(""); // State for rack_id
   const [switchFormTotalPorts, setSwitchFormTotalPorts] = useState(1);
   const [switchFormSourcePort, setSwitchFormSourcePort] = useState("");
   const [switchFormModel, setSwitchFormModel] = useState("");
   const [switchFormDesc, setSwitchFormDesc] = useState("");
-  const [switchFormUsage, setSwitchFormUsage] = useState(""); // New state for Switch usage
+  const [switchFormUsage, setSwitchFormUsage] = useState("");
 
   const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false);
 
   const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
   const [selectedRackFilter, setSelectedRackFilter] = useState("all");
   const [selectedModelFilter, setSelectedModelFilter] = useState("all");
-  const [selectedUsageFilter, setSelectedUsageFilter] = useState("all"); // New filter for Switch Usage
+  const [selectedUsageFilter, setSelectedUsageFilter] = useState("all");
 
   const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
   const [availableRackOptions, setAvailableRackOptions] = useState([]);
   const [availableModelOptions, setAvailableModelOptions] = useState([]);
-  const [availableUsageOptions, setAvailableUsageOptions] = useState([]); // New state for unique usage options
+  const [availableUsageOptions, setAvailableUsageOptions] = useState([]);
 
   const ipRegex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
 
-  // Dropdown options for Usage
-  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"]; //
+  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"];
 
+  // Effect to extract unique filter options whenever 'switches' or 'locations' data changes
   useEffect(() => {
+    const currentSwitches = Array.isArray(switches) ? switches : [];
+    const currentLocations = Array.isArray(locations) ? locations : [];
+
     const uniqueLocations = [
-      ...new Set(switches.map((s) => s.location_name).filter(Boolean)),
+      ...new Set(currentSwitches.map((s) => s.location_name).filter(Boolean)),
     ].sort();
     setAvailableLocationOptions(uniqueLocations);
 
     const uniqueRacks = [
-      ...new Set(switches.map((s) => s.rack_name).filter(Boolean)),
+      ...new Set(currentSwitches.map((s) => s.rack_name).filter(Boolean)),
     ].sort();
     setAvailableRackOptions(uniqueRacks);
 
     const uniqueModels = [
-      ...new Set(switches.map((s) => s.model).filter(Boolean)),
+      ...new Set(currentSwitches.map((s) => s.model).filter(Boolean)),
     ].sort();
     setAvailableModelOptions(uniqueModels);
 
-    const uniqueUsage = [ // Extract unique usage options
-      ...new Set(switches.map((s) => s.usage).filter(Boolean)),
+    const uniqueUsage = [
+      ...new Set(currentSwitches.map((s) => s.usage).filter(Boolean)),
     ].sort();
     setAvailableUsageOptions(uniqueUsage);
-  }, [switches]);
+  }, [switches, locations]);
 
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filtered = switches.filter((_switch) => {
+    const currentSwitches = Array.isArray(switches) ? switches : [];
+    const currentLocations = Array.isArray(locations) ? locations : [];
+
+    const filtered = currentSwitches.filter((_switch) => {
+      const switchLocationDoorNumber = _switch.location?.door_number || "";
+
       const matchesSearch =
-        (_switch.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (_switch.ip_address || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (_switch.location_name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (_switch.row_in_rack || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (_switch.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        String(_switch.total_ports).includes(lowerCaseSearchTerm) ||
-        (String(_switch.source_port) || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (String(_switch.model) || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (String(_switch.description) || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (String(_switch.usage) || "") // New: search by usage
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm);
+        (typeof _switch.name === 'string' && _switch.name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.ip_address === 'string' && _switch.ip_address.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.location_name === 'string' && _switch.location_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.row_in_rack === 'string' && _switch.row_in_rack.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.rack_name === 'string' && _switch.rack_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.total_ports === 'number' && String(_switch.total_ports).includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.source_port === 'string' && String(_switch.source_port).toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.model === 'string' && String(_switch.model).toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.description === 'string' && String(_switch.description).toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof _switch.usage === 'string' && String(_switch.usage).toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (typeof switchLocationDoorNumber === 'string' && switchLocationDoorNumber.toLowerCase().includes(lowerCaseSearchTerm));
 
       const matchesLocation =
         selectedLocationFilter === "all" ||
-        _switch.location_name === selectedLocationFilter;
-      const matchesRack =
-        selectedRackFilter === "all" ||
-        _switch.rack_name === selectedRackFilter;
-      const matchesModel =
-        selectedModelFilter === "all" || _switch.model === selectedModelFilter;
-      const matchesUsage = // New filter condition for usage
-        selectedUsageFilter === "all" || _switch.usage === selectedUsageFilter;
+        (typeof _switch.location_name === 'string' && _switch.location_name === selectedLocationFilter);
 
+      const matchesRack =
+        selectedRackFilter === "all" || (typeof _switch.rack_name === 'string' && _switch.rack_name === selectedRackFilter);
+      const matchesModel =
+        selectedModelFilter === "all" || (typeof _switch.model === 'string' && _switch.model === selectedModelFilter);
+      const matchesUsage =
+        selectedUsageFilter === "all" || (typeof _switch.usage === 'string' && _switch.usage === selectedUsageFilter);
 
       return matchesSearch && matchesLocation && matchesRack && matchesModel && matchesUsage;
     });
@@ -133,7 +128,8 @@ function SwitchList({
     selectedLocationFilter,
     selectedRackFilter,
     selectedModelFilter,
-    selectedUsageFilter, // Add as dependency
+    selectedUsageFilter,
+    locations
   ]);
 
   const handleEdit = (_switch) => {
@@ -142,12 +138,12 @@ function SwitchList({
     setSwitchFormIp(_switch.ip_address || "");
     setSwitchFormLocationId(_switch.location_id || "");
     setSwitchFormRowInRack(_switch.row_in_rack || "");
-    setSwitchFormRackName(_switch.rack_name || "");
+    setSwitchFormRackId(_switch.rack_id ? String(_switch.rack_id) : "");
     setSwitchFormTotalPorts(_switch.total_ports);
     setSwitchFormSourcePort(_switch.source_port || "");
     setSwitchFormModel(_switch.model || "");
     setSwitchFormDesc(_switch.description || "");
-    setSwitchFormUsage(_switch.usage || ""); // Set usage for editing
+    setSwitchFormUsage(_switch.usage || "");
     setIsAddSwitchFormExpanded(true);
   };
 
@@ -168,12 +164,12 @@ function SwitchList({
       ip_address: switchFormIp,
       location_id: parseInt(switchFormLocationId),
       row_in_rack: switchFormRowInRack,
-      rack_name: switchFormRackName,
+      rack_id: switchFormRackId ? parseInt(switchFormRackId) : null,
       total_ports: parseInt(switchFormTotalPorts),
       source_port: switchFormSourcePort,
       model: switchFormModel,
       description: switchFormDesc,
-      usage: switchFormUsage, // Include usage in data
+      usage: switchFormUsage,
     };
 
     if (editingSwitch) {
@@ -186,18 +182,46 @@ function SwitchList({
     setSwitchFormIp("");
     setSwitchFormLocationId("");
     setSwitchFormRowInRack("");
-    setSwitchFormRackName("");
+    setSwitchFormRackId("");
     setSwitchFormTotalPorts(1);
     setSwitchFormSourcePort("");
     setSwitchFormModel("");
     setSwitchFormDesc("");
-    setSwitchFormUsage(""); // Reset usage field
+    setSwitchFormUsage("");
     setIsAddSwitchFormExpanded(false);
   };
 
+  const sortedLocations = Array.isArray(locations) ? [...locations].sort((a,b) => a.name.localeCompare(b.name)) : [];
+  const sortedRacks = Array.isArray(racks) ? [...racks].sort((a,b) => a.name.localeCompare(b.name)) : [];
+
+  // --- DEBUGGING LOGS ---
+  useEffect(() => {
+    console.log("SwitchList - Racks prop:", racks);
+    console.log("SwitchList - Sorted Racks for dropdown:", sortedRacks);
+    console.log("SwitchList - Selected Location ID for Switch Form:", switchFormLocationId);
+    
+    if (Array.isArray(sortedRacks) && switchFormLocationId) {
+      const filteredForDebug = sortedRacks.filter(rack => {
+        const match = (rack.location_id !== undefined && String(rack.location_id) === switchFormLocationId);
+        if (!match) {
+          console.log(`Rack "${rack.name}" (ID: ${rack.id}, LocationID: ${rack.location_id}) does NOT match selected location ${switchFormLocationId}`);
+        } else {
+          console.log(`Rack "${rack.name}" (ID: ${rack.id}, LocationID: ${rack.location_id}) DOES match selected location ${switchFormLocationId}`);
+        }
+        return match;
+      });
+      console.log("SwitchList - Filtered Racks (for dropdown, after filter):", filteredForDebug);
+    } else if (!switchFormLocationId) {
+      console.log("SwitchList - No location selected in form, showing all racks.");
+    } else if (!Array.isArray(sortedRacks)) {
+      console.log("SwitchList - sortedRacks is not an array!");
+    }
+  }, [racks, sortedRacks, switchFormLocationId]); // Add dependencies for this effect
+  // --- END DEBUGGING LOGS ---
+
+
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       {/* Filter Options for Switches */}
@@ -219,9 +243,9 @@ function SwitchList({
             className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="all">All</option>
-            {availableLocationOptions.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
+            {Array.isArray(locations) && locations.map((loc) => (
+              <option key={loc.id} value={loc.name}>
+                {loc.name}{loc.door_number ? ` (Door: ${loc.door_number})` : ''}
               </option>
             ))}
           </select>
@@ -271,7 +295,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Usage Filter for Switches */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-usage-filter"
@@ -334,14 +357,17 @@ function SwitchList({
             />
             <select
               value={switchFormLocationId}
-              onChange={(e) => setSwitchFormLocationId(e.target.value)}
+              onChange={(e) => {
+                setSwitchFormLocationId(e.target.value);
+                setSwitchFormRackId(""); // Reset selected rack when location changes
+              }}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">-- Select Location --</option>
-              {locations.map((loc) => (
+              {sortedLocations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
-                  {loc.name}
+                  {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                 </option>
               ))}
             </select>
@@ -357,13 +383,35 @@ function SwitchList({
               onChange={(e) => setSwitchFormRowInRack(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
-            <input
-              type="text"
-              placeholder="Rack Name (Optional)"
-              value={switchFormRackName}
-              onChange={(e) => setSwitchFormRackName(e.target.value)}
+            {/* Rack Selection Dropdown: Using rack.location_id for filtering */}
+            <select
+              value={switchFormRackId}
+              onChange={(e) => setSwitchFormRackId(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+            >
+              <option value="">-- Select Rack (Optional) --</option>
+              {Array.isArray(sortedRacks) && sortedRacks
+                .filter(rack => {
+                    // Filter based on rack.location_id
+                    return !switchFormLocationId || (rack.location_id !== undefined && String(rack.location_id) === switchFormLocationId);
+                })
+                .map((rack) => (
+                  <option key={rack.id} value={rack.id}>
+                    {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                  </option>
+                ))}
+            </select>
+            {Array.isArray(racks) && racks.length === 0 && (
+              <p className="text-sm text-red-500 mt-1">
+                No racks added. Add racks in the Racks tab to link.
+              </p>
+            )}
+            {switchFormLocationId && Array.isArray(sortedRacks) && sortedRacks.filter(rack => rack.location_id !== undefined && String(rack.location_id) === switchFormLocationId).length === 0 && (
+                <p className="text-sm text-gray-500 mt-1">
+                    No racks found for the selected location.
+                </p>
+            )}
+
             <input
               type="number"
               placeholder="Total Ports (e.g., 4)"
@@ -387,7 +435,7 @@ function SwitchList({
               onChange={(e) => setSwitchFormModel(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
-            <select // Switch Usage dropdown
+            <select
                 value={switchFormUsage}
                 onChange={(e) => setSwitchFormUsage(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -396,7 +444,6 @@ function SwitchList({
                 {usageOptions.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
-                {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
                 <option value="other">Add Custom Usage...</option>
             </select>
             {switchFormUsage === "other" && (
@@ -407,11 +454,11 @@ function SwitchList({
                     const customUsage = e.target.value.trim();
                     if (customUsage) {
                       if (!usageOptions.includes(customUsage)) {
-                        usageOptions.push(customUsage); // Dynamically add to available options
+                        usageOptions.push(customUsage);
                       }
                       setSwitchFormUsage(customUsage);
                     } else {
-                      setSwitchFormUsage(""); // Reset if input is cleared
+                      setSwitchFormUsage("");
                     }
                   }}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -434,12 +481,12 @@ function SwitchList({
                     setSwitchFormIp("");
                     setSwitchFormLocationId("");
                     setSwitchFormRowInRack("");
-                    setSwitchFormRackName("");
+                    setSwitchFormRackId("");
                     setSwitchFormTotalPorts(1);
                     setSwitchFormSourcePort("");
                     setSwitchFormModel("");
                     setSwitchFormDesc("");
-                    setSwitchFormUsage(""); // Reset usage field
+                    setSwitchFormUsage("");
                     setIsAddSwitchFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -476,7 +523,7 @@ function SwitchList({
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {_switch.location_name || "N/A"}
+                {_switch.location_name || "N/A"}{_switch.location?.door_number && ` (Door: ${_switch.location.door_number})`}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Server size={16} className="text-gray-500 mr-2" /> Row:{" "}
@@ -498,7 +545,7 @@ function SwitchList({
                 <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
                 {_switch.model || "N/A"}
               </p>
-              <p className="text-sm text-gray-700 mb-1 flex items-center"> {/* New field: Switch Usage */}
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
                 {_switch.usage || "N/A"}
               </p>
@@ -517,7 +564,7 @@ function SwitchList({
                   View Ports
                 </button>
                 <button
-                  onClick={() => onViewDiagram(_switch)} // New "View Diagram" button
+                  onClick={() => onViewDiagram(_switch)}
                   className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
                   title="View Diagram"
                 >

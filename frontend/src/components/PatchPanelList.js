@@ -32,7 +32,7 @@ function PatchPanelList({
   const [ppFormName, setPpFormName] = useState("");
   const [ppFormLocationId, setPpFormLocationId] = useState("");
   const [ppFormRowInRack, setPpFormRowInRack] = useState("");
-  const [ppFormRackName, setPpFormRackName] = useState("");
+  const [ppFormRackId, setPpFormRackId] = useState(""); // Changed from ppFormRackName
   const [ppFormTotalPorts, setPpFormTotalPorts] = useState(1);
   const [ppFormDesc, setPpFormDesc] = useState("");
 
@@ -94,7 +94,7 @@ function PatchPanelList({
     setPpFormName(pp.name);
     setPpFormLocationId(pp.location_id || "");
     setPpFormRowInRack(pp.row_in_rack || "");
-    setPpFormRackName(pp.rack_name || "");
+    setPpFormRackId(pp.rack_id ? String(pp.rack_id) : ""); // Set rack_id for editing
     setPpFormTotalPorts(pp.total_ports);
     setPpFormDesc(pp.description || "");
     setIsAddPpFormExpanded(true); // Expand form when editing
@@ -112,7 +112,7 @@ function PatchPanelList({
       name: ppFormName,
       location_id: parseInt(ppFormLocationId),
       row_in_rack: ppFormRowInRack,
-      rack_name: ppFormRackName,
+      rack_id: ppFormRackId ? parseInt(ppFormRackId) : null, // Send rack_id, convert to null if empty string
       total_ports: parseInt(ppFormTotalPorts),
       description: ppFormDesc,
     };
@@ -126,11 +126,15 @@ function PatchPanelList({
     setPpFormName(""); // Clear form fields
     setPpFormLocationId("");
     setPpFormRowInRack("");
-    setPpFormRackName("");
+    setPpFormRackId(""); // Reset rack_id field
     setPpFormTotalPorts(1);
     setPpFormDesc("");
     setIsAddPpFormExpanded(false); // Collapse form after submission
   };
+
+  // Defensive checks for props that might be undefined initially
+  const sortedLocations = Array.isArray(locations) ? [...locations].sort((a,b) => a.name.localeCompare(b.name)) : [];
+  const sortedRacks = Array.isArray(racks) ? [...racks].sort((a,b) => a.name.localeCompare(b.name)) : [];
 
   return (
     <div className="space-y-6">
@@ -221,12 +225,15 @@ function PatchPanelList({
             />
             <select
               value={ppFormLocationId}
-              onChange={(e) => setPpFormLocationId(e.target.value)}
+              onChange={(e) => {
+                setPpFormLocationId(e.target.value);
+                setPpFormRackId(""); // Reset selected rack when location changes
+              }}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">-- Select Location --</option>
-              {locations.map((loc) => (
+              {sortedLocations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
                   {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                 </option>
@@ -244,32 +251,35 @@ function PatchPanelList({
               onChange={(e) => setPpFormRowInRack(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
-            <input
-              type="text"
-              placeholder="Rack Name (Optional)"
-              value={ppFormRackName}
-              onChange={(e) => setPpFormRackName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            {/* If you implement linking to Rack model, this section would change to a select: 
+            {/* Rack Selection Dropdown for Patch Panel */}
             <select
-              value={ppFormRackId} // New state for rack_id
+              value={ppFormRackId}
               onChange={(e) => setPpFormRackId(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">-- Select Rack (Optional) --</option>
-              {racks.map((rack) => (
-                <option key={rack.id} value={rack.id}>
-                  {rack.name} ({rack.location_name})
-                </option>
-              ))}
+              {Array.isArray(sortedRacks) && sortedRacks // Ensure sortedRacks is an array here as well
+                .filter(rack => {
+                    // Defensive check: ensure rack and rack.location_id exist
+                    return !ppFormLocationId || (rack.location_id !== undefined && String(rack.location_id) === ppFormLocationId);
+                })
+                .map((rack) => (
+                  <option key={rack.id} value={rack.id}>
+                    {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                  </option>
+                ))}
             </select>
             {racks.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
                 No racks added. Add racks in the Racks tab to link.
               </p>
             )}
-            */}
+            {ppFormLocationId && Array.isArray(sortedRacks) && sortedRacks.filter(rack => rack.location_id !== undefined && String(rack.location_id) === ppFormLocationId).length === 0 && (
+                <p className="text-sm text-gray-500 mt-1">
+                    No racks found for the selected location.
+                </p>
+            )}
+
             <input
               type="number"
               placeholder="Total Ports (e.g., 24)"
@@ -295,7 +305,7 @@ function PatchPanelList({
                     setPpFormName("");
                     setPpFormLocationId("");
                     setPpFormRowInRack("");
-                    setPpFormRackName("");
+                    setPpFormRackId(""); // Reset rack_id field
                     setPpFormTotalPorts(1);
                     setPpFormDesc("");
                     setIsAddPpFormExpanded(false);
