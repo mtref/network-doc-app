@@ -244,6 +244,41 @@ def validate_port_occupancy(target_id, port_number, entity_type, exclude_connect
             return True, conflicting_connection.pc.name if conflicting_connection.pc else "Unknown PC"
     return False, None
 
+# NEW HELPER FUNCTION: Validate Rack Unit Occupancy
+def validate_rack_unit_occupancy(rack_id, row_in_rack, device_type, exclude_device_id=None):
+    """
+    Checks if a specific row in a rack is already occupied by another device.
+    Returns (True, conflicting_device_name) if occupied, (False, None) if available.
+    """
+    if not rack_id or not row_in_rack:
+        return False, None # No rack or row specified, so no conflict check needed
+
+    # Check Switches
+    switches_in_row = Switch.query.filter_by(
+        rack_id=rack_id,
+        row_in_rack=row_in_rack
+    )
+    if device_type == 'switch' and exclude_device_id:
+        switches_in_row = switches_in_row.filter(Switch.id != exclude_device_id)
+    
+    conflicting_switch = switches_in_row.first()
+    if conflicting_switch:
+        return True, f"Switch '{conflicting_switch.name}'"
+
+    # Check Patch Panels
+    patch_panels_in_row = PatchPanel.query.filter_by(
+        rack_id=rack_id,
+        row_in_rack=row_in_rack
+    )
+    if device_type == 'patch_panel' and exclude_device_id:
+        patch_panels_in_row = patch_panels_in_row.filter(PatchPanel.id != exclude_device_id)
+    
+    conflicting_pp = patch_panels_in_row.first()
+    if conflicting_pp:
+        return True, f"Patch Panel '{conflicting_pp.name}'"
+
+    return False, None
+
 # Location Endpoints
 @app.route('/locations', methods=['GET', 'POST'])
 def handle_locations():
@@ -463,13 +498,25 @@ def handle_patch_panels():
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Patch Panel name is required'}), 400
+        
+        # Validate Rack Unit Occupancy
+        rack_id = data.get('rack_id')
+        row_in_rack = data.get('row_in_rack')
+        if rack_id and row_in_rack: # Only validate if both are provided
+            is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                rack_id=rack_id,
+                row_in_rack=row_in_rack,
+                device_type='patch_panel'
+            )
+            if is_occupied:
+                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_pp = PatchPanel(
             name=data['name'],
             location_id=data.get('location_id'),
-            row_in_rack=data.get('row_in_rack'),
-            rack_id=data.get('rack_id'), # Use rack_id
-            # rack_name will be derived from rack_id relationship
+            row_in_rack=row_in_rack, # Use validated row_in_rack
+            rack_id=rack_id, # Use validated rack_id
             total_ports=total_ports,
             description=data.get('description')
         )
@@ -494,10 +541,24 @@ def handle_patch_panel_by_id(pp_id):
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
+        
+        # Validate Rack Unit Occupancy for updates
+        rack_id = data.get('rack_id', pp.rack_id)
+        row_in_rack = data.get('row_in_rack', pp.row_in_rack)
+        if rack_id and row_in_rack and (str(rack_id) != str(pp.rack_id) or str(row_in_rack) != str(pp.row_in_rack)): # Only validate if values changed
+             is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                rack_id=rack_id,
+                row_in_rack=row_in_rack,
+                device_type='patch_panel',
+                exclude_device_id=pp_id # Exclude current device from conflict check
+            )
+             if is_occupied:
+                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+
         pp.name = data.get('name', pp.name)
         pp.location_id = data.get('location_id', pp.location_id)
-        pp.row_in_rack = data.get('row_in_rack', pp.row_in_rack)
-        pp.rack_id = data.get('rack_id', pp.rack_id) # Use rack_id
+        pp.row_in_rack = row_in_rack # Use potentially updated row_in_rack
+        pp.rack_id = rack_id # Use potentially updated rack_id
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
         pp.description = data.get('description', pp.description)
         try:
@@ -523,14 +584,26 @@ def handle_switches():
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Switch name is required'}), 400
+
+        # Validate Rack Unit Occupancy
+        rack_id = data.get('rack_id')
+        row_in_rack = data.get('row_in_rack')
+        if rack_id and row_in_rack: # Only validate if both are provided
+            is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                rack_id=rack_id,
+                row_in_rack=row_in_rack,
+                device_type='switch'
+            )
+            if is_occupied:
+                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_switch = Switch(
             name=data['name'],
             ip_address=data.get('ip_address'),
             location_id=data.get('location_id'),
-            row_in_rack=data.get('row_in_rack'),
-            rack_id=data.get('rack_id'), # Use rack_id
-            # rack_name will be derived from rack_id relationship
+            row_in_rack=row_in_rack, # Use validated row_in_rack
+            rack_id=rack_id, # Use validated rack_id
             total_ports=total_ports,
             source_port=data.get('source_port'),
             model=data.get('model'),
@@ -558,11 +631,25 @@ def handle_switch_by_id(switch_id):
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
+        
+        # Validate Rack Unit Occupancy for updates
+        rack_id = data.get('rack_id', _switch.rack_id)
+        row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
+        if rack_id and row_in_rack and (str(rack_id) != str(_switch.rack_id) or str(row_in_rack) != str(_switch.row_in_rack)): # Only validate if values changed
+             is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                rack_id=rack_id,
+                row_in_rack=row_in_rack,
+                device_type='switch',
+                exclude_device_id=switch_id # Exclude current device from conflict check
+            )
+             if is_occupied:
+                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+
         _switch.name = data.get('name', _switch.name)
         _switch.ip_address = data.get('ip_address', _switch.ip_address)
         _switch.location_id = data.get('location_id', _switch.location_id)
-        _switch.row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
-        _switch.rack_id = data.get('rack_id', _switch.rack_id) # Use rack_id
+        _switch.row_in_rack = row_in_rack # Use potentially updated row_in_rack
+        _switch.rack_id = rack_id # Use potentially updated rack_id
         _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports
         _switch.source_port = data.get('source_port', _switch.source_port)
         _switch.model = data.get('model', _switch.model)
