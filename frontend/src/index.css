@@ -141,6 +141,21 @@ body {
     color: #000 !important; /* Force black color for all text elements */
   }
 
+  /* Styles for filled-in text fields in print view */
+  .print-text-field {
+    min-height: 1.5em; /* Ensure enough height for content if filled */
+    display: flex; /* Use flex to align content within the box */
+    align-items: center; /* Vertically center content */
+    padding: 0.2em 0.5em !important; /* Adjust padding for visual appeal */
+    box-sizing: border-box !important;
+    white-space: normal; /* Allow text to wrap */
+    word-break: break-word; /* Break long words */
+  }
+
+  .print-text-field-small {
+    min-width: 2em; /* Ensure some width for small inline fields */
+  }
+
   /* Increase padding and margins for sections and fields */
   .p-8 {
     padding: 1.5cm !important;
@@ -204,7 +219,7 @@ body {
   }
 
   /* Fixed heights for input fields to ensure consistency */
-  /* These are now inline styles in PrintableConnectionForm.js */
+  /* These are now implicitly handled by .print-text-field or .p-2.border */
 
   /* Ensure borders are visible for form fields */
   div.p-2.border {

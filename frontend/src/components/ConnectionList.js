@@ -27,11 +27,12 @@ import {
   Building2,
   Tag, // New icon for cable label
   Palette, // New icon for cable color
+  Printer, // Import Printer icon
 } from "lucide-react";
 import SearchBar from "./SearchBar"; // Import the SearchBar component
 
 // ConnectionCard component (remains unchanged as it displays individual connection details)
-function ConnectionCard({ connection, onDelete, onEdit }) {
+function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added onPrint prop
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = () => {
@@ -163,6 +164,16 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
         <div className="flex-shrink-0 flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4 w-full sm:w-auto justify-end">
           <button
             onClick={(e) => {
+              e.stopPropagation(); // Prevent card from expanding/collapsing
+              onPrint(connection); // Pass the specific connection data to print
+            }}
+            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+            title="Print Connection Data"
+          >
+            <Printer size={16} />
+          </button>
+          <button
+            onClick={(e) => {
               e.stopPropagation();
               onEdit(connection);
             }}
@@ -189,7 +200,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               e.stopPropagation();
               onDelete(connection.id);
             }}
-            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 transition-colors duration-200"
             title="Delete Connection"
           >
             <svg
@@ -262,21 +273,6 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                   : "No"
                 : "N/A"}
             </p>
-            <p className="flex items-center">
-              <Monitor size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">OS:</span>{" "}
-              {connection.pc?.operating_system || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Model:</span>{" "}
-              {connection.pc?.model || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Building2 size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Office:</span>{" "}
-              {connection.pc?.office || "N/A"}
-            </p>
             <p className="flex items-center"> {/* New field: PC Type */}
               <Info size={16} className="text-gray-500 mr-2" />{" "}
               <span className="font-medium">Type:</span>{" "}
@@ -286,6 +282,18 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               <Info size={16} className="text-gray-500 mr-2" />{" "}
               <span className="font-medium">Usage:</span>{" "}
               {connection.pc?.usage || "N/A"}
+            </p>
+            <p className="flex items-center">
+              <Monitor size={16} className="text-gray-500 mr-2" /> OS:{" "}
+              {connection.pc?.operating_system || "N/A"}
+            </p>
+            <p className="flex items-center">
+              <HardDrive size={16} className="text-gray-500 mr-2" /> Model:{" "}
+              {connection.pc?.model || "N/A"}
+            </p>
+            <p className="flex items-center">
+              <Building2 size={16} className="text-gray-500 mr-2" /> Office:{" "}
+              {connection.pc?.office || "N/A"}
             </p>
             <p className="flex items-start col-span-full">
               <Info
@@ -427,9 +435,8 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 <span className="font-medium">Model:</span>{" "}
                 {connection.switch?.model || "N/A"}
               </p>
-              <p className="flex items-center"> {/* New field: Switch Usage */}
-                <Info size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Usage:</span>{" "}
+              <p className="flex items-center">
+                <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
                 {connection.switch?.usage || "N/A"}
               </p>
               <p className="flex items-start col-span-full">
@@ -454,7 +461,7 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
   );
 }
 
-function ConnectionList({ connections, onDelete, onEdit }) {
+function ConnectionList({ connections, onDelete, onEdit, onPrint }) { // Pass onPrint here
   const [searchTerm, setSearchTerm] = useState(""); // State for search term
   const [filteredConnections, setFilteredConnections] = useState([]); // State for filtered connections
 
@@ -626,6 +633,7 @@ function ConnectionList({ connections, onDelete, onEdit }) {
               connection={connection}
               onDelete={onDelete}
               onEdit={onEdit}
+              onPrint={onPrint} 
             />
           ))}
         </div>

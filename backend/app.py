@@ -4,24 +4,59 @@
 
 import io
 import csv
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS # For handling Cross-Origin Resource Sharing
 from sqlalchemy.orm import joinedload # To eager load related data
+from werkzeug.utils import secure_filename # For secure filenames
 
 import os
+import uuid # For unique filenames
+
+# --- Debugging Start ---
+print("--- app.py: Starting Flask app initialization ---")
+# --- Debugging End ---
 
 app = Flask(__name__)
 CORS(app) # Enable CORS for all routes
+
+# --- Debugging Start ---
+print("--- app.py: CORS initialized ---")
+# --- Debugging End ---
 
 # Database configuration
 # Using SQLite for simplicity. The database file will be stored in the 'instance' folder.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network_doc.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Configuration for PDF uploads
+# Define these as global constants first, then assign to app.config
+UPLOAD_FOLDER_PATH = os.path.join(app.root_path, 'uploads/pdf_templates')
+ALLOWED_EXTENSIONS_SET = {'pdf'} # Changed name to avoid conflict with function
+MAX_PDF_FILES_LIMIT = 5 # Changed name for clarity as it's a limit
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER_PATH
+app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS_SET # Corrected variable name here
+app.config['MAX_PDF_FILES'] = MAX_PDF_FILES_LIMIT
+
+# --- Debugging Start ---
+print(f"--- app.py: App config set. UPLOAD_FOLDER: {app.config['UPLOAD_FOLDER']}, MAX_PDF_FILES: {app.config['MAX_PDF_FILES']} ---")
+# --- Debugging End ---
+
+# Ensure the upload folder exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True) # Use app.config for consistency
+
+# --- Debugging Start ---
+print(f"--- app.py: Upload folder checked/created: {app.config['UPLOAD_FOLDER']} ---")
+# --- Debugging End ---
+
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# --- Debugging Start ---
+print("--- app.py: SQLAlchemy and Migrate initialized ---")
+# --- Debugging End ---
 
 # --- Global Constants ---
 MAX_HOPS = 5 # Maximum number of hops to export/import for connections
@@ -33,7 +68,7 @@ class Location(db.Model):
     __tablename__ = 'locations'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    door_number = db.Column(db.String(50), nullable=True) # New field
+    door_number = db.Column(db.String(50), nullable=True)
 
     def to_dict(self):
         return {
@@ -41,16 +76,19 @@ class Location(db.Model):
             'name': self.name,
             'door_number': self.door_number
         }
+# --- Debugging Start ---
+print("--- app.py: Location model defined ---")
+# --- Debugging End ---
 
-class Rack(db.Model): # New Rack model
+class Rack(db.Model):
     __tablename__ = 'racks'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=False)
     location = db.relationship('Location', backref='racks_in_location', lazy=True)
     description = db.Column(db.String(255), nullable=True)
-    total_units = db.Column(db.Integer, nullable=False, default=42) # NEW FIELD: Total U units in the rack
-    orientation = db.Column(db.String(50), nullable=False, default='bottom-up') # NEW FIELD: 'bottom-up' or 'top-down'
+    total_units = db.Column(db.Integer, nullable=False, default=42)
+    orientation = db.Column(db.String(50), nullable=False, default='bottom-up')
 
     def to_dict(self):
         return {
@@ -58,11 +96,14 @@ class Rack(db.Model): # New Rack model
             'name': self.name,
             'location_id': self.location_id,
             'location_name': self.location.name if self.location else None,
-            'location': self.location.to_dict() if self.location else None, # Include full location object for frontend filtering
+            'location': self.location.to_dict() if self.location else None,
             'description': self.description,
-            'total_units': self.total_units, # NEW: Include total_units
-            'orientation': self.orientation, # NEW: Include orientation
+            'total_units': self.total_units,
+            'orientation': self.orientation,
         }
+# --- Debugging Start ---
+print("--- app.py: Rack model defined ---")
+# --- Debugging End ---
 
 class PC(db.Model):
     __tablename__ = 'pcs'
@@ -72,12 +113,12 @@ class PC(db.Model):
     username = db.Column(db.String(100), nullable=True)
     in_domain = db.Column(db.Boolean, nullable=False, default=False)
     operating_system = db.Column(db.String(100), nullable=True)
-    model = db.Column(db.String(255), nullable=True) # Renamed from ports_name to model
+    model = db.Column(db.String(255), nullable=True)
     office = db.Column(db.String(100), nullable=True)
     description = db.Column(db.String(255), nullable=True)
     multi_port = db.Column(db.Boolean, nullable=False, default=False)
-    type = db.Column(db.String(50), nullable=False, default='Workstation') # New field
-    usage = db.Column(db.String(100), nullable=True) # New field
+    type = db.Column(db.String(50), nullable=False, default='Workstation')
+    usage = db.Column(db.String(100), nullable=True)
 
     def to_dict(self):
         return {
@@ -87,13 +128,16 @@ class PC(db.Model):
             'username': self.username,
             'in_domain': self.in_domain,
             'operating_system': self.operating_system,
-            'model': self.model, # Updated to model
+            'model': self.model,
             'office': self.office,
             'description': self.description,
             'multi_port': self.multi_port,
-            'type': self.type, # Include new field
-            'usage': self.usage # Include new field
+            'type': self.type,
+            'usage': self.usage
         }
+# --- Debugging Start ---
+print("--- app.py: PC model defined ---")
+# --- Debugging End ---
 
 class PatchPanel(db.Model):
     __tablename__ = 'patch_panels'
@@ -102,9 +146,9 @@ class PatchPanel(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
     row_in_rack = db.Column(db.String(50), nullable=True)
-    rack_name = db.Column(db.String(100), nullable=True) # Kept for older data compatibility/display
-    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True) # New field to link to Rack
-    rack = db.relationship('Rack', backref='patch_panels_in_rack', lazy=True) # Relationship to Rack
+    rack_name = db.Column(db.String(100), nullable=True)
+    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    rack = db.relationship('Rack', backref='patch_panels_in_rack', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
     description = db.Column(db.String(255), nullable=True)
 
@@ -115,13 +159,16 @@ class PatchPanel(db.Model):
             'location_id': self.location_id,
             'location_name': self.location.name if self.location else None,
             'row_in_rack': self.row_in_rack,
-            'rack_id': self.rack_id, # Include rack_id
-            'rack_name': self.rack.name if self.rack else None, # Use self.rack.name via relationship
+            'rack_id': self.rack_id,
+            'rack_name': self.rack.name if self.rack else None,
             'total_ports': self.total_ports,
             'description': self.description,
-            'location': self.location.to_dict() if self.location else None, # Include full location object
-            'rack': self.rack.to_dict() if self.rack else None, # Include full rack object
+            'location': self.location.to_dict() if self.location else None,
+            'rack': self.rack.to_dict() if self.rack else None,
         }
+# --- Debugging Start ---
+print("--- app.py: PatchPanel model defined ---")
+# --- Debugging End ---
 
 class Switch(db.Model):
     __tablename__ = 'switches'
@@ -131,14 +178,14 @@ class Switch(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='switches_in_location', lazy=True)
     row_in_rack = db.Column(db.String(50), nullable=True)
-    rack_name = db.Column(db.String(100), nullable=True) # Kept for older data compatibility/display
-    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True) # New field to link to Rack
-    rack = db.relationship('Rack', backref='switches_in_rack', lazy=True) # Relationship to Rack
+    rack_name = db.Column(db.String(100), nullable=True)
+    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    rack = db.relationship('Rack', backref='switches_in_rack', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
     source_port = db.Column(db.String(100), nullable=True)
     model = db.Column(db.String(100), nullable=True)
     description = db.Column(db.String(255), nullable=True)
-    usage = db.Column(db.String(100), nullable=True) # New field
+    usage = db.Column(db.String(100), nullable=True)
 
     def to_dict(self):
         return {
@@ -148,16 +195,19 @@ class Switch(db.Model):
             'location_id': self.location_id,
             'location_name': self.location.name if self.location else None,
             'row_in_rack': self.row_in_rack,
-            'rack_id': self.rack_id, # Include rack_id
-            'rack_name': self.rack.name if self.rack else None, # Use self.rack.name via relationship
+            'rack_id': self.rack_id,
+            'rack_name': self.rack.name if self.rack else None,
             'total_ports': self.total_ports,
             'source_port': self.source_port,
             'model': self.model,
             'description': self.description,
-            'usage': self.usage, # Include new field
-            'location': self.location.to_dict() if self.location else None, # Include full location object
-            'rack': self.rack.to_dict() if self.rack else None, # Include full rack object
+            'usage': self.usage,
+            'location': self.location.to_dict() if self.location else None,
+            'rack': self.rack.to_dict() if self.rack else None,
         }
+# --- Debugging Start ---
+print("--- app.py: Switch model defined ---")
+# --- Debugging End ---
 
 class Connection(db.Model):
     __tablename__ = 'connections'
@@ -166,13 +216,12 @@ class Connection(db.Model):
     switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
     switch_port = db.Column(db.String(50), nullable=False)
     is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
-    cable_color = db.Column(db.String(50), nullable=True) # New field
-    cable_label = db.Column(db.String(100), nullable=True) # New field
+    cable_color = db.Column(db.String(50), nullable=True)
+    cable_label = db.Column(db.String(100), nullable=True)
 
     pc = db.relationship('PC', backref='connections_as_pc', lazy=True)
     switch = db.relationship('Switch', backref='connections_as_switch', lazy=True)
     hops = db.relationship('ConnectionHop', backref='connection', lazy=True, cascade="all, delete-orphan", order_by="ConnectionHop.sequence")
-
 
     def to_dict(self):
         return {
@@ -184,9 +233,12 @@ class Connection(db.Model):
             'switch': self.switch.to_dict() if self.switch else None,
             'switch_port': self.switch_port,
             'is_switch_port_up': self.is_switch_port_up,
-            'cable_color': self.cable_color, # Include new field
-            'cable_label': self.cable_label # Include new field
+            'cable_color': self.cable_color,
+            'cable_label': self.cable_label
         }
+# --- Debugging Start ---
+print("--- app.py: Connection model defined ---")
+# --- Debugging End ---
 
 class ConnectionHop(db.Model):
     __tablename__ = 'connection_hops'
@@ -196,8 +248,8 @@ class ConnectionHop(db.Model):
     patch_panel_port = db.Column(db.String(50), nullable=False)
     is_port_up = db.Column(db.Boolean, nullable=False, default=True)
     sequence = db.Column(db.Integer, nullable=False)
-    cable_color = db.Column(db.String(50), nullable=True) # New field
-    cable_label = db.Column(db.String(100), nullable=True) # New field
+    cable_color = db.Column(db.String(50), nullable=True)
+    cable_label = db.Column(db.String(100), nullable=True)
 
     patch_panel = db.relationship('PatchPanel', backref='connection_hops', lazy=True)
 
@@ -208,9 +260,48 @@ class ConnectionHop(db.Model):
             'patch_panel_port': self.patch_panel_port,
             'is_port_up': self.is_port_up,
             'sequence': self.sequence,
-            'cable_color': self.cable_color, # Include new field
-            'cable_label': self.cable_label # Include new field
+            'cable_color': self.cable_color,
+            'cable_label': self.cable_label
         }
+# --- Debugging Start ---
+print("--- app.py: ConnectionHop model defined ---")
+# --- Debugging End ---
+
+# NEW: Model for PDF templates
+class PdfTemplate(db.Model):
+    __tablename__ = 'pdf_templates'
+    id = db.Column(db.Integer, primary_key=True)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), unique=True, nullable=False)
+    upload_date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'original_filename': self.original_filename,
+            'stored_filename': self.stored_filename,
+            'upload_date': self.upload_date.isoformat()
+        }
+# --- Debugging Start ---
+print("--- app.py: PdfTemplate model defined ---")
+# --- Debugging End ---
+
+# NEW: Model for Application Settings
+class AppSettings(db.Model):
+    __tablename__ = 'app_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    default_pdf_id = db.Column(db.Integer, db.ForeignKey('pdf_templates.id'), nullable=True)
+    default_pdf = db.relationship('PdfTemplate', backref='app_settings', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'default_pdf_id': self.default_pdf_id,
+            'default_pdf_name': self.default_pdf.original_filename if self.default_pdf else None
+        }
+# --- Debugging Start ---
+print("--- app.py: AppSettings model defined ---")
+# --- Debugging End ---
 
 # --- API Endpoints ---
 
@@ -279,16 +370,23 @@ def validate_rack_unit_occupancy(rack_id, row_in_rack, device_type, exclude_devi
 
     return False, None
 
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
 # Location Endpoints
 @app.route('/locations', methods=['GET', 'POST'])
 def handle_locations():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /locations endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Location name is required'}), 400
         new_location = Location(
             name=data['name'],
-            door_number=data.get('door_number') # Handle new field
+            door_number=data.get('door_number')
         )
         try:
             db.session.add(new_location)
@@ -297,12 +395,15 @@ def handle_locations():
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # GET
+    else:
         locations = Location.query.all()
         return jsonify([location.to_dict() for location in locations])
 
 @app.route('/locations/<int:location_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_location_by_id(location_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /locations/{location_id} endpoint ---")
+    # --- Debugging End ---
     location = Location.query.get_or_404(location_id)
     if request.method == 'GET':
         return jsonify(location.to_dict())
@@ -311,14 +412,14 @@ def handle_location_by_id(location_id):
         if not data or not data.get('name'):
             return jsonify({'error': 'Location name is required'}), 400
         location.name = data.get('name', location.name)
-        location.door_number = data.get('door_number', location.door_number) # Handle new field
+        location.door_number = data.get('door_number', location.door_number)
         try:
             db.session.commit()
             return jsonify(location.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # DELETE
+    else:
         try:
             db.session.delete(location)
             db.session.commit()
@@ -330,15 +431,17 @@ def handle_location_by_id(location_id):
 # Rack Endpoints (New)
 @app.route('/racks', methods=['GET', 'POST'])
 def handle_racks():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /racks endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name') or not data.get('location_id'):
             return jsonify({'error': 'Rack name and location_id are required'}), 400
-        # Validate total_units is an integer and within a reasonable range (e.g., 1 to 50)
-        total_units = data.get('total_units', 42) # Default to 42 if not provided
+        total_units = data.get('total_units', 42)
         try:
             total_units = int(total_units)
-            if not (1 <= total_units <= 50): # Example range, adjust as needed
+            if not (1 <= total_units <= 50):
                 return jsonify({'error': 'Total units must be an integer between 1 and 50.'}), 400
         except (ValueError, TypeError):
             return jsonify({'error': 'Total units must be a valid integer.'}), 400
@@ -347,25 +450,27 @@ def handle_racks():
             name=data['name'],
             location_id=data['location_id'],
             description=data.get('description'),
-            total_units=total_units, # NEW: Set total_units
-            orientation=data.get('orientation', 'bottom-up') # NEW: Set orientation
+            total_units=total_units,
+            orientation=data.get('orientation', 'bottom-up')
         )
         try:
             db.session.add(new_rack)
             db.session.commit()
-            # After commit, ensure location relationship is loaded for to_dict
             db.session.refresh(new_rack)
             return jsonify(new_rack.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # GET
+    else:
         racks = Rack.query.options(joinedload(Rack.location)).all()
         return jsonify([rack.to_dict() for rack in racks])
 
 @app.route('/racks/<int:rack_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_rack_by_id(rack_id):
-    rack = Rack.query.options(joinedload(Rack.location)).get_or_404(rack_id) # Eager load for PUT/GET
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /racks/{rack_id} endpoint ---")
+    # --- Debugging End ---
+    rack = Rack.query.options(joinedload(Rack.location)).get_or_404(rack_id)
     if request.method == 'GET':
         return jsonify(rack.to_dict())
     elif request.method == 'PUT':
@@ -373,7 +478,6 @@ def handle_rack_by_id(rack_id):
         if not data or not data.get('name') or not data.get('location_id'):
             return jsonify({'error': 'Rack name and location_id are required'}), 400
         
-        # Validate total_units if provided in PUT request
         if 'total_units' in data:
             total_units = data.get('total_units')
             try:
@@ -382,20 +486,20 @@ def handle_rack_by_id(rack_id):
                     return jsonify({'error': 'Total units must be an integer between 1 and 50.'}), 400
             except (ValueError, TypeError):
                 return jsonify({'error': 'Total units must be a valid integer.'}), 400
-            rack.total_units = total_units # NEW: Update total_units
+            rack.total_units = total_units
         
         rack.name = data.get('name', rack.name)
         rack.location_id = data.get('location_id', rack.location_id)
         rack.description = data.get('description', rack.description)
-        rack.orientation = data.get('orientation', rack.orientation) # NEW: Update orientation
+        rack.orientation = data.get('orientation', rack.orientation)
         try:
             db.session.commit()
-            db.session.refresh(rack) # Refresh to load updated location relationship if needed
+            db.session.refresh(rack)
             return jsonify(rack.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # DELETE
+    else:
         try:
             db.session.delete(rack)
             db.session.commit()
@@ -408,6 +512,9 @@ def handle_rack_by_id(rack_id):
 # PC Endpoints (updated to handle new fields)
 @app.route('/pcs', methods=['GET', 'POST'])
 def handle_pcs():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /pcs endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
@@ -418,12 +525,12 @@ def handle_pcs():
             username=data.get('username'),
             in_domain=data.get('in_domain', False),
             operating_system=data.get('operating_system'),
-            model=data.get('model'), # Updated to model
+            model=data.get('model'),
             office=data.get('office'),
             description=data.get('description'),
             multi_port=data.get('multi_port', False),
-            type=data.get('type', 'Workstation'), # New field
-            usage=data.get('usage') # New field
+            type=data.get('type', 'Workstation'),
+            usage=data.get('usage')
         )
         try:
             db.session.add(new_pc)
@@ -432,12 +539,15 @@ def handle_pcs():
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # GET
+    else:
         pcs = PC.query.all()
         return jsonify([pc.to_dict() for pc in pcs])
 
 @app.route('/pcs/<int:pc_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_pc_by_id(pc_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /pcs/{pc_id} endpoint ---")
+    # --- Debugging End ---
     pc = PC.query.get_or_404(pc_id)
     if request.method == 'GET':
         return jsonify(pc.to_dict())
@@ -450,19 +560,19 @@ def handle_pc_by_id(pc_id):
         pc.username = data.get('username', pc.username)
         pc.in_domain = data.get('in_domain', pc.in_domain)
         pc.operating_system = data.get('operating_system', pc.operating_system)
-        pc.model = data.get('model', pc.model) # Updated to model
+        pc.model = data.get('model', pc.model)
         pc.office = data.get('office', pc.office)
         pc.description = data.get('description', pc.description)
         pc.multi_port = data.get('multi_port', pc.multi_port)
-        pc.type = data.get('type', pc.type) # New field
-        pc.usage = data.get('usage', pc.usage) # New field
+        pc.type = data.get('type', pc.type)
+        pc.usage = data.get('usage', pc.usage)
         try:
             db.session.commit()
             return jsonify(pc.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # DELETE
+    else:
         try:
             db.session.delete(pc)
             db.session.commit()
@@ -474,17 +584,16 @@ def handle_pc_by_id(pc_id):
 # New endpoint to get available PCs for new connections
 @app.route('/available_pcs', methods=['GET'])
 def get_available_pcs():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /available_pcs endpoint ---")
+    # --- Debugging End ---
     all_pcs = PC.query.all()
-    all_connections = Connection.query.options(joinedload(Connection.pc)).all() # Eager load PC for multi_port check
+    all_connections = Connection.query.options(joinedload(Connection.pc)).all()
 
-    # Get IDs of PCs that are currently connected and are single-port
-    # Filter connections where pc is not null and multi_port is False
     connected_single_port_pc_ids = {conn.pc_id for conn in all_connections if conn.pc and not conn.pc.multi_port}
 
     available_pcs = []
     for pc in all_pcs:
-        # If PC is multi-port, it's always available
-        # If PC is single-port, it's available only if not already connected
         if pc.multi_port or pc.id not in connected_single_port_pc_ids:
             available_pcs.append(pc.to_dict())
             
@@ -494,46 +603,51 @@ def get_available_pcs():
 # Patch Panel Endpoints (updated to handle new fields)
 @app.route('/patch_panels', methods=['GET', 'POST'])
 def handle_patch_panels():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /patch_panels endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Patch Panel name is required'}), 400
         
-        # Validate Rack Unit Occupancy
         rack_id = data.get('rack_id')
         row_in_rack = data.get('row_in_rack')
-        if rack_id and row_in_rack: # Only validate if both are provided
+        if rack_id and row_in_rack:
             is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 rack_id=rack_id,
                 row_in_rack=row_in_rack,
                 device_type='patch_panel'
             )
             if is_occupied:
-                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
 
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_pp = PatchPanel(
             name=data['name'],
             location_id=data.get('location_id'),
-            row_in_rack=row_in_rack, # Use validated row_in_rack
-            rack_id=rack_id, # Use validated rack_id
+            row_in_rack=row_in_rack,
+            rack_id=rack_id,
             total_ports=total_ports,
             description=data.get('description')
         )
         try:
             db.session.add(new_pp)
             db.session.commit()
-            db.session.refresh(new_pp) # Refresh to load relationships
+            db.session.refresh(new_pp)
             return jsonify(new_pp.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # GET
+    else:
         patch_panels = PatchPanel.query.options(joinedload(PatchPanel.location), joinedload(PatchPanel.rack)).all()
         return jsonify([pp.to_dict() for pp in patch_panels])
 
 @app.route('/patch_panels/<int:pp_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_patch_panel_by_id(pp_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /patch_panels/{pp_id} endpoint ---")
+    # --- Debugging End ---
     pp = PatchPanel.query.options(joinedload(PatchPanel.location), joinedload(PatchPanel.rack)).get_or_404(pp_id)
     if request.method == 'GET':
         return jsonify(pp.to_dict())
@@ -542,33 +656,32 @@ def handle_patch_panel_by_id(pp_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
         
-        # Validate Rack Unit Occupancy for updates
         rack_id = data.get('rack_id', pp.rack_id)
         row_in_rack = data.get('row_in_rack', pp.row_in_rack)
-        if rack_id and row_in_rack and (str(rack_id) != str(pp.rack_id) or str(row_in_rack) != str(pp.row_in_rack)): # Only validate if values changed
+        if rack_id and row_in_rack and (str(rack_id) != str(pp.rack_id) or str(row_in_rack) != str(pp.row_in_rack)):
              is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 rack_id=rack_id,
                 row_in_rack=row_in_rack,
                 device_type='patch_panel',
-                exclude_device_id=pp_id # Exclude current device from conflict check
+                exclude_device_id=pp_id
             )
              if is_occupied:
-                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
 
         pp.name = data.get('name', pp.name)
         pp.location_id = data.get('location_id', pp.location_id)
-        pp.row_in_rack = row_in_rack # Use potentially updated row_in_rack
-        pp.rack_id = rack_id # Use potentially updated rack_id
+        pp.row_in_rack = row_in_rack
+        pp.rack_id = rack_id
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
         pp.description = data.get('description', pp.description)
         try:
             db.session.commit()
-            db.session.refresh(pp) # Refresh to load relationships
+            db.session.refresh(pp)
             return jsonify(pp.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # DELETE
+    else:
         try:
             db.session.delete(pp)
             db.session.commit()
@@ -580,50 +693,55 @@ def handle_patch_panel_by_id(pp_id):
 # Switch Endpoints (updated to handle new fields)
 @app.route('/switches', methods=['GET', 'POST'])
 def handle_switches():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /switches endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'Switch name is required'}), 400
 
-        # Validate Rack Unit Occupancy
         rack_id = data.get('rack_id')
         row_in_rack = data.get('row_in_rack')
-        if rack_id and row_in_rack: # Only validate if both are provided
+        if rack_id and row_in_rack:
             is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 rack_id=rack_id,
                 row_in_rack=row_in_rack,
                 device_type='switch'
             )
             if is_occupied:
-                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
 
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_switch = Switch(
             name=data['name'],
             ip_address=data.get('ip_address'),
             location_id=data.get('location_id'),
-            row_in_rack=row_in_rack, # Use validated row_in_rack
-            rack_id=rack_id, # Use validated rack_id
+            row_in_rack=row_in_rack,
+            rack_id=rack_id,
             total_ports=total_ports,
             source_port=data.get('source_port'),
             model=data.get('model'),
             description=data.get('description'),
-            usage=data.get('usage') # Handle new field
+            usage=data.get('usage')
         )
         try:
             db.session.add(new_switch)
             db.session.commit()
-            db.session.refresh(new_switch) # Refresh to load relationships
+            db.session.refresh(new_switch)
             return jsonify(new_switch.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # GET
+    else:
         switches = Switch.query.options(joinedload(Switch.location), joinedload(Switch.rack)).all()
         return jsonify([_switch.to_dict() for _switch in switches])
 
 @app.route('/switches/<int:switch_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_switch_by_id(switch_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /switches/{switch_id} endpoint ---")
+    # --- Debugging End ---
     _switch = Switch.query.options(joinedload(Switch.location), joinedload(Switch.rack)).get_or_404(switch_id)
     if request.method == 'GET':
         return jsonify(_switch.to_dict())
@@ -632,37 +750,36 @@ def handle_switch_by_id(switch_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
         
-        # Validate Rack Unit Occupancy for updates
         rack_id = data.get('rack_id', _switch.rack_id)
         row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
-        if rack_id and row_in_rack and (str(rack_id) != str(_switch.rack_id) or str(row_in_rack) != str(_switch.row_in_rack)): # Only validate if values changed
+        if rack_id and row_in_rack and (str(rack_id) != str(_switch.rack_id) or str(row_in_rack) != str(_switch.row_in_rack)):
              is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 rack_id=rack_id,
                 row_in_rack=row_in_rack,
                 device_type='switch',
-                exclude_device_id=switch_id # Exclude current device from conflict check
+                exclude_device_id=switch_id
             )
              if is_occupied:
-                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409 # Conflict
+                 return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
 
         _switch.name = data.get('name', _switch.name)
         _switch.ip_address = data.get('ip_address', _switch.ip_address)
         _switch.location_id = data.get('location_id', _switch.location_id)
-        _switch.row_in_rack = row_in_rack # Use potentially updated row_in_rack
-        _switch.rack_id = rack_id # Use potentially updated rack_id
+        _switch.row_in_rack = row_in_rack
+        _switch.rack_id = rack_id
         _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports
         _switch.source_port = data.get('source_port', _switch.source_port)
         _switch.model = data.get('model', _switch.model)
         _switch.description = data.get('description', _switch.description)
-        _switch.usage = data.get('usage', _switch.usage) # Handle new field
+        _switch.usage = data.get('usage', _switch.usage)
         try:
             db.session.commit()
-            db.session.refresh(_switch) # Refresh to load relationships
+            db.session.refresh(_switch)
             return jsonify(_switch.to_dict())
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
-    else: # DELETE
+    else:
         try:
             db.session.delete(_switch)
             db.session.commit()
@@ -674,54 +791,54 @@ def handle_switch_by_id(switch_id):
 # Connection Endpoints
 @app.route('/connections', methods=['GET', 'POST'])
 def handle_connections():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /connections endpoint ---")
+    # --- Debugging End ---
     if request.method == 'POST':
         data = request.json
         required_fields = ['pc_id', 'switch_id', 'switch_port', 'is_switch_port_up', 'hops']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields for connection'}), 400
 
-        # Validate PC availability for single-port PCs
         pc = PC.query.get(data['pc_id'])
         if pc and not pc.multi_port:
             existing_connection_for_pc = Connection.query.filter_by(pc_id=pc.id).first()
             if existing_connection_for_pc:
                 return jsonify({'error': f"PC '{pc.name}' is a single-port device and is already connected. Cannot create new connection."}), 409
 
-        # Validate Switch Port occupancy
         is_occupied, conflicting_pc = validate_port_occupancy(
             target_id=data['switch_id'],
             port_number=data['switch_port'],
             entity_type='switch'
         )
         if is_occupied:
-            return jsonify({'error': f'Switch port {data["switch_port"]} is already in use by PC: {conflicting_pc}'}), 409 # Conflict
+            return jsonify({'error': f'Switch port {data["switch_port"]} is already in use by PC: {conflicting_pc}'}), 409
 
         new_connection = Connection(
             pc_id=data['pc_id'],
             switch_id=data['switch_id'],
             switch_port=data['switch_port'],
             is_switch_port_up=data['is_switch_port_up'],
-            cable_color=data.get('cable_color'), # Handle new field
-            cable_label=data.get('cable_label') # Handle new field
+            cable_color=data.get('cable_color'),
+            cable_label=data.get('cable_label')
         )
         db.session.add(new_connection)
-        db.session.flush() # Flush to get new_connection.id for hops
+        db.session.flush()
 
-        # Add and validate hops
         for idx, hop_data in enumerate(data['hops']):
             if not all(f in hop_data for f in ['patch_panel_id', 'patch_panel_port', 'is_port_up']):
                 db.session.rollback()
                 return jsonify({'error': f'Missing fields for hop {idx}'}), 400
 
-            # Validate Patch Panel Port occupancy
             is_occupied, conflicting_pc = validate_port_occupancy(
                 target_id=hop_data['patch_panel_id'],
                 port_number=hop_data['patch_panel_port'],
-                entity_type='patch_panel'
+                entity_type='patch_panel',
+                exclude_connection_id=new_connection.id # Exclude current connection being added
             )
             if is_occupied:
                 db.session.rollback()
-                return jsonify({'error': f'Patch Panel port {hop_data["patch_panel_port"]} on Patch Panel ID {hop_data["patch_panel_id"]} is already in use by PC: {conflicting_pc}'}), 409 # Conflict
+                return jsonify({'error': f'Patch Panel port {hop_data["patch_panel_port"]} on Patch Panel ID {hop_data["patch_panel_id"]} is already in use by PC: {conflicting_pc}'}), 409
 
             new_hop = ConnectionHop(
                 connection_id=new_connection.id,
@@ -729,31 +846,33 @@ def handle_connections():
                 patch_panel_port=hop_data['patch_panel_port'],
                 is_port_up=hop_data['is_port_up'],
                 sequence=idx,
-                cable_color=hop_data.get('cable_color'), # Handle new field
-                cable_label=hop_data.get('cable_label') # Handle new field
+                cable_color=hop_data.get('cable_color'),
+                cable_label=hop_data.get('cable_label')
             )
             db.session.add(new_hop)
 
         try:
             db.session.commit()
-            db.session.refresh(new_connection) # Refresh to load related hops and objects
+            db.session.refresh(new_connection)
             return jsonify(new_connection.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else: # GET
-        # Eager load related data to avoid N+1 queries when converting to dicts
         connections = Connection.query.options(
             joinedload(Connection.pc),
             joinedload(Connection.switch).joinedload(Switch.location),
-            joinedload(Connection.switch).joinedload(Switch.rack), # Eager load switch rack
+            joinedload(Connection.switch).joinedload(Switch.rack),
             joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location),
-            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.rack) # Eager load patch panel rack
+            joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.rack)
         ).all()
         return jsonify([conn.to_dict() for conn in connections])
 
 @app.route('/connections/<int:conn_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_connection_by_id(conn_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /connections/{conn_id} endpoint ---")
+    # --- Debugging End ---
     connection = Connection.query.options(
         joinedload(Connection.pc),
         joinedload(Connection.switch).joinedload(Switch.location),
@@ -769,9 +888,8 @@ def handle_connection_by_id(conn_id):
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
 
-        # Validate PC availability for single-port PCs during update
         new_pc_id = data.get('pc_id', connection.pc_id)
-        if new_pc_id != connection.pc_id: # PC is being changed
+        if new_pc_id != connection.pc_id:
             new_pc = PC.query.get(new_pc_id)
             if new_pc and not new_pc.multi_port:
                 existing_connection_for_new_pc = Connection.query.filter(
@@ -781,7 +899,6 @@ def handle_connection_by_id(conn_id):
                 if existing_connection_for_new_pc:
                     return jsonify({'error': f"PC '{new_pc.name}' is a single-port device and is already connected in another connection. Cannot update."}), 409
 
-        # Validate Switch Port occupancy (excluding current connection)
         if 'switch_id' in data and 'switch_port' in data:
             is_occupied, conflicting_pc = validate_port_occupancy(
                 target_id=data['switch_id'],
@@ -796,23 +913,19 @@ def handle_connection_by_id(conn_id):
         connection.switch_id = data.get('switch_id', connection.switch_id)
         connection.switch_port = data.get('switch_port', connection.switch_port)
         connection.is_switch_port_up = data.get('is_switch_port_up', connection.is_switch_port_up)
-        connection.cable_color = data.get('cable_color', connection.cable_color) # Handle new field
-        connection.cable_label = data.get('cable_label', connection.cable_label) # Handle new field
+        connection.cable_color = data.get('cable_color', connection.cable_color)
+        connection.cable_label = data.get('cable_label', connection.cable_label)
 
-        # Handle hops update: delete existing and re-add
         if 'hops' in data:
-            # Delete existing hops
             for hop in connection.hops:
                 db.session.delete(hop)
-            db.session.flush() # Ensure deletions are processed before adding new
+            db.session.flush()
 
-            # Add new hops with validation
             for idx, hop_data in enumerate(data['hops']):
                 if not all(f in hop_data for f in ['patch_panel_id', 'patch_panel_port', 'is_port_up']):
                     db.session.rollback()
                     return jsonify({'error': f'Missing fields for hop {idx}'}), 400
 
-                # Validate Patch Panel Port occupancy (excluding current connection's hops)
                 is_occupied, conflicting_pc = validate_port_occupancy(
                     target_id=hop_data['patch_panel_id'],
                     port_number=hop_data['patch_panel_port'],
@@ -829,14 +942,14 @@ def handle_connection_by_id(conn_id):
                     patch_panel_port=hop_data['patch_panel_port'],
                     is_port_up=hop_data['is_port_up'],
                     sequence=idx,
-                    cable_color=hop_data.get('cable_color'), # Handle new field
-                    cable_label=hop_data.get('cable_label') # Handle new field
+                    cable_color=hop_data.get('cable_color'),
+                    cable_label=hop_data.get('cable_label')
                 )
                 db.session.add(new_hop)
 
         try:
             db.session.commit()
-            db.session.refresh(connection) # Refresh to get updated related objects
+            db.session.refresh(connection)
             return jsonify(connection.to_dict())
         except Exception as e:
             db.session.rollback()
@@ -853,6 +966,9 @@ def handle_connection_by_id(conn_id):
 # New API Endpoints for Port Availability
 @app.route('/patch_panels/<int:pp_id>/ports', methods=['GET'])
 def get_patch_panel_ports(pp_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /patch_panels/{pp_id}/ports endpoint ---")
+    # --- Debugging End ---
     patch_panel = PatchPanel.query.options(joinedload(PatchPanel.location), joinedload(PatchPanel.rack)).get_or_404(pp_id)
     
     try:
@@ -894,17 +1010,20 @@ def get_patch_panel_ports(pp_id):
         'patch_panel_id': pp_id,
         'patch_panel_name': patch_panel.name,
         'patch_panel_location': patch_panel.location.name if patch_panel.location else None,
-        'row_in_rack': patch_panel.row_in_rack, # Include existing fields for modal
-        'rack_name': patch_panel.rack.name if patch_panel.rack else None, # Use relationship
-        'description': patch_panel.description, # Include existing fields for modal
+        'row_in_rack': patch_panel.row_in_rack,
+        'rack_name': patch_panel.rack.name if patch_panel.rack else None,
+        'description': patch_panel.description,
         'total_ports': patch_panel.total_ports,
-        'location': patch_panel.location.to_dict() if patch_panel.location else None, # full location obj
-        'rack': patch_panel.rack.to_dict() if patch_panel.rack else None, # full rack obj
+        'location': patch_panel.location.to_dict() if patch_panel.location else None,
+        'rack': patch_panel.rack.to_dict() if patch_panel.rack else None,
         'ports': port_status
     })
 
 @app.route('/switches/<int:switch_id>/ports', methods=['GET'])
 def get_switch_ports(switch_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /switches/{switch_id}/ports endpoint ---")
+    # --- Debugging End ---
     _switch = Switch.query.options(joinedload(Switch.location), joinedload(Switch.rack)).get_or_404(switch_id)
     
     try:
@@ -946,15 +1065,15 @@ def get_switch_ports(switch_id):
         'switch_id': switch_id,
         'switch_name': _switch.name,
         'switch_location': _switch.location.name if _switch.location else None,
-        'ip_address': _switch.ip_address, # Include existing fields for modal
-        'row_in_rack': _switch.row_in_rack, # Include existing fields for modal
-        'rack_name': _switch.rack.name if _switch.rack else None, # Use relationship
-        'source_port': _switch.source_port, # Include existing fields for modal
-        'model': _switch.model, # Include existing fields for modal
-        'description': _switch.description, # Include existing fields for modal
+        'ip_address': _switch.ip_address,
+        'row_in_rack': _switch.row_in_rack,
+        'rack_name': _switch.rack.name if _switch.rack else None,
+        'source_port': _switch.source_port,
+        'model': _switch.model,
+        'description': _switch.description,
         'total_ports': _switch.total_ports,
-        'location': _switch.location.to_dict() if _switch.location else None, # full location obj
-        'rack': _switch.rack.to_dict() if _switch.rack else None, # full rack obj
+        'location': _switch.location.to_dict() if _switch.location else None,
+        'rack': _switch.rack.to_dict() if _switch.rack else None,
         'ports': port_status
     })
 
@@ -962,6 +1081,9 @@ def get_switch_ports(switch_id):
 
 @app.route('/export/<entity_type>', methods=['GET'])
 def export_data(entity_type):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /export/{entity_type} endpoint ---")
+    # --- Debugging End ---
     si = io.StringIO()
     cw = csv.writer(si)
 
@@ -975,9 +1097,9 @@ def export_data(entity_type):
             data_rows = [[loc.id, loc.name, loc.door_number] for loc in locations]
             filename = 'locations.csv'
         elif entity_type == 'racks':
-            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation'] # NEW: total_units, orientation
+            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation']
             racks = Rack.query.options(joinedload(Rack.location)).all()
-            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in racks] # NEW: total_units, orientation
+            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in racks]
             filename = 'racks.csv'
         elif entity_type == 'pcs':
             headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage']
@@ -1069,6 +1191,9 @@ def export_data(entity_type):
 
 @app.route('/import/<entity_type>', methods=['POST'])
 def import_data(entity_type):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /import/{entity_type} endpoint ---")
+    # --- Debugging End ---
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request.'}), 400
     file = request.files['file']
@@ -1096,8 +1221,8 @@ def import_data(entity_type):
             'name': 'name',
             'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
             'description': 'description',
-            'total_units': lambda x: int(x) if x.isdigit() else 42, # NEW: import total_units
-            'orientation': lambda x: x if x in ['bottom-up', 'top-down'] else 'bottom-up', # NEW: import orientation
+            'total_units': lambda x: int(x) if x.isdigit() else 42,
+            'orientation': lambda x: x if x in ['bottom-up', 'top-down'] else 'bottom-up',
         },
         'pcs': {
             'name': 'name', 'ip_address': 'ip_address', 'username': 'username',
@@ -1112,7 +1237,7 @@ def import_data(entity_type):
             'name': 'name',
             'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
             'row_in_rack': 'row_in_rack',
-            'rack_name': lambda x: Rack.query.filter_by(name=x).first().id if Rack.query.filter_by(name=x).first() else None, # Map rack_name to rack_id
+            'rack_name': lambda x: Rack.query.filter_by(name=x).first().id if Rack.query.filter_by(name=x).first() else None,
             'total_ports': lambda x: int(x) if x.isdigit() else 1,
             'description': 'description'
         },
@@ -1120,7 +1245,7 @@ def import_data(entity_type):
             'name': 'name', 'ip_address': 'ip_address',
             'location_name': lambda x: Location.query.filter_by(name=x).first().id if Location.query.filter_by(name=x).first() else None,
             'row_in_rack': 'row_in_rack',
-            'rack_name': lambda x: Rack.query.filter_by(name=x).first().id if Rack.query.filter_by(name=x).first() else None, # Map rack_name to rack_id
+            'rack_name': lambda x: Rack.query.filter_by(name=x).first().id if Rack.query.filter_by(name=x).first() else None,
             'total_ports': lambda x: int(x) if x.isdigit() else 1,
             'source_port': 'source_port', 'model': 'model', 'description': 'description',
             'usage': 'usage'
@@ -1191,8 +1316,8 @@ def import_data(entity_type):
                     'name': name,
                     'location_id': location.id,
                     'description': row_dict.get('description'),
-                    'total_units': field_maps['racks']['total_units'](row_dict.get('total_units')), # NEW: import total_units
-                    'orientation': field_maps['racks']['orientation'](row_dict.get('orientation')), # NEW: import orientation
+                    'total_units': field_maps['racks']['total_units'](row_dict.get('total_units')),
+                    'orientation': field_maps['racks']['orientation'](row_dict.get('orientation')),
                 }
                 new_rack = Rack(**new_item_data)
                 db.session.add(new_rack)
@@ -1223,8 +1348,8 @@ def import_data(entity_type):
                     existing_pc.multi_port = row_dict.get('multi_port', str(existing_pc.multi_port)).lower() == 'true'
                     existing_pc.type = row_dict.get('type', existing_pc.type)
                     existing_pc.usage = row_dict.get('usage', existing_pc.usage)
-                    success_count += 1 # Count as success for update
-                    continue # Skip to next row
+                    success_count += 1
+                    continue
 
                 new_item_data = {}
                 for csv_header, model_attr in field_maps['pcs'].items():
@@ -1244,7 +1369,7 @@ def import_data(entity_type):
                 
                 name = row_dict.get('name')
                 location_name = row_dict.get('location_name')
-                rack_name = row_dict.get('rack_name') # Get rack_name from CSV
+                rack_name = row_dict.get('rack_name')
 
                 if not name or not location_name:
                     errors.append(f"Row {i+2}: Missing 'name' or 'location_name' field. Skipped.")
@@ -1274,7 +1399,7 @@ def import_data(entity_type):
                 new_item_data = {
                     'name': name,
                     'location_id': location.id,
-                    'rack_id': rack_id, # Assign resolved rack_id
+                    'rack_id': rack_id,
                     'row_in_rack': row_dict.get('row_in_rack'),
                     'total_ports': int(row_dict.get('total_ports', 1)) if str(row_dict.get('total_ports', 1)).isdigit() else 1,
                     'description': row_dict.get('description')
@@ -1291,7 +1416,7 @@ def import_data(entity_type):
                 
                 name = row_dict.get('name')
                 location_name = row_dict.get('location_name')
-                rack_name = row_dict.get('rack_name') # Get rack_name from CSV
+                rack_name = row_dict.get('rack_name')
 
                 if not name or not location_name:
                     errors.append(f"Row {i+2}: Missing 'name' or 'location_name' field. Skipped.")
@@ -1322,7 +1447,7 @@ def import_data(entity_type):
                     'name': name,
                     'ip_address': row_dict.get('ip_address'),
                     'location_id': location.id,
-                    'rack_id': rack_id, # Assign resolved rack_id
+                    'rack_id': rack_id,
                     'row_in_rack': row_dict.get('row_in_rack'),
                     'total_ports': int(row_dict.get('total_ports', 1)) if str(row_dict.get('total_ports', 1)).isdigit() else 1,
                     'source_port': row_dict.get('source_port'),
@@ -1386,7 +1511,7 @@ def import_data(entity_type):
                     cable_label=cable_label
                 )
                 db.session.add(new_connection)
-                db.session.flush() # Get the new connection's ID before processing hops
+                db.session.flush()
 
                 # Process hops dynamically from CSV
                 hops_to_add = []
@@ -1442,10 +1567,144 @@ def import_data(entity_type):
         'success_count': success_count
     }), 200
 
+# NEW PDF TEMPLATE MANAGEMENT ENDPOINTS
+
+@app.route('/pdf_templates', methods=['GET'])
+def list_pdf_templates():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /pdf_templates endpoint ---")
+    # --- Debugging End ---
+    templates = PdfTemplate.query.all()
+    settings = AppSettings.query.get(1)
+    default_pdf_id = settings.default_pdf_id if settings else None
+
+    return jsonify({
+        'templates': [t.to_dict() for t in templates],
+        'default_pdf_id': default_pdf_id
+    })
+
+
+@app.route('/pdf_templates/upload', methods=['POST'])
+def upload_pdf_template():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /pdf_templates/upload endpoint ---")
+    # --- Debugging End ---
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if PdfTemplate.query.count() >= app.config['MAX_PDF_FILES']: # Corrected access
+        return jsonify({'error': f'Maximum of {app.config["MAX_PDF_FILES"]} PDF templates allowed.'}), 400
+
+    if file and allowed_file(file.filename):
+        original_filename = file.filename
+        unique_filename = str(uuid.uuid4()) + '.' + original_filename.rsplit('.', 1)[1].lower()
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        try:
+            file.save(filepath)
+            
+            new_pdf = PdfTemplate(
+                original_filename=original_filename,
+                stored_filename=unique_filename
+            )
+            db.session.add(new_pdf)
+            db.session.commit()
+            return jsonify({'message': 'File uploaded successfully', 'template': new_pdf.to_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Failed to upload file: {str(e)}'}), 500
+    
+    return jsonify({'error': 'File type not allowed'}), 400
+
+
+@app.route('/pdf_templates/<int:pdf_id>', methods=['DELETE'])
+def delete_pdf_template(pdf_id):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /pdf_templates/{pdf_id} endpoint ---")
+    # --- Debugging End ---
+    pdf_template = PdfTemplate.query.get(pdf_id)
+    if not pdf_template:
+        return jsonify({'error': 'PDF template not found'}), 404
+
+    try:
+        settings = AppSettings.query.get(1)
+        if settings and settings.default_pdf_id == pdf_template.id:
+            return jsonify({'error': 'Cannot delete default PDF template. Please set another default first.'}), 400
+
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], pdf_template.stored_filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            
+        db.session.delete(pdf_template)
+        db.session.commit()
+        return jsonify({'message': 'PDF template deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to delete PDF template: {str(e)}'}), 500
+
+
+@app.route('/app_settings/default_pdf', methods=['POST'])
+def set_default_pdf():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /app_settings/default_pdf endpoint ---")
+    # --- Debugging End ---
+    data = request.json
+    default_pdf_id = data.get('default_pdf_id')
+
+    if default_pdf_id is not None:
+        pdf_exists = PdfTemplate.query.get(default_pdf_id)
+        if not pdf_exists:
+            return jsonify({'error': 'Selected PDF template does not exist.'}), 404
+
+    settings = AppSettings.query.get(1)
+    if not settings:
+        settings = AppSettings(id=1)
+        db.session.add(settings)
+    
+    settings.default_pdf_id = default_pdf_id
+    
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Default PDF template updated successfully', 'settings': settings.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to set default PDF: {str(e)}'}), 500
+
+
+@app.route('/app_settings', methods=['GET'])
+def get_app_settings():
+    # --- Debugging Start ---
+    print("--- app.py: Registering /app_settings endpoint ---")
+    # --- Debugging End ---
+    settings = AppSettings.query.get(1)
+    if not settings:
+        return jsonify({'default_pdf_id': None, 'default_pdf_name': None}), 200
+    return jsonify(settings.to_dict()), 200
+
+
+@app.route('/pdf_templates/download/<string:stored_filename>', methods=['GET'])
+def download_pdf_template(stored_filename):
+    # --- Debugging Start ---
+    print(f"--- app.py: Registering /pdf_templates/download/{stored_filename} endpoint ---")
+    # --- Debugging End ---
+    if not secure_filename(stored_filename) == stored_filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], stored_filename)
+    except Exception as e:
+        app.logger.error(f"Error serving PDF file {stored_filename}: {str(e)}")
+        return jsonify({'error': 'File not found or access denied'}), 404
+
+
 if __name__ == '__main__':
-    # Ensure the instance directory exists for SQLite database
+    # Ensure the instance and uploads directories exist
     instance_path = os.path.join(app.root_path, 'instance')
     os.makedirs(instance_path, exist_ok=True)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True) # Use app.config here for consistency
     # The 'flask db upgrade' command in docker-compose handles initial migration
     # and database creation.
     app.run(debug=True, host='0.0.0.0')

@@ -10,13 +10,13 @@ import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
 import PatchPanelList from "./components/PatchPanelList";
-import PrintableConnectionForm from "./components/PrintableConnectionForm";
+// import PrintableConnectionForm from "./components/PrintableConnectionForm"; // REMOVED
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
-import RackList from "./components/RackList"; // New import
-import RackViewModal from "./components/RackViewModal"; // NEW: Import RackViewModal
+import RackList from "./components/RackList";
+import RackViewModal from "./components/RackViewModal";
 import { Printer } from "lucide-react";
-import ReactDOMServer from "react-dom/server";
+// import ReactDOMServer from "react-dom/server"; // REMOVED (not needed without HTML string rendering)
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -49,7 +49,7 @@ const deepEqual = (a, b) => {
     }
 
     return true;
-  };
+  }
 
   return false;
 };
@@ -61,7 +61,7 @@ function App() {
   const [switches, setSwitches] = useState([]);
   const [connections, setConnections] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [racks, setRacks] = useState([]); // State for Racks
+  const [racks, setRacks] = useState([]);
 
   // State for current active tab
   const [activeTab, setActiveTab] = useState("connections");
@@ -80,15 +80,20 @@ function App() {
   const [selectedSwitchForDiagram, setSelectedSwitchForDiagram] =
     useState(null);
 
-  // NEW: State for Rack View Modal
+  // State for Rack View Modal
   const [showRackViewModal, setShowRackViewModal] = useState(false);
   const [selectedRackForView, setSelectedRackForView] = useState(null);
 
   // State for editing a connection in the ConnectionForm
   const [editingConnection, setEditingConnection] = useState(null);
 
-  // State to store CSS content for injecting into print window
+  // State to store CSS content for injecting into print window (still used by PortStatusModal, if desired)
   const [cssContent, setCssContent] = useState("");
+
+  // States for PDF templates and app settings
+  const [pdfTemplates, setPdfTemplates] = useState([]);
+  const [defaultPdfId, setDefaultPdfId] = useState(null);
+  const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(null);
 
   // Memoized showMessage function
   const showMessage = useCallback((msg, duration = 3000) => {
@@ -98,7 +103,7 @@ function App() {
       setIsMessageVisible(false);
       setMessage("");
     }, duration);
-  }, []); // No dependencies, as it only sets local state
+  }, []);
 
   // Centralized data fetching function
   const fetchData = useCallback(async (endpoint, setter) => {
@@ -116,7 +121,7 @@ function App() {
       console.error(`Failed to fetch ${endpoint}:`, error);
       showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
     }
-  }, [showMessage]); // showMessage is a dependency
+  }, [showMessage]);
 
   // Effect to fetch all initial data on component mount
   useEffect(() => {
@@ -127,10 +132,23 @@ function App() {
       await fetchData("connections", setConnections);
       await fetchData("locations", setLocations);
       await fetchData("racks", setRacks);
+
+      // Fetch PDF templates and default settings
+      try {
+        const pdfResponse = await fetch(`${API_BASE_URL}/pdf_templates`);
+        const pdfData = await pdfResponse.json();
+        setPdfTemplates(pdfData.templates);
+        setDefaultPdfId(pdfData.default_pdf_id);
+        // Set the default selected print template to the app's default PDF if available
+        setSelectedPrintTemplateId(pdfData.default_pdf_id);
+      } catch (error) {
+        console.error("Failed to fetch PDF templates or app settings:", error);
+        showMessage("Error fetching PDF templates or app settings.", 5000);
+      }
     };
     fetchAllInitialData();
 
-    // Fetch CSS for printing
+    // Fetch CSS for printing (still useful for PortStatusModal if you want to print it)
     fetch("/static/css/main.css")
       .then((res) => res.text())
       .then((css) => setCssContent(css))
@@ -138,7 +156,6 @@ function App() {
   }, [fetchData]);
 
   // Handlers for CRUD operations - explicitly trigger re-fetches after changes
-  // Modified: handleAddConnection to return success status and message
   const handleAddConnection = useCallback(async (newConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections`, {
@@ -149,21 +166,20 @@ function App() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` }; // Return false on error
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
       }
       showMessage("Connection added successfully!");
       setEditingConnection(null);
       await fetchData("connections", setConnections);
       await fetchData("pcs", setPcs);
-      return { success: true }; // Return true on success
+      return { success: true };
     } catch (error) {
       console.error("Error adding connection:", error);
       showMessage(`Error adding connection: ${error.message}`, 8000);
-      return { success: false, error: error.message }; // Return false on network/other error
+      return { success: false, error: error.message };
     }
   }, [fetchData, showMessage]);
 
-  // Modified: handleUpdateConnection to return success status and message
   const handleUpdateConnection = useCallback(async (id, updatedConnectionData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
@@ -174,17 +190,17 @@ function App() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` }; // Return false on error
+        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
       }
       showMessage("Connection updated successfully!");
       setEditingConnection(null);
       await fetchData("connections", setConnections);
       await fetchData("pcs", setPcs);
-      return { success: true }; // Return true on success
+      return { success: true };
     } catch (error) {
       console.error("Error updating connection:", error);
       showMessage(`Error updating connection: ${error.message}`, 8000);
-      return { success: false, error: error.message }; // Return false on network/other error
+      return { success: false, error: error.message };
     }
   }, [fetchData, showMessage]);
 
@@ -235,7 +251,7 @@ function App() {
       switch: connection.switch,
     };
     setEditingConnection(formattedConnection);
-  }, []); // No specific dependencies beyond the `connection` object that's already stable per call.
+  }, []);
 
   const handleAddEntity = useCallback(async (type, data) => {
     try {
@@ -252,15 +268,13 @@ function App() {
       const newEntity = await response.json();
       showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
       // Re-fetch data for relevant lists
-      if (type === "pcs") setPcs(prev => [...prev, newEntity]); // Optimistic update or refetch
+      if (type === "pcs") setPcs(prev => [...prev, newEntity]);
       if (type === "patch_panels") setPatchPanels(prev => [...prev, newEntity]);
       if (type === "switches") setSwitches(prev => [...prev, newEntity]);
       if (type === "locations") setLocations(prev => [...prev, newEntity]);
       if (type === "racks") setRacks(prev => [...prev, newEntity]);
       await fetchData("connections", setConnections); // Connections might depend on any new entity
 
-      // For `racks` and other entities, ensure the full related objects are loaded
-      // This is a simplified approach, a more robust solution might involve specific refetch for the new entity
       if (type === "racks") await fetchData("racks", setRacks); 
       if (type === "patch_panels") await fetchData("patch_panels", setPatchPanels);
       if (type === "switches") await fetchData("switches", setSwitches);
@@ -358,7 +372,7 @@ function App() {
       console.error(`Failed to fetch ${entityType} port status:`, error);
       showMessage(`Error fetching port status: ${error.message}`, 5000);
     }
-  }, [showMessage]); // No dependencies beyond showMessage and state setters
+  }, [showMessage]);
 
   const handleClosePortStatusModal = useCallback(() => {
     setShowPortStatusModal(false);
@@ -379,56 +393,42 @@ function App() {
     setSelectedSwitchForDiagram(null);
   }, []);
 
-  // NEW: Handler for viewing full Rack details
+  // Handler for viewing full Rack details
   const handleViewRackDetails = useCallback((rack) => {
     console.log("handleViewRackDetails called for rack:", rack);
     setSelectedRackForView(rack);
     setShowRackViewModal(true);
   }, []);
 
-  // NEW: Handler for closing Rack View Modal
+  // Handler for closing Rack View Modal
   const handleCloseRackViewModal = useCallback(() => {
     console.log("handleCloseRackViewModal called");
     setShowRackViewModal(false);
     setSelectedRackForView(null);
   }, []);
 
-  const handlePrintForm = useCallback(() => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      showMessage("Please allow pop-ups for printing.", 5000);
-      return;
+  // Modified handlePrintForm: Now only opens the selected PDF template
+  const handlePrintForm = useCallback((connectionToPrint = null) => { // connectionToPrint is now optional, as we're just opening a template
+    const selectedTemplate = pdfTemplates.find(t => t.id === selectedPrintTemplateId);
+
+    if (!selectedTemplate) {
+        showMessage("Please select a PDF template to print from the dropdown.", 5000);
+        return;
     }
 
-    const printableHtml = ReactDOMServer.renderToString(
-      <PrintableConnectionForm />
-    );
+    const pdfUrl = `${API_BASE_URL}/pdf_templates/download/${selectedTemplate.stored_filename}`;
+    
+    // Open the PDF in a new tab
+    const printWindow = window.open(pdfUrl, '_blank');
+    if (!printWindow) {
+        showMessage("Please allow pop-ups to open the PDF.", 5000);
+    } else {
+        showMessage(`Opening "${selectedTemplate.original_filename}" for printing.`, 3000);
+        // Note: Direct programmatic printing of an opened PDF might not be universally supported
+        // or desirable for user experience. Users typically print from the PDF viewer.
+    }
+  }, [selectedPrintTemplateId, pdfTemplates, showMessage]);
 
-    const styleTag = `<style>${cssContent}</style>`;
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Network Connection Form Print</title>
-          ${styleTag}
-      </head>
-      <body>
-          <div class="print-only-container">
-              ${printableHtml}
-          </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
-  }, [cssContent, showMessage]); // cssContent and showMessage are dependencies
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-200 font-inter p-4 sm:p-8">
@@ -462,7 +462,7 @@ function App() {
         />
       )}
 
-      {/* NEW: Rack View Modal */}
+      {/* Rack View Modal */}
       {showRackViewModal && selectedRackForView && (
         <RackViewModal
           isOpen={showRackViewModal}
@@ -470,7 +470,6 @@ function App() {
           rack={selectedRackForView}
           switches={switches}
           patchPanels={patchPanels}
-          // If you want units clickable in this modal too, pass the handler
           onShowPortStatus={handleShowPortStatus}
         />
       )}
@@ -539,7 +538,6 @@ function App() {
             >
               Locations
             </button>
-            {/* New Racks Tab */}
             <button
               className={`py-3 px-6 text-lg font-medium ${
                 activeTab === "racks"
@@ -550,7 +548,6 @@ function App() {
             >
               Racks
             </button>
-            {/* New Settings Tab */}
             <button
               className={`py-3 px-6 text-lg font-medium ${
                 activeTab === "settings"
@@ -588,12 +585,39 @@ function App() {
               </section>
 
               <div className="text-center mb-6">
-                <button
-                  onClick={handlePrintForm}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-md shadow-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center mx-auto"
-                >
-                  <Printer size={20} className="mr-2" /> Print Empty Form
-                </button>
+                <h3 className="text-xl font-bold text-blue-700 mb-4">Print Options</h3>
+                <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+                    {/* PDF Template Selector */}
+                    <div className="flex items-center space-x-2">
+                        <label htmlFor="pdf-template-select" className="text-gray-700 font-medium">
+                            PDF Template:
+                        </label>
+                        <select
+                            id="pdf-template-select"
+                            value={selectedPrintTemplateId || ''}
+                            onChange={(e) => setSelectedPrintTemplateId(e.target.value ? parseInt(e.target.value) : null)}
+                            className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="">-- None (No PDF Template) --</option>
+                            {pdfTemplates.map(template => (
+                                <option key={template.id} value={template.id}>
+                                    {template.original_filename} {template.id === defaultPdfId && "(Default)"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    
+                    {/* Print Button (now opens selected PDF template) */}
+                    <button
+                        onClick={() => handlePrintForm()} // No connection data here, just open the template
+                        className="px-6 py-3 bg-indigo-600 text-white rounded-md shadow-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center"
+                    >
+                        <Printer size={20} className="mr-2" /> Print Selected PDF Template
+                    </button>
+                </div>
+                <p className="mt-4 text-sm text-gray-500">
+                    This will open the selected PDF template in a new tab for printing.
+                </p>
               </div>
 
               <section>
@@ -604,6 +628,8 @@ function App() {
                   connections={connections}
                   onDelete={handleDeleteConnection}
                   onEdit={handleEditConnection}
+                  // onPrint is now passed, but its functionality is simplified to open PDF template
+                  onPrint={handlePrintForm}
                 />
                 {connections.length === 0 && (
                   <p className="text-center text-gray-500 text-lg mt-8">
@@ -768,7 +794,15 @@ function App() {
           )}
 
           {activeTab === "settings" && (
-            <SettingsPage showMessage={showMessage} />
+            <SettingsPage
+                showMessage={showMessage}
+                pdfTemplates={pdfTemplates}
+                setPdfTemplates={setPdfTemplates}
+                defaultPdfId={defaultPdfId}
+                setDefaultPdfId={setDefaultPdfId}
+                setSelectedPrintTemplateId={setSelectedPrintTemplateId}
+                fetchPdfTemplates={fetchData} // Pass the general fetchData for PDF templates
+            />
           )}
         </main>
         <footer className="mt-12 text-center text-gray-500 text-sm">
