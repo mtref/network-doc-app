@@ -9,7 +9,7 @@ import {
   Laptop,
   Router,
   Info,
-  PlusCircle,
+  PlusCircle, // The plus icon for "Add New PC"
   ChevronDown,
   ChevronUp,
   User,
@@ -22,6 +22,11 @@ import {
   Link, // Icon for multi-port
   Server, // Icon for PC type: Server
   MonitorCheck, // Icon for PC type: Workstation (assuming it fits)
+  Activity, // New icon for Usage
+  Tag, // New icon for Model
+  Cpu, // New icon for OS
+  MapPin, // New icon for Office
+  Globe, // New icon for In Domain
 } from "lucide-react"; // Icons for PC details and collapse/expand
 
 function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
@@ -324,7 +329,7 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
             className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="all">All</option>
-            {availableUsageOptions.map((usage) => (
+            {usageOptions.map((usage) => (
               <option key={usage} value={usage}>
                 {usage}
               </option>
@@ -356,10 +361,11 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
         </div>
       </div>
 
-      {/* Add/Edit PC Form (Collapsible) */}
-      <div className="bg-white rounded-lg shadow-sm border border-blue-200">
+      {/* Add/Edit PC Form (Collapsible) - Outer container now has width and centering */}
+      <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
+        {/* Header (no mx-auto or w-x/y here, it's w-full of its parent) */}
         <div
-          className="flex justify-between items-center p-5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
+          className="flex justify-center items-center p-3 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddPcFormExpanded(!isAddPcFormExpanded)}
         >
           <h3 className="text-xl font-bold text-indigo-700 flex items-center">
@@ -377,29 +383,40 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
             isAddPcFormExpanded ? "expanded" : ""
           }`}
         >
-          <form onSubmit={handlePcFormSubmit} className="p-5 space-y-3">
-            <input
-              type="text"
-              placeholder="PC Name"
-              value={pcFormName}
-              onChange={(e) => setPcFormName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="text"
-              placeholder="IP Address (e.g., 192.168.1.1)"
-              value={pcFormIp}
-              onChange={(e) => setPcFormIp(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Username (Optional)"
-              value={pcFormUsername}
-              onChange={(e) => setPcFormUsername(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+          {/* Form content (no mx-auto or w-x/y here, it's w-full of its parent, the outer div) */}
+          <form onSubmit={handlePcFormSubmit}
+                className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50">
+            <div className="flex items-center space-x-2">
+                <Laptop size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="PC Name"
+                    value={pcFormName}
+                    onChange={(e) => setPcFormName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                />
+            </div>
+            <div className="flex items-center space-x-2">
+                <Router size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="IP Address (e.g., 192.168.1.1)"
+                    value={pcFormIp}
+                    onChange={(e) => setPcFormIp(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+            <div className="flex items-center space-x-2">
+                <User size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="Username (Optional)"
+                    value={pcFormUsername}
+                    onChange={(e) => setPcFormUsername(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center">
                 <input
@@ -432,27 +449,37 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                 </label>
               </div>
             </div>
-            <select // PC Type dropdown
-                value={pcFormType}
-                onChange={(e) => setPcFormType(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-            >
-                <option value="Workstation">Workstation</option>
-                <option value="Server">Server</option>
-            </select>
-            <select // PC Usage dropdown
-                value={pcFormUsage}
-                onChange={(e) => setPcFormUsage(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            >
-                <option value="">-- Select Usage (Optional) --</option>
-                {usageOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-                {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
-                <option value="other">Add Custom Usage...</option>
-            </select>
+            <div className="flex items-center space-x-2">
+                {pcFormType === "Server" ? (
+                  <Server size={20} className="text-gray-500" />
+                ) : (
+                  <MonitorCheck size={20} className="text-gray-500" />
+                )}
+                <select // PC Type dropdown
+                    value={pcFormType}
+                    onChange={(e) => setPcFormType(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                >
+                    <option value="Workstation">Workstation</option>
+                    <option value="Server">Server</option>
+                </select>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Activity size={20} className="text-gray-500" />
+                <select // PC Usage dropdown
+                    value={pcFormUsage}
+                    onChange={(e) => setPcFormUsage(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                    <option value="">-- Select Usage (Optional) --</option>
+                    {usageOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                    {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
+                    <option value="other">Add Custom Usage...</option>
+                </select>
+            </div>
             {pcFormUsage === "other" && (
                 <input
                   type="text"
@@ -471,34 +498,46 @@ function PcList({ pcs, onAddEntity, onUpdateEntity, onDeleteEntity }) {
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
             )}
-            <input
-              type="text"
-              placeholder="Model (e.g., Dell OptiPlex 7010)" // Updated from Ports Name
-              value={pcFormModel}
-              onChange={(e) => setPcFormModel(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Operating System (Optional)"
-              value={pcFormOs}
-              onChange={(e) => setPcFormOs(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Office (Optional)"
-              value={pcFormOffice}
-              onChange={(e) => setPcFormOffice(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-            <textarea
-              placeholder="Description (Optional)"
-              value={pcFormDesc}
-              onChange={(e) => setPcFormDesc(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-              rows="3"
-            ></textarea>
+            <div className="flex items-center space-x-2">
+                <Tag size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="Model (e.g., Dell OptiPlex 7010)" // Updated from Ports Name
+                    value={pcFormModel}
+                    onChange={(e) => setPcFormModel(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+            <div className="flex items-center space-x-2">
+                <Cpu size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="Operating System (Optional)"
+                    value={pcFormOs}
+                    onChange={(e) => setPcFormOs(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+            <div className="flex items-center space-x-2">
+                <MapPin size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="Office (Optional)"
+                    value={pcFormOffice}
+                    onChange={(e) => setPcFormOffice(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+            </div>
+            <div className="flex items-start space-x-2">
+                <Info size={20} className="text-gray-500 mt-2" />
+                <textarea
+                    placeholder="Description (Optional)"
+                    value={pcFormDesc}
+                    onChange={(e) => setPcFormDesc(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    rows="3"
+                ></textarea>
+            </div>
             <div className="flex space-x-3 justify-end">
               {editingPc && (
                 <button

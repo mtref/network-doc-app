@@ -41,6 +41,7 @@ const ConnectionForm = memo(function ConnectionForm({
   onAddEntity,
   onShowPortStatus,
   locations,
+  racks, // New prop for Racks
   showMessage,
 }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -84,7 +85,7 @@ const ConnectionForm = memo(function ConnectionForm({
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
   const [newPpRowInRack, setNewPpRowInRack] = useState("");
-  const [newPpRackName, setNewPpRackName] = useState("");
+  const [newPpRackId, setNewPpRackId] = useState(""); // State for Rack ID
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
   const [newPpDesc, setNewPpDesc] = useState("");
 
@@ -92,14 +93,19 @@ const ConnectionForm = memo(function ConnectionForm({
   const [newSwitchIp, setNewSwitchIp] = useState("");
   const [newSwitchLocationId, setNewSwitchLocationId] = useState("");
   const [newSwitchRowInRack, setNewSwitchRowInRack] = useState("");
-  const [newSwitchRackName, setNewSwitchRackName] = useState("");
+  const [newSwitchRackId, setNewSwitchRackId] = useState(""); // State for Rack ID
   const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
   const [newSwitchSourcePort, setNewSwitchSourcePort] = useState("");
   const [newSwitchModel, setNewSwitchModel] = useState("");
   const [newSwitchDesc, setNewSwitchDesc] = useState("");
+  const [newSwitchUsage, setNewSwitchUsage] = useState("");
 
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
+
+  // Usage options for PC and Switch forms
+  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"];
+
 
   // IMPORTANT: The fetchAvailablePcs callback now depends on 'pcs' and 'connections' props.
   // This ensures it gets recreated and re-executed when these underlying data change.
@@ -111,7 +117,7 @@ const ConnectionForm = memo(function ConnectionForm({
       // This logic must exactly match your backend's /available_pcs endpoint
       // for consistent filtering on the frontend without extra API calls here.
       const connected_single_port_pc_ids = new Set(
-        all_connections.filter(conn => !conn.pc.multi_port).map(conn => conn.pc.id)
+        all_connections.filter(conn => conn.pc && !conn.pc.multi_port).map(conn => conn.pc.id)
       );
 
       const filteredPcs = [];
@@ -145,6 +151,7 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       setFilteredSwitchesByLocation(filtered);
     }
+    // If a switch was selected but no longer matches the filter, clear it
     if (switchId && selectedLocationIdForSwitch !== "" &&
         !switches.some(s => String(s.id) === switchId && String(s.location_id) === selectedLocationIdForSwitch)) {
         setSwitchId("");
@@ -210,6 +217,7 @@ const ConnectionForm = memo(function ConnectionForm({
       setEditingConnection(null);
       setCurrentStep(1);
 
+      // Reset new PC/PP/Switch form fields when connection form is reset
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
@@ -225,7 +233,7 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewPpName("");
       setNewPpLocationId("");
       setNewPpRowInRack("");
-      setNewPpRackName("");
+      setNewPpRackId("");
       setNewPpTotalPorts(1);
       setNewPpDesc("");
 
@@ -233,16 +241,18 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewSwitchIp("");
       setNewSwitchLocationId("");
       setNewSwitchRowInRack("");
-      setNewSwitchRackName("");
+      setNewSwitchRackId("");
       setNewSwitchTotalPorts(1);
       setNewSwitchSourcePort("");
       setNewSwitchModel("");
       setNewSwitchDesc("");
+      setNewSwitchUsage("");
 
       fetchAvailablePcs(); // Re-fetch available PCs when not editing (now this uses the current state of pcs/connections)
     }
-  }, [editingConnection, pcs, connections, switches]); // Added pcs and connections to dependencies
+  }, [editingConnection, pcs, connections, switches, fetchAvailablePcs]); // Added pcs and connections to dependencies
 
+  // Effect to automatically select a newly created PC and move to step 2
   useEffect(() => {
     if (
       lastCreatedPcIdRef.current !== null &&
@@ -259,7 +269,7 @@ const ConnectionForm = memo(function ConnectionForm({
   const handleHopLocationChange = (index, value) => {
     const updatedHops = [...hops];
     updatedHops[index].location_id = value;
-    updatedHops[index].patch_panel_id = "";
+    updatedHops[index].patch_panel_id = ""; // Clear selected patch panel when location changes
     setHops(updatedHops);
   };
 
@@ -395,6 +405,10 @@ const ConnectionForm = memo(function ConnectionForm({
 
   const handleNewPcSaveAndContinue = async (e) => {
     e.preventDefault();
+    if (!newPcName.trim()) {
+      showMessage("PC Name is required.", 3000);
+      return;
+    }
     if (newPcIp && !ipRegex.test(newPcIp)) {
       showMessage(
         "Please enter a valid IP address for PC (e.g., 192.168.1.1).",
@@ -402,76 +416,76 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       return;
     }
-    if (newPcName.trim()) {
-      try {
-        const result = await onAddEntity("pcs", {
-          name: newPcName,
-          ip_address: newPcIp,
-          username: newPcUsername,
-          in_domain: newPcInDomain,
-          operating_system: newPcOs,
-          model: newPcModel,
-          office: newPcOffice,
-          description: newPcDesc,
-          multi_port: newPcMultiPort,
-          type: newPcType,
-          usage: newPcUsage,
-        });
+    try {
+      const result = await onAddEntity("pcs", {
+        name: newPcName,
+        ip_address: newPcIp,
+        username: newPcUsername,
+        in_domain: newPcInDomain,
+        operating_system: newPcOs,
+        model: newPcModel,
+        office: newPcOffice,
+        description: newPcDesc,
+        multi_port: newPcMultiPort,
+        type: newPcType,
+        usage: newPcUsage,
+      });
 
-        if (result.success && result.entity) {
-          lastCreatedPcIdRef.current = result.entity.id;
-          // No explicit fetchAvailablePcs() here,
-          // but the useEffect that depends on `pcs` prop will trigger it.
-          setNewPcName("");
-          setNewPcIp("");
-          setNewPcUsername("");
-          setNewPcInDomain(false);
-          setNewPcOs("");
-          setNewPcModel("");
-          setNewPcOffice("");
-          setNewPcDesc("");
-          setNewPcMultiPort(false);
-          setNewPcType("Workstation");
-          setNewPcUsage("");
-          setIsNewPcExpanded(false);
-        }
-      } catch (error) {
-        // showMessage handled by onAddEntity
+      if (result.success && result.entity) {
+        lastCreatedPcIdRef.current = result.entity.id;
+        // No explicit fetchAvailablePcs() here,
+        // but the useEffect that depends on `pcs` prop will trigger it.
+        setNewPcName("");
+        setNewPcIp("");
+        setNewPcUsername("");
+        setNewPcInDomain(false);
+        setNewPcOs("");
+        setNewPcModel("");
+        setNewPcOffice("");
+        setNewPcDesc("");
+        setNewPcMultiPort(false);
+        setNewPcType("Workstation");
+        setNewPcUsage("");
+        setIsNewPcExpanded(false);
       }
-    } else {
-      showMessage("PC Name is required.", 3000);
+    } catch (error) {
+      // showMessage handled by onAddEntity
     }
   };
 
   const handleAddPp = async (e) => {
     e.preventDefault();
-    if (newPpName.trim() && newPpLocationId) {
-      try {
-        await onAddEntity("patch_panels", {
-          name: newPpName,
-          location_id: parseInt(newPpLocationId),
-          row_in_rack: newPpRowInRack,
-          rack_name: newPpRackName,
-          total_ports: parseInt(newPpTotalPorts),
-          description: newPpDesc,
-        });
-        setNewPpName("");
-        setNewPpLocationId("");
-        setNewPpRowInRack("");
-        setNewPpRackName("");
-        setNewPpTotalPorts(1);
-        setNewPpDesc("");
-        setIsNewPpExpanded(false);
-      } catch (error) {
-        showMessage(`Error adding patch panel: ${error.message}`, 5000);
-      }
-    } else {
+    if (!newPpName.trim() || !newPpLocationId) {
       showMessage("Patch Panel Name and Location are required.", 3000);
+      return;
+    }
+    try {
+      await onAddEntity("patch_panels", {
+        name: newPpName,
+        location_id: parseInt(newPpLocationId),
+        row_in_rack: newPpRowInRack,
+        rack_id: newPpRackId ? parseInt(newPpRackId) : null,
+        total_ports: parseInt(newPpTotalPorts),
+        description: newPpDesc,
+      });
+      setNewPpName("");
+      setNewPpLocationId("");
+      setNewPpRowInRack("");
+      setNewPpRackId("");
+      setNewPpTotalPorts(1);
+      setNewPpDesc("");
+      setIsNewPpExpanded(false);
+    } catch (error) {
+      showMessage(`Error adding patch panel: ${error.message}`, 5000);
     }
   };
 
   const handleAddSwitch = async (e) => {
     e.preventDefault();
+    if (!newSwitchName.trim() || !newSwitchLocationId) {
+      showMessage("Switch Name and Location are required.", 3000);
+      return;
+    }
     if (newSwitchIp && !ipRegex.test(newSwitchIp)) {
       showMessage(
         "Please enter a valid IP address for Switch (e.g., 192.168.1.1).",
@@ -479,34 +493,32 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       return;
     }
-    if (newSwitchName.trim() && newSwitchLocationId) {
-      try {
-        await onAddEntity("switches", {
-          name: newSwitchName,
-          ip_address: newSwitchIp,
-          location_id: parseInt(newSwitchLocationId),
-          row_in_rack: newSwitchRowInRack,
-          rack_name: newSwitchRackName,
-          total_ports: parseInt(newSwitchTotalPorts),
-          source_port: newSwitchSourcePort,
-          model: newSwitchModel,
-          description: newSwitchDesc,
-        });
-        setNewSwitchName("");
-        setNewSwitchIp("");
-        setNewSwitchLocationId("");
-        setNewSwitchRowInRack("");
-        setNewSwitchRackName("");
-        setNewSwitchTotalPorts(1);
-        setNewSwitchSourcePort("");
-        setNewSwitchModel("");
-        setNewSwitchDesc("");
-        setIsNewSwitchExpanded(false);
-      } catch (error) {
-        showMessage(`Error adding switch: ${error.message}`, 5000);
-      }
-    } else {
-      showMessage("Switch Name and Location are required.", 3000);
+    try {
+      await onAddEntity("switches", {
+        name: newSwitchName,
+        ip_address: newSwitchIp,
+        location_id: parseInt(newSwitchLocationId),
+        row_in_rack: newSwitchRowInRack,
+        rack_id: newSwitchRackId ? parseInt(newSwitchRackId) : null,
+        total_ports: parseInt(newSwitchTotalPorts),
+        source_port: newSwitchSourcePort,
+        model: newSwitchModel,
+        description: newSwitchDesc,
+        usage: newSwitchUsage,
+      });
+      setNewSwitchName("");
+      setNewSwitchIp("");
+      setNewSwitchLocationId("");
+      setNewSwitchRowInRack("");
+      setNewSwitchRackId("");
+      setNewSwitchTotalPorts(1);
+      setNewSwitchSourcePort("");
+      setNewSwitchModel("");
+      setNewSwitchDesc("");
+      setNewSwitchUsage("");
+      setIsNewSwitchExpanded(false);
+    } catch (error) {
+      showMessage(`Error adding switch: ${error.message}`, 5000);
     }
   };
 
@@ -545,9 +557,8 @@ const ConnectionForm = memo(function ConnectionForm({
     return { connected: connectedCount, available: availableCount };
   }, [switches, patchPanels, connections]);
 
-  const sortedSwitches = [...switches].sort((a,b) => a.name.localeCompare(b.name));
-  const sortedPatchPanels = [...patchPanels].sort((a,b) => a.name.localeCompare(b.name));
   const sortedLocations = [...locations].sort((a,b) => a.name.localeCompare(b.name));
+  const sortedRacks = [...racks].sort((a,b) => a.name.localeCompare(b.name));
 
 
   return (
@@ -576,9 +587,10 @@ const ConnectionForm = memo(function ConnectionForm({
               onChange={(e) => {
                 if (e.target.value === "add-new-pc") {
                   setIsNewPcExpanded(true);
+                  // Scroll to the new PC creation section
                   document
                     .getElementById("new-pc-creation-section")
-                    ?.scrollIntoView({ behavior: "smooth" });
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
                   setPcId(""); // Clear current selection
                 } else {
                   setPcId(e.target.value);
@@ -724,13 +736,18 @@ const ConnectionForm = memo(function ConnectionForm({
                   onChange={(e) => setNewPcOffice(e.target.value)}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
-                <input
-                  type="text"
-                  placeholder="Usage (Optional)"
-                  value={newPcUsage}
-                  onChange={(e) => setNewPcUsage(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+                <select // PC Usage dropdown
+                    value={newPcUsage}
+                    onChange={(e) => setNewPcUsage(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                    <option value="">-- Select Usage (Optional) --</option>
+                    {usageOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                    {/* Option to add custom usage - would require a separate input field to appear */}
+                    {/* <option value="other">Add Custom Usage...</option> */}
+                </select>
                 <textarea
                   placeholder="Description (Optional)"
                   value={newPcDesc}
@@ -825,9 +842,10 @@ const ConnectionForm = memo(function ConnectionForm({
                   onChange={async (e) => {
                     if (e.target.value === "add-new-switch") {
                       setIsNewSwitchExpanded(true);
+                      // Scroll to the new switch creation section
                       document
                         .getElementById("new-switch-creation-section")
-                        ?.scrollBy({ top: document.getElementById("new-switch-creation-section").scrollHeight, behavior: 'smooth' }); // Scroll to end of new switch section
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
                       setSwitchId(""); // Clear current selection
                     } else {
                       setSwitchId(e.target.value);
@@ -1009,6 +1027,9 @@ const ConnectionForm = memo(function ConnectionForm({
                   ? patchPanels.filter(pp => String(pp.location_id) === hop.location_id)
                   : patchPanels;
 
+                // Sort racks by name for dropdown
+                const sortedRacksForPp = Array.isArray(racks) ? [...racks].sort((a,b) => a.name.localeCompare(b.name)) : [];
+
                 return (
                   <div
                     key={index}
@@ -1060,7 +1081,7 @@ const ConnectionForm = memo(function ConnectionForm({
                               setIsNewPpExpanded(true);
                               document
                                 .getElementById("new-pp-creation-section")
-                                ?.scrollBy({ top: document.getElementById("new-pp-creation-section").scrollHeight, behavior: 'smooth' });
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
                               handleHopPatchPanelChange(index, "");
                             } else {
                               handleHopPatchPanelChange(index, e.target.value);
@@ -1205,7 +1226,7 @@ const ConnectionForm = memo(function ConnectionForm({
                                 {color}
                               </option>
                             ))}
-                            <option value="add-new-hop-color">
+                            <option value="add-new">
                               -- Add New Color --
                             </option>
                           </select>
@@ -1265,6 +1286,250 @@ const ConnectionForm = memo(function ConnectionForm({
               >
                 Add Patch Panel Hop
               </button>
+            </div>
+
+            {/* Create New Patch Panel Section (Collapsible) */}
+            <div
+              id="new-pp-creation-section"
+              className="bg-white rounded-lg shadow-sm border border-gray-100 mt-6"
+            >
+              <div
+                className="flex justify-between items-center p-5 cursor-pointer bg-green-50 hover:bg-green-100 transition-colors duration-200 rounded-t-lg"
+                onClick={() => setIsNewPpExpanded(!isNewPpExpanded)}
+              >
+                <h3 className="text-lg font-semibold text-green-700 flex items-center">
+                  <PlusCircle size={20} className="mr-2" /> Create New Patch Panel
+                </h3>
+                {isNewPpExpanded ? (
+                  <ChevronUp size={20} />
+                ) : (
+                  <ChevronDown size={20} />
+                )}
+              </div>
+              <div
+                className={`collapsible-content ${
+                  isNewPpExpanded ? "expanded" : ""
+                }`}
+              >
+                <form onSubmit={handleAddPp} className="p-5 space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Patch Panel Name"
+                    value={newPpName}
+                    onChange={(e) => setNewPpName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                  <select
+                    value={newPpLocationId}
+                    onChange={(e) => {
+                      setNewPpLocationId(e.target.value);
+                      setNewPpRackId(""); // Reset rack when location changes
+                    }}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">-- Select Location --</option>
+                    {sortedLocations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                      </option>
+                    ))}
+                  </select>
+                  {locations.length === 0 && (
+                    <p className="text-sm text-red-500 mt-1">
+                      Please add locations first.
+                    </p>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Row in Rack (Optional)"
+                    value={newPpRowInRack}
+                    onChange={(e) => setNewPpRowInRack(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {/* Rack selection for new Patch Panel */}
+                  <select
+                    value={newPpRackId}
+                    onChange={(e) => setNewPpRackId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">-- Select Rack (Optional) --</option>
+                    {sortedRacks
+                      .filter(rack => !newPpLocationId || (rack.location_id !== undefined && String(rack.location_id) === newPpLocationId))
+                      .map((rack) => (
+                        <option key={rack.id} value={rack.id}>
+                          {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                        </option>
+                      ))}
+                  </select>
+                  {(racks.length === 0 || (newPpLocationId && sortedRacks.filter(rack => String(rack.location_id) === newPpLocationId).length === 0)) && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      No racks available for selected location.
+                    </p>
+                  )}
+                  <input
+                    type="number"
+                    placeholder="Total Ports (e.g., 24)"
+                    value={newPpTotalPorts}
+                    onChange={(e) => setNewPpTotalPorts(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    required
+                  />
+                  <textarea
+                    placeholder="Description (Optional)"
+                    value={newPpDesc}
+                    onChange={(e) => setNewPpDesc(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    rows="3"
+                  ></textarea>
+                  <button
+                    type="submit"
+                    className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Create Patch Panel
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Create New Switch Section (Collapsible) */}
+            <div
+              id="new-switch-creation-section"
+              className="bg-white rounded-lg shadow-sm border border-gray-100 mt-6"
+            >
+              <div
+                className="flex justify-between items-center p-5 cursor-pointer bg-red-50 hover:bg-red-100 transition-colors duration-200 rounded-t-lg"
+                onClick={() => setIsNewSwitchExpanded(!isNewSwitchExpanded)}
+              >
+                <h3 className="text-lg font-semibold text-red-700 flex items-center">
+                  <PlusCircle size={20} className="mr-2" /> Create New Switch
+                </h3>
+                {isNewSwitchExpanded ? (
+                  <ChevronUp size={20} />
+                ) : (
+                  <ChevronDown size={20} />
+                )}
+              </div>
+              <div
+                className={`collapsible-content ${
+                  isNewSwitchExpanded ? "expanded" : ""
+                }`}
+              >
+                <form onSubmit={handleAddSwitch} className="p-5 space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Switch Name"
+                    value={newSwitchName}
+                    onChange={(e) => setNewSwitchName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="IP Address (e.g., 192.168.1.1)"
+                    value={newSwitchIp}
+                    onChange={(e) => setNewSwitchIp(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <select
+                    value={newSwitchLocationId}
+                    onChange={(e) => {
+                      setNewSwitchLocationId(e.target.value);
+                      setNewSwitchRackId(""); // Reset rack when location changes
+                    }}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">-- Select Location --</option>
+                    {sortedLocations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                      </option>
+                    ))}
+                  </select>
+                  {locations.length === 0 && (
+                    <p className="text-sm text-red-500 mt-1">
+                      Please add locations first.
+                    </p>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Row in Rack (Optional)"
+                    value={newSwitchRowInRack}
+                    onChange={(e) => setNewSwitchRowInRack(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {/* Rack selection for new Switch */}
+                  <select
+                    value={newSwitchRackId}
+                    onChange={(e) => setNewSwitchRackId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">-- Select Rack (Optional) --</option>
+                    {sortedRacks
+                      .filter(rack => !newSwitchLocationId || (rack.location_id !== undefined && String(rack.location_id) === newSwitchLocationId))
+                      .map((rack) => (
+                        <option key={rack.id} value={rack.id}>
+                          {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                        </option>
+                      ))}
+                  </select>
+                  {(racks.length === 0 || (newSwitchLocationId && sortedRacks.filter(rack => String(rack.location_id) === newSwitchLocationId).length === 0)) && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      No racks available for selected location.
+                    </p>
+                  )}
+                  <input
+                    type="number"
+                    placeholder="Total Ports (e.g., 4)"
+                    value={newSwitchTotalPorts}
+                    onChange={(e) => setNewSwitchTotalPorts(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Source Port (Optional)"
+                    value={newSwitchSourcePort}
+                    onChange={(e) => setNewSwitchSourcePort(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Model (Optional)"
+                    value={newSwitchModel}
+                    onChange={(e) => setNewSwitchModel(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <select // New Switch Usage dropdown
+                      value={newSwitchUsage}
+                      onChange={(e) => setNewSwitchUsage(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  >
+                      <option value="">-- Select Usage (Optional) --</option>
+                      {usageOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                      {/* <option value="other">Add Custom Usage...</option> */}
+                  </select>
+                  <textarea
+                    placeholder="Description (Optional)"
+                    value={newSwitchDesc}
+                    onChange={(e) => setNewSwitchDesc(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    rows="3"
+                  ></textarea>
+                  <button
+                    type="submit"
+                    className="w-full bg-red-500 text-white p-2 rounded-md hover:bg-red-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Create Switch
+                  </button>
+                </form>
+              </div>
             </div>
 
             {/* Action Buttons for Connection Form */}

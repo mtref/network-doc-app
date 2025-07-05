@@ -2,7 +2,7 @@
 // This component displays a searchable list of Racks in a card format,
 // including filter options by Location, and now a visual representation of each rack.
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react"; // Import useRef
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
 import {
   Columns, // Icon for Rack
@@ -21,10 +21,45 @@ import {
 } from "lucide-react";
 
 // New sub-component for visualizing a single Rack
-export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
+export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus, isModalView }) => {
   // Explicitly ensure switches and patchPanels are arrays, even if props are undefined/null
   const currentSwitches = Array.isArray(switches) ? switches : [];
   const currentPatchPanels = Array.isArray(patchPanels) ? patchPanels : [];
+
+  const visualizerRef = useRef(null); // Create a ref for the visualizer div
+
+  // Effect to prevent scroll propagation
+  useEffect(() => {
+    const handleWheel = (event) => {
+      // Check if the content is actually overflowing
+      const { clientHeight, scrollHeight } = visualizerRef.current;
+      const isContentScrollable = scrollHeight > clientHeight;
+
+      // Determine if the scroll is at the top or bottom
+      const isAtTop = visualizerRef.current.scrollTop === 0;
+      const isAtBottom = visualizerRef.current.scrollTop + clientHeight >= scrollHeight;
+
+      if (isContentScrollable) {
+        // Only prevent default if scrolling up from top or down from bottom
+        // This allows natural scrolling when reaching limits
+        if (event.deltaY < 0 && isAtTop) { // Scrolling up at top
+          event.preventDefault();
+        } else if (event.deltaY > 0 && isAtBottom) { // Scrolling down at bottom
+          event.preventDefault();
+        }
+      }
+      // If not scrollable or not at limits, let event propagate naturally.
+      // This is important to allow page scroll when visualizer is short.
+    };
+
+    const visualizerElement = visualizerRef.current;
+    if (visualizerElement && !isModalView) { // Only apply this fix for the inline list view, not the modal
+      visualizerElement.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        visualizerElement.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [isModalView]); // Re-run effect if isModalView changes
 
   if (!rack || !rack.total_units) {
     return (
@@ -46,6 +81,7 @@ export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }
 
   // Switches in this rack - Filtering on the guaranteed 'currentSwitches' array
   currentSwitches.forEach(s => {
+      // Ensure 's' is not null/undefined and has required properties before accessing them
       if (s !== null && s !== undefined && s.rack_id === rack.id && s.row_in_rack) {
           const unit = parseInt(s.row_in_rack);
           if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
@@ -56,9 +92,11 @@ export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }
 
   // Patch Panels in this rack - Filtering on the guaranteed 'currentPatchPanels' array
   currentPatchPanels.forEach(pp => {
+      // Ensure 'pp' is not null/undefined and has required properties before accessing them
       if (pp !== null && pp !== undefined && pp.rack_id === rack.id && pp.row_in_rack) {
           const unit = parseInt(pp.row_in_rack);
           if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
+              // Only add if the unit is not already occupied by a switch (switches take precedence)
               if (!occupiedUnits.has(unit)) {
                  occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
               }
@@ -72,7 +110,10 @@ export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }
 
 
   return (
-    <div className="mt-4 border border-gray-300 rounded-md p-2 bg-gray-50 max-h-64 overflow-y-auto">
+    // Conditional classes for height and overflow
+    <div
+      ref={visualizerRef} // Assign the ref here
+      className={`mt-4 border border-gray-300 rounded-md p-2 bg-gray-50 ${isModalView ? '' : 'max-h-64 overflow-y-auto'}`}>
       <h5 className="text-md font-semibold text-gray-700 mb-2 border-b pb-1 flex items-center justify-between">
         <span>Rack Units ({rack.total_units}U)</span>
         <span className={`text-xs font-normal flex items-center ${orientationTextColor}`}>
@@ -230,14 +271,15 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
     setIsAddRackFormExpanded(false); // Collapse form after submission
   };
 
-  const sortedLocations = Array.isArray(locations) ? [...locations].sort((a,b) => a.name.localeCompare(b.name)) : [];
+  const sortedLocations = [...locations].sort((a,b) => a.name.localeCompare(b.name));
+  const sortedRacks = [...racks].sort((a,b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
       {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      {/* Filter Options for Racks */}
+      {/* Filter Options */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-wrap gap-4 items-center">
         <Filter size={20} className="text-gray-600 flex-shrink-0" />
         <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
@@ -266,10 +308,11 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
         </div>
       </div>
 
-      {/* Add/Edit Rack Form (Collapsible) */}
-      <div className="bg-white rounded-lg shadow-sm border border-blue-200">
+      {/* Add/Edit Rack Form (Collapsible) - Outer container now has width and centering */}
+      <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
+        {/* Header (no mx-auto or w-x/y here, it's w-full of its parent) */}
         <div
-          className="flex justify-between items-center p-5 cursor-pointer bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200 rounded-t-lg"
+          className="flex justify-center items-center p-3 cursor-pointer bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddRackFormExpanded(!isAddRackFormExpanded)}
         >
           <h3 className="text-xl font-bold flex items-center">
@@ -287,69 +330,90 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
             isAddRackFormExpanded ? "expanded" : ""
           }`}
         >
-          <form onSubmit={handleRackFormSubmit} className="p-5 space-y-3">
-            <input
-              type="text"
-              placeholder="Rack Name"
-              value={rackFormName}
-              onChange={(e) => setRackFormName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <select
-              value={rackFormLocationId}
-              onChange={(e) => setRackFormLocationId(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">-- Select Location --</option>
-              {sortedLocations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                </option>
-              ))}
-            </select>
+          {/* Form container with matching width, centering, and a more visible border */}
+          <form onSubmit={handleRackFormSubmit}
+                className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50">
+            <div className="flex items-center space-x-2">
+                <Columns size={20} className="text-gray-500" />
+                <input
+                    type="text"
+                    placeholder="Rack Name"
+                    value={rackFormName}
+                    onChange={(e) => setRackFormName(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                />
+            </div>
+            <div className="flex items-center space-x-2">
+                <MapPin size={20} className="text-gray-500" />
+                <select
+                    value={rackFormLocationId}
+                    onChange={(e) => setRackFormLocationId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    required
+                >
+                    <option value="">-- Select Location --</option>
+                    {sortedLocations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                      </option>
+                    ))}
+                </select>
+            </div>
             {locations.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
                 Please add a location first (Go to Locations tab) to add a Rack.
               </p>
             )}
-            <input
-              type="number"
-              placeholder="Total Units (e.g., 42)"
-              value={rackFormTotalUnits}
-              onChange={(e) => setRackFormTotalUnits(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              min="1"
-              max="50"
-              required
-            />
-            {/* NEW: Orientation Selection */}
-            <div>
-              <label htmlFor="rack-orientation" className="block text-sm font-medium text-gray-700 mb-1">
-                Unit Numbering Orientation:
-              </label>
-              <select
-                id="rack-orientation"
-                value={rackFormOrientation}
-                onChange={(e) => setRackFormOrientation(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
-              >
-                <option value="bottom-up">Bottom-Up (Unit 1 at bottom)</option>
-                <option value="top-down">Top-Down (Unit 1 at top)</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Determines how rack unit numbers are ordered visually. Standard is Bottom-Up.
-              </p>
+            <div className="flex items-center space-x-2">
+                <HardDrive size={20} className="text-gray-500" />
+                <input
+                    type="number"
+                    placeholder="Total Units (e.g., 42)"
+                    value={rackFormTotalUnits}
+                    onChange={(e) => setRackFormTotalUnits(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    max="50"
+                    required
+                />
             </div>
-            <textarea
-              placeholder="Description (Optional)"
-              value={rackFormDescription}
-              onChange={(e) => setRackFormDescription(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-              rows="3"
-            ></textarea>
+            {/* NEW: Orientation Selection with Icon */}
+            <div className="flex items-center space-x-2">
+                {rackFormOrientation === 'top-down' ? (
+                  <ArrowDownNarrowWide size={20} className="text-gray-500" />
+                ) : (
+                  <ArrowUpWideNarrow size={20} className="text-gray-500" />
+                )}
+                <div className="w-full">
+                  <label htmlFor="rack-orientation" className="block text-sm font-medium text-gray-700 mb-1">
+                    Unit Numbering Orientation:
+                  </label>
+                  <select
+                    id="rack-orientation"
+                    value={rackFormOrientation}
+                    onChange={(e) => setRackFormOrientation(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    required
+                  >
+                    <option value="bottom-up">Bottom-Up (Unit 1 at bottom)</option>
+                    <option value="top-down">Top-Down (Unit 1 at top)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Determines how rack unit numbers are ordered visually. Standard is Bottom-Up.
+                  </p>
+                </div>
+            </div>
+            <div className="flex items-start space-x-2">
+                <Info size={20} className="text-gray-500 mt-2" />
+                <textarea
+                    placeholder="Description (Optional)"
+                    value={rackFormDescription}
+                    onChange={(e) => setRackFormDescription(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    rows="3"
+                ></textarea>
+            </div>
             <div className="flex space-x-3 justify-end">
               {editingRack && (
                 <button
@@ -394,7 +458,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
                 {rack.location_name || "N/A"}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`}
               </p>
-              <p className="text-sm text-gray-700 mb-3 flex items-start">
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Info
                   size={16}
                   className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
@@ -405,12 +469,13 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
               {/* NEW: Rack Visualizer Component */}
               <RackVisualizer
                   rack={rack}
-                  switches={Array.isArray(switches) ? switches : []} // Ensure switches is an array [cite: 1]
-                  patchPanels={Array.isArray(patchPanels) ? patchPanels : []} // Ensure patchPanels is an array [cite: 1]
+                  switches={Array.isArray(switches) ? switches : []} // Ensure switches is an array
+                  patchPanels={Array.isArray(patchPanels) ? patchPanels : []} // Ensure patchPanels is an array
                   onShowPortStatus={onShowPortStatus}
+                  isModalView={false} // Explicitly set to false for list view
               />
               
-              <div className="flex justify-end space-x-2 mt-4"> {/* Added mt-4 for spacing */}
+              <div className="flex justify-end space-x-2 mt-4">
                 <button
                   onClick={() => handleEdit(rack)}
                   className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
