@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 // New sub-component for visualizing a single Rack
-const RackVisualizer = ({ rack, switches, patchPanels }) => {
+const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
   if (!rack || !rack.total_units) {
     return (
       <div className="text-sm text-gray-500 mt-2">
@@ -43,7 +43,7 @@ const RackVisualizer = ({ rack, switches, patchPanels }) => {
   Array.isArray(switches) && switches.filter(s => s.rack_id === rack.id && s.row_in_rack)
           .forEach(s => {
               const unit = parseInt(s.row_in_rack);
-              // Assuming devices occupy 1U from their row_in_rack position for simplicity
+              // Assuming a switch takes 1U, adjust if multi-U devices are needed
               if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
                   occupiedUnits.set(unit, { type: 'switch', name: s.name, id: s.id, total_ports: s.total_ports });
               }
@@ -81,24 +81,32 @@ const RackVisualizer = ({ rack, switches, patchPanels }) => {
           let unitClass = "bg-gray-200 text-gray-600"; // Free slot
           let unitContent = `U${unit}: Free`;
           let Icon = HardDrive; // Default generic icon
+          let isClickable = false;
+          let entityType = null;
+          let entityId = null;
 
           if (content) {
+            isClickable = true; // Make occupied units clickable
+            entityId = content.id;
             if (content.type === 'switch') {
               unitClass = "bg-red-100 text-red-800 border border-red-300";
               unitContent = `U${unit}: ${content.name} (SW - ${content.total_ports}p)`;
               Icon = Server;
+              entityType = 'switches';
             } else if (content.type === 'patchPanel') {
               unitClass = "bg-green-100 text-green-800 border border-green-300";
               unitContent = `U${unit}: ${content.name} (PP - ${content.total_ports}p)`;
               Icon = Split;
+              entityType = 'patch_panels';
             }
           }
 
           return (
             <div
               key={unit}
-              className={`flex items-center text-xs p-1 rounded ${unitClass}`}
+              className={`flex items-center text-xs p-1 rounded ${unitClass} ${isClickable ? 'cursor-pointer hover:shadow-md transition-shadow duration-200' : ''}`}
               title={content ? `${content.name} (${content.type === 'switch' ? 'Switch' : 'Patch Panel'}) - ${content.total_ports} ports` : `U${unit}: Free`}
+              onClick={isClickable ? () => onShowPortStatus(entityType, entityId) : null}
             >
               <Icon size={12} className="mr-1 flex-shrink-0" />
               <span className="flex-grow truncate">{unitContent}</span>
@@ -111,7 +119,7 @@ const RackVisualizer = ({ rack, switches, patchPanels }) => {
 };
 
 
-function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity, switches, patchPanels }) {
+function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity, switches, patchPanels, onShowPortStatus }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
   const [editingRack, setEditingRack] = useState(null); // State for editing a Rack
@@ -390,7 +398,7 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
               </p>
 
               {/* NEW: Rack Visualizer Component */}
-              <RackVisualizer rack={rack} switches={switches} patchPanels={patchPanels} />
+              <RackVisualizer rack={rack} switches={switches} patchPanels={patchPanels} onShowPortStatus={onShowPortStatus} />
               
               <div className="flex justify-end space-x-2 mt-4"> {/* Added mt-4 for spacing */}
                 <button

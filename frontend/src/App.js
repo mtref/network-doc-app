@@ -606,7 +606,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
-                racks={racks} 
+                racks={racks}
                 onViewDiagram={handleViewSwitchDiagram}
               />
             </section>
@@ -729,6 +729,7 @@ function App() {
                 onAddEntity={handleAddEntity}
                 onUpdateEntity={handleUpdateEntity}
                 onDeleteEntity={handleDeleteEntity}
+                onShowPortStatus={handleShowPortStatus} 
               />
             </section>
           )}
