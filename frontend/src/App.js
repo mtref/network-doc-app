@@ -14,6 +14,7 @@ import PrintableConnectionForm from "./components/PrintableConnectionForm";
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import RackList from "./components/RackList"; // New import
+import RackViewModal from "./components/RackViewModal"; // NEW: Import RackViewModal
 import { Printer } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
 
@@ -78,6 +79,10 @@ function App() {
   const [showSwitchDiagramModal, setShowSwitchDiagramModal] = useState(false);
   const [selectedSwitchForDiagram, setSelectedSwitchForDiagram] =
     useState(null);
+
+  // NEW: State for Rack View Modal
+  const [showRackViewModal, setShowRackViewModal] = useState(false);
+  const [selectedRackForView, setSelectedRackForView] = useState(null);
 
   // State for editing a connection in the ConnectionForm
   const [editingConnection, setEditingConnection] = useState(null);
@@ -374,6 +379,20 @@ function App() {
     setSelectedSwitchForDiagram(null);
   }, []);
 
+  // NEW: Handler for viewing full Rack details
+  const handleViewRackDetails = useCallback((rack) => {
+    console.log("handleViewRackDetails called for rack:", rack);
+    setSelectedRackForView(rack);
+    setShowRackViewModal(true);
+  }, []);
+
+  // NEW: Handler for closing Rack View Modal
+  const handleCloseRackViewModal = useCallback(() => {
+    console.log("handleCloseRackViewModal called");
+    setShowRackViewModal(false);
+    setSelectedRackForView(null);
+  }, []);
+
   const handlePrintForm = useCallback(() => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -440,6 +459,19 @@ function App() {
           selectedSwitch={selectedSwitchForDiagram}
           connections={connections}
           pcs={pcs}
+        />
+      )}
+
+      {/* NEW: Rack View Modal */}
+      {showRackViewModal && selectedRackForView && (
+        <RackViewModal
+          isOpen={showRackViewModal}
+          onClose={handleCloseRackViewModal}
+          rack={selectedRackForView}
+          switches={switches}
+          patchPanels={patchPanels}
+          // If you want units clickable in this modal too, pass the handler
+          onShowPortStatus={handleShowPortStatus}
         />
       )}
 
@@ -606,7 +638,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
-                racks={racks}
+                racks={racks} 
                 onViewDiagram={handleViewSwitchDiagram}
               />
             </section>
@@ -725,11 +757,12 @@ function App() {
                 racks={racks}
                 locations={locations}
                 switches={switches} 
-                patchPanels={patchPanels} 
+                patchPanels={patchPanels}
                 onAddEntity={handleAddEntity}
                 onUpdateEntity={handleUpdateEntity}
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus} 
+                onViewRackDetails={handleViewRackDetails} 
               />
             </section>
           )}

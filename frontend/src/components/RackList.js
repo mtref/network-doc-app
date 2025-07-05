@@ -17,10 +17,15 @@ import {
   HardDrive, // Generic device icon for unknown type
   ArrowDownNarrowWide, // Icon for top-down orientation
   ArrowUpWideNarrow, // Icon for bottom-up orientation
+  Maximize, // Icon for View Rack button
 } from "lucide-react";
 
 // New sub-component for visualizing a single Rack
-const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
+export const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
+  // Explicitly ensure switches and patchPanels are arrays, even if props are undefined/null
+  const currentSwitches = Array.isArray(switches) ? switches : [];
+  const currentPatchPanels = Array.isArray(patchPanels) ? patchPanels : [];
+
   if (!rack || !rack.total_units) {
     return (
       <div className="text-sm text-gray-500 mt-2">
@@ -39,27 +44,27 @@ const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
   // Create a map of occupied units for quick lookup
   const occupiedUnits = new Map(); // Map: unitNumber -> { type: 'switch'|'patchPanel', name: 'DeviceName', id: deviceId, total_ports: number }
 
-  // Switches in this rack
-  Array.isArray(switches) && switches.filter(s => s.rack_id === rack.id && s.row_in_rack)
-          .forEach(s => {
-              const unit = parseInt(s.row_in_rack);
-              // Assuming a switch takes 1U, adjust if multi-U devices are needed
-              if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-                  occupiedUnits.set(unit, { type: 'switch', name: s.name, id: s.id, total_ports: s.total_ports });
-              }
-          });
+  // Switches in this rack - Filtering on the guaranteed 'currentSwitches' array
+  currentSwitches.forEach(s => {
+      if (s !== null && s !== undefined && s.rack_id === rack.id && s.row_in_rack) {
+          const unit = parseInt(s.row_in_rack);
+          if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
+              occupiedUnits.set(unit, { type: 'switch', name: s.name, id: s.id, total_ports: s.total_ports });
+          }
+      }
+  });
 
-  // Patch Panels in this rack
-  Array.isArray(patchPanels) && patchPanels.filter(pp => pp.rack_id === rack.id && pp.row_in_rack)
-             .forEach(pp => {
-                 const unit = parseInt(pp.row_in_rack);
-                 if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-                     // Check if a switch already occupies this unit to prioritize switch display if overlap (unlikely with 1U units)
-                     if (!occupiedUnits.has(unit)) {
-                        occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
-                     }
-                 }
-             });
+  // Patch Panels in this rack - Filtering on the guaranteed 'currentPatchPanels' array
+  currentPatchPanels.forEach(pp => {
+      if (pp !== null && pp !== undefined && pp.rack_id === rack.id && pp.row_in_rack) {
+          const unit = parseInt(pp.row_in_rack);
+          if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
+              if (!occupiedUnits.has(unit)) {
+                 occupiedUnits.set(unit, { type: 'patchPanel', name: pp.name, id: pp.id, total_ports: pp.total_ports });
+              }
+          }
+      }
+  });
   
   // Determine text color based on orientation
   const orientationTextColor = rack.orientation === 'top-down' ? 'text-blue-600' : 'text-purple-600';
@@ -119,7 +124,7 @@ const RackVisualizer = ({ rack, switches, patchPanels, onShowPortStatus }) => {
 };
 
 
-function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity, switches, patchPanels, onShowPortStatus }) {
+function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntity, switches, patchPanels, onShowPortStatus, onViewRackDetails }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
   const [editingRack, setEditingRack] = useState(null); // State for editing a Rack
@@ -398,7 +403,12 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
               </p>
 
               {/* NEW: Rack Visualizer Component */}
-              <RackVisualizer rack={rack} switches={switches} patchPanels={patchPanels} onShowPortStatus={onShowPortStatus} />
+              <RackVisualizer
+                  rack={rack}
+                  switches={Array.isArray(switches) ? switches : []} // Ensure switches is an array [cite: 1]
+                  patchPanels={Array.isArray(patchPanels) ? patchPanels : []} // Ensure patchPanels is an array [cite: 1]
+                  onShowPortStatus={onShowPortStatus}
+              />
               
               <div className="flex justify-end space-x-2 mt-4"> {/* Added mt-4 for spacing */}
                 <button
@@ -412,6 +422,14 @@ function RackList({ racks, locations, onAddEntity, onUpdateEntity, onDeleteEntit
                   className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
                 >
                   Delete
+                </button>
+                {/* NEW: View Rack Details Button */}
+                <button
+                  onClick={() => onViewRackDetails(rack)}
+                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
+                  title="View Rack Details"
+                >
+                  <Maximize size={16} className="mr-1" /> View Rack
                 </button>
               </div>
             </div>
