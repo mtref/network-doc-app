@@ -13,7 +13,7 @@ COPY frontend/. .
 
 RUN npm run build
 
-# --- Stage 2: Backend Source ---
+# --- Stage 2: Backend Source (for dependencies and app code) ---
 FROM python:3.9-slim-buster AS backend-source
 
 WORKDIR /app 
@@ -24,8 +24,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/. . 
 
-# Create instance directory for SQLite DB
-RUN mkdir -p /app/instance
+# Create instance directory for SQLite DB (this will be in /app/backend/instance in the final image)
+RUN mkdir -p backend/instance
 
 
 # --- Stage 3: Final Image - Combine Frontend, Backend, and Nginx Proxy ---
@@ -40,7 +40,13 @@ RUN apk add --no-cache nginx python3 py3-pip tini
 COPY --from=frontend-builder /app/build /app/frontend/build
 
 # Copy backend application source files from the 'backend-source' stage
+# This copies the backend Python code, including the 'backend' directory itself.
 COPY --from=backend-source /app /app/backend 
+
+# NEW: Explicitly copy the migrations directory from the host into the backend app folder
+# This assumes you have successfully run 'python3 -m flask db init' and 'python3 -m flask db migrate' locally
+# and the 'backend/migrations' folder exists in your local project root.
+COPY backend/migrations /app/backend/migrations
 
 # Install backend Python dependencies (these are needed in the final image too, as the Python runtime is alpine-based)
 COPY backend/requirements.txt /app/backend/requirements.txt 

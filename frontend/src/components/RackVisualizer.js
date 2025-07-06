@@ -1,6 +1,7 @@
 // frontend/src/components/RackVisualizer.js
 // This component visually represents a single rack, showing its units
 // and which units are occupied by Switches, Patch Panels, or Server-type PCs.
+// UPDATED: Now handles devices that occupy multiple rack units.
 
 import React, { useRef, useEffect } from "react";
 import {
@@ -72,59 +73,51 @@ export const RackVisualizer = ({
   const displayUnits =
     rack.orientation === "top-down" ? rawUnits : [...rawUnits].reverse();
 
-  const occupiedUnits = new Map();
+  // Map to store which unit is occupied by which device.
+  // Each entry will point to the *same* device object for all units it occupies.
+  const occupiedUnitsMap = new Map(); // Map: unitNumber -> { type, name, id, total_ports, data, units_occupied, start_unit }
 
-  currentSwitches.forEach((s) => {
-    if (s && s.rack_id === rack.id && s.row_in_rack) {
-      const unit = parseInt(s.row_in_rack);
-      if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-        occupiedUnits.set(unit, {
-          type: "switch",
-          name: s.name,
-          id: s.id,
-          total_ports: s.total_ports,
-          data: s,
-        });
-      }
-    }
-  });
-
-  currentPatchPanels.forEach((pp) => {
-    if (pp && pp.rack_id === rack.id && pp.row_in_rack) {
-      const unit = parseInt(pp.row_in_rack);
-      if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-        if (!occupiedUnits.has(unit)) {
-          occupiedUnits.set(unit, {
-            type: "patchPanel",
-            name: pp.name,
-            id: pp.id,
-            total_ports: pp.total_ports,
-            data: pp,
-          });
-        }
-      }
-    }
-  });
-
-  currentPcs.forEach((pc) => {
+  // Helper to add a device to the occupiedUnitsMap
+  const addDeviceToMap = (device, type) => {
     if (
-      pc &&
-      pc.type === "Server" &&
-      pc.rack_id === rack.id &&
-      pc.row_in_rack
+      device &&
+      device.rack_id === rack.id &&
+      device.row_in_rack !== null &&
+      device.units_occupied !== null
     ) {
-      const unit = parseInt(pc.row_in_rack);
-      if (!isNaN(unit) && unit >= 1 && unit <= rack.total_units) {
-        if (!occupiedUnits.has(unit)) {
-          occupiedUnits.set(unit, {
-            type: "pc",
-            name: pc.name,
-            id: pc.id,
-            total_ports: "N/A",
-            data: pc,
+      const startUnit = parseInt(device.row_in_rack);
+      const units = parseInt(device.units_occupied);
+
+      if (
+        !isNaN(startUnit) &&
+        !isNaN(units) &&
+        startUnit >= 1 &&
+        units >= 1 &&
+        startUnit + units - 1 <= rack.total_units
+      ) {
+        for (let i = 0; i < units; i++) {
+          const currentUnit = startUnit + i;
+          // Store the device data for each unit it occupies
+          occupiedUnitsMap.set(currentUnit, {
+            type: type,
+            name: device.name,
+            id: device.id,
+            total_ports: device.total_ports, // Only relevant for switches/patch panels
+            data: device, // Full device object
+            units_occupied: units, // Number of units this device occupies
+            start_unit: startUnit, // The starting unit of this device
           });
         }
       }
+    }
+  };
+
+  currentSwitches.forEach((s) => addDeviceToMap(s, "switch"));
+  currentPatchPanels.forEach((pp) => addDeviceToMap(pp, "patchPanel"));
+  currentPcs.forEach((pc) => {
+    if (pc.type === "Server") {
+      // Only Server PCs are rack-mounted
+      addDeviceToMap(pc, "pc");
     }
   });
 
@@ -151,33 +144,53 @@ export const RackVisualizer = ({
       </h5>
       <div className="space-y-0.5">
         {displayUnits.map((unit) => {
-          const content = occupiedUnits.get(unit);
+          const content = occupiedUnitsMap.get(unit);
           let unitClass = "bg-gray-200 text-gray-600";
           let unitContent = `U${unit}: Free`;
           let Icon = HardDrive;
           let isClickable = false;
           let entityType = null;
           let entityId = null;
+          let unitRangeText = "";
 
           if (content) {
-            isClickable = true;
-            entityId = content.id;
-            if (content.type === "switch") {
-              unitClass = "bg-red-100 text-red-800 border border-red-300";
-              unitContent = `U${unit}: ${content.name} (SW - ${content.total_ports}p)`;
-              Icon = Server;
-              entityType = "switches";
-            } else if (content.type === "patchPanel") {
-              unitClass = "bg-green-100 text-green-800 border border-green-300";
-              unitContent = `U${unit}: ${content.name} (PP - ${content.total_ports}p)`;
-              Icon = Split;
-              entityType = "patch_panels";
-            } else if (content.type === "pc") {
-              unitClass =
-                "bg-indigo-100 text-indigo-800 border border-indigo-300";
-              unitContent = `U${unit}: ${content.name} (Server)`;
-              Icon = Server;
-              entityType = "pcs";
+            // Only render if this is the *starting* unit of a multi-unit device,
+            // or a single-unit device. This prevents rendering the device name multiple times.
+            if (content.start_unit === unit || content.units_occupied === 1) {
+              isClickable = true;
+              entityId = content.id;
+              unitRangeText =
+                content.units_occupied > 1
+                  ? ` (${content.start_unit}-${
+                      content.start_unit + content.units_occupied - 1
+                    }U)`
+                  : ` (${content.start_unit}U)`;
+
+              if (content.type === "switch") {
+                unitClass = "bg-red-100 text-red-800 border border-red-300";
+                unitContent = `U${unit}${unitRangeText}: ${content.name} (SW - ${content.total_ports}p)`;
+                Icon = Server;
+                entityType = "switches";
+              } else if (content.type === "patchPanel") {
+                unitClass =
+                  "bg-green-100 text-green-800 border border-green-300";
+                unitContent = `U${unit}${unitRangeText}: ${content.name} (PP - ${content.total_ports}p)`;
+                Icon = Split;
+                entityType = "patch_panels";
+              } else if (content.type === "pc") {
+                unitClass =
+                  "bg-indigo-100 text-indigo-800 border border-indigo-300";
+                unitContent = `U${unit}${unitRangeText}: ${content.name} (Server)`;
+                Icon = Server;
+                entityType = "pcs";
+              }
+            } else {
+              // This unit is part of a multi-unit device, but not the starting unit.
+              // We'll just show it as occupied without repeating the device name.
+              unitClass = "bg-gray-300 text-gray-700"; // Slightly darker gray for occupied but not primary unit
+              unitContent = `U${unit}: Occupied`;
+              Icon = HardDrive; // Generic icon
+              isClickable = false; // Not clickable individually
             }
           }
 
@@ -197,7 +210,12 @@ export const RackVisualizer = ({
                         : content.type === "patchPanel"
                         ? "Patch Panel"
                         : "Server PC"
-                    }) - ${
+                    })${
+                      content.units_occupied > 1
+                        ? ` occupying ${content.units_occupied} units from U${content.start_unit}`
+                        : ""
+                    } - ${
+                      content.total_ports !== undefined &&
                       content.total_ports !== "N/A"
                         ? `${content.total_ports} ports`
                         : "Rack Mounted"

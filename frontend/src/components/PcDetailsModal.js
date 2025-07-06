@@ -1,5 +1,6 @@
 // frontend/src/components/PcDetailsModal.js
 // This modal displays detailed information about a selected PC.
+// UPDATED: Now displays units_occupied for Server type PCs.
 
 import React from "react";
 import {
@@ -104,9 +105,16 @@ function PcDetailsModal({ isOpen, onClose, pc }) {
                 <Columns size={16} className="text-gray-500 mr-2" /> Rack Name:{" "}
                 <span className="font-medium">{pc.rack_name || "N/A"}</span>
               </p>
-              <p className="text-sm text-gray-700 flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Row in Rack:{" "}
+              <p className="text-sm text-gray-700 flex items-center mb-1">
+                <Info size={16} className="text-gray-500 mr-2" /> Starting Row:{" "}
                 <span className="font-medium">{pc.row_in_rack || "N/A"}</span>
+              </p>
+              <p className="text-sm text-gray-700 flex items-center">
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Units
+                Occupied:{" "}
+                <span className="font-medium">
+                  {pc.units_occupied || "N/A"}U
+                </span>
               </p>
             </div>
           )}

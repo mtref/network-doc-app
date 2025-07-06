@@ -1,6 +1,7 @@
 // frontend/src/components/PatchPanelList.js
 // This component displays a searchable list of Patch Panels in a card format,
 // now including filter options by Location and Rack.
+// UPDATED: Added units_occupied for Patch Panels.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -33,6 +34,7 @@ function PatchPanelList({
   const [ppFormLocationId, setPpFormLocationId] = useState("");
   const [ppFormRowInRack, setPpFormRowInRack] = useState("");
   const [ppFormRackId, setPpFormRackId] = useState(""); // State for Rack ID
+  const [ppFormUnitsOccupied, setPpFormUnitsOccupied] = useState(1); // NEW: State for units occupied
   const [ppFormTotalPorts, setPpFormTotalPorts] = useState(1);
   const [ppFormDesc, setPpFormDesc] = useState("");
 
@@ -51,16 +53,19 @@ function PatchPanelList({
     const uniqueLocations = [
       ...new Set(
         locations.map(
-          (loc) => loc.name + (loc.door_number ? ` (Door: ${loc.door_number})` : "")
+          (loc) =>
+            loc.name + (loc.door_number ? ` (Door: ${loc.door_number})` : "")
         )
       ),
     ].sort();
     setAvailableLocationOptions(uniqueLocations);
 
-    const uniqueRacks = [ // Populate rack filter options
+    const uniqueRacks = [
+      // Populate rack filter options
       ...new Set(
         racks.map(
-          (rack) => rack.name + (rack.location_name ? ` (${rack.location_name})` : "")
+          (rack) =>
+            rack.name + (rack.location_name ? ` (${rack.location_name})` : "")
         )
       ),
     ].sort();
@@ -74,24 +79,30 @@ function PatchPanelList({
       // Safely get location door number and rack name for search/filter
       const ppLocationDoorNumber = pp.location?.door_number || "";
       const ppRackNameWithLocation = pp.rack?.name
-        ? pp.rack.name + (pp.rack.location_name ? ` (${pp.rack.location_name})` : "")
+        ? pp.rack.name +
+          (pp.rack.location_name ? ` (${pp.rack.location_name})` : "")
         : "";
 
       // Text search filter
       const matchesSearch =
         (pp.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pp.location_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (ppLocationDoorNumber).toLowerCase().includes(lowerCaseSearchTerm) ||
+        ppLocationDoorNumber.toLowerCase().includes(lowerCaseSearchTerm) ||
         (pp.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) ||
+        (pp.units_occupied ? `${pp.units_occupied}u` : "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // NEW: Search by units occupied
         (pp.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by old rack_name field
-        (ppRackNameWithLocation).toLowerCase().includes(lowerCaseSearchTerm) || // Search by new combined rack name
+        ppRackNameWithLocation.toLowerCase().includes(lowerCaseSearchTerm) || // Search by new combined rack name
         String(pp.total_ports).includes(lowerCaseSearchTerm) ||
         (pp.description || "").toLowerCase().includes(lowerCaseSearchTerm);
 
       // Location filter
       const matchesLocation =
         selectedLocationFilter === "all" ||
-        (pp.location_name + (ppLocationDoorNumber ? ` (Door: ${ppLocationDoorNumber})` : '')) === selectedLocationFilter;
+        pp.location_name +
+          (ppLocationDoorNumber ? ` (Door: ${ppLocationDoorNumber})` : "") ===
+          selectedLocationFilter;
 
       // Rack filter
       const matchesRack =
@@ -117,6 +128,7 @@ function PatchPanelList({
     setPpFormLocationId(pp.location_id || "");
     setPpFormRowInRack(pp.row_in_rack || "");
     setPpFormRackId(pp.rack_id || ""); // Set rack ID for editing
+    setPpFormUnitsOccupied(pp.units_occupied || 1); // NEW: Set units occupied for editing
     setPpFormTotalPorts(pp.total_ports || 1);
     setPpFormDesc(pp.description || "");
     setIsAddPpFormExpanded(true); // Expand form when editing
@@ -130,11 +142,50 @@ function PatchPanelList({
       return;
     }
 
+    if (
+      ppFormRackId &&
+      (ppFormRowInRack === "" || ppFormUnitsOccupied === "")
+    ) {
+      alert(
+        "For rack-mounted Patch Panels, Starting Row in Rack and Units Occupied are required."
+      );
+      return;
+    }
+    if (ppFormRackId) {
+      const selectedRack = racks.find((r) => String(r.id) === ppFormRackId);
+      if (selectedRack) {
+        const startRow = parseInt(ppFormRowInRack);
+        const units = parseInt(ppFormUnitsOccupied);
+
+        if (
+          isNaN(startRow) ||
+          startRow < 1 ||
+          startRow > selectedRack.total_units
+        ) {
+          alert(
+            `Starting Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`
+          );
+          return;
+        }
+        if (isNaN(units) || units < 1) {
+          alert("Units Occupied must be a positive number.");
+          return;
+        }
+        if (startRow + units - 1 > selectedRack.total_units) {
+          alert(
+            `Device extends beyond total units of the rack (${selectedRack.total_units}U).`
+          );
+          return;
+        }
+      }
+    }
+
     const ppData = {
       name: ppFormName,
       location_id: parseInt(ppFormLocationId),
-      row_in_rack: ppFormRowInRack,
+      row_in_rack: ppFormRackId ? parseInt(ppFormRowInRack) : null,
       rack_id: ppFormRackId ? parseInt(ppFormRackId) : null, // Ensure null if not selected
+      units_occupied: ppFormRackId ? parseInt(ppFormUnitsOccupied) : 1, // NEW: Conditionally set and parse
       total_ports: parseInt(ppFormTotalPorts),
       description: ppFormDesc,
     };
@@ -149,13 +200,16 @@ function PatchPanelList({
     setPpFormLocationId("");
     setPpFormRowInRack("");
     setPpFormRackId(""); // Reset rack ID
+    setPpFormUnitsOccupied(1); // NEW: Reset units occupied
     setPpFormTotalPorts(1);
     setPpFormDesc("");
     setIsAddPpFormExpanded(false); // Collapse form after submission
   };
 
-  const sortedLocations = [...locations].sort((a,b) => a.name.localeCompare(b.name));
-  const sortedRacks = [...racks].sort((a,b) => a.name.localeCompare(b.name));
+  const sortedLocations = [...locations].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+  const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
@@ -237,96 +291,135 @@ function PatchPanelList({
           }`}
         >
           {/* Form container with matching width, centering, and a more visible border */}
-          <form onSubmit={handlePpFormSubmit}
-                className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50">
+          <form
+            onSubmit={handlePpFormSubmit}
+            className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50"
+          >
             <div className="flex items-center space-x-2">
-                <Split size={20} className="text-gray-500" />
-                <input
-                    type="text"
-                    placeholder="Patch Panel Name"
-                    value={ppFormName}
-                    onChange={(e) => setPpFormName(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    required
-                />
+              <Split size={20} className="text-gray-500" />
+              <input
+                type="text"
+                placeholder="Patch Panel Name"
+                value={ppFormName}
+                onChange={(e) => setPpFormName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
             </div>
             <div className="flex items-center space-x-2">
-                <MapPin size={20} className="text-gray-500" />
-                <select
-                    value={ppFormLocationId}
-                    onChange={(e) => {
-                      setPpFormLocationId(e.target.value);
-                      setPpFormRackId(""); // Reset rack when location changes
-                    }}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    required
-                >
-                    <option value="">-- Select Location --</option>
-                    {sortedLocations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                      </option>
-                    ))}
-                </select>
+              <MapPin size={20} className="text-gray-500" />
+              <select
+                value={ppFormLocationId}
+                onChange={(e) => {
+                  setPpFormLocationId(e.target.value);
+                  setPpFormRackId(""); // Reset rack when location changes
+                  setPpFormRowInRack(""); // Reset row
+                  setPpFormUnitsOccupied(1); // Reset units
+                }}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="">-- Select Location --</option>
+                {sortedLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                  </option>
+                ))}
+              </select>
             </div>
             {locations.length === 0 && (
               <p className="text-sm text-red-500 mt-1">
-                Please add a location first (Go to Locations tab) to add a Patch Panel.
+                Please add a location first (Go to Locations tab) to add a Patch
+                Panel.
               </p>
             )}
             <div className="flex items-center space-x-2">
-                <Server size={20} className="text-gray-500" />
-                <input
-                    type="text"
-                    placeholder="Row in Rack (Optional)"
-                    value={ppFormRowInRack}
-                    onChange={(e) => setPpFormRowInRack(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+              <Columns size={20} className="text-gray-500" />
+              <select
+                value={ppFormRackId}
+                onChange={(e) => {
+                  setPpFormRackId(e.target.value);
+                  setPpFormRowInRack(""); // Reset row when rack changes
+                  setPpFormUnitsOccupied(1); // Reset units
+                }}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">-- Select Rack (Optional) --</option>
+                {sortedRacks
+                  .filter(
+                    (rack) =>
+                      !ppFormLocationId ||
+                      (rack.location_id !== undefined &&
+                        String(rack.location_id) === ppFormLocationId)
+                  )
+                  .map((rack) => (
+                    <option key={rack.id} value={rack.id}>
+                      {rack.name} ({rack.location_name}
+                      {rack.location?.door_number &&
+                        ` (Door: ${rack.location.door_number})`}
+                      )
+                    </option>
+                  ))}
+              </select>
             </div>
-            <div className="flex items-center space-x-2">
-                <Columns size={20} className="text-gray-500" />
-                <select
-                    value={ppFormRackId}
-                    onChange={(e) => setPpFormRackId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                    <option value="">-- Select Rack (Optional) --</option>
-                    {sortedRacks
-                      .filter(rack => !ppFormLocationId || (rack.location_id !== undefined && String(rack.location_id) === ppFormLocationId))
-                      .map((rack) => (
-                        <option key={rack.id} value={rack.id}>
-                          {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
-                        </option>
-                      ))}
-                </select>
-            </div>
-            {(racks.length === 0 || (ppFormLocationId && sortedRacks.filter(rack => String(rack.location_id) === ppFormLocationId).length === 0)) && (
+            {(racks.length === 0 ||
+              (ppFormLocationId &&
+                sortedRacks.filter(
+                  (rack) => String(rack.location_id) === ppFormLocationId
+                ).length === 0)) && (
               <p className="text-sm text-gray-500 mt-1">
                 No racks available for selected location.
               </p>
             )}
-            <div className="flex items-center space-x-2">
-                <HardDrive size={20} className="text-gray-500" />
-                <input
+            {ppFormRackId && (
+              <>
+                <div className="flex items-center space-x-2">
+                  <Server size={20} className="text-gray-500" />
+                  <input
                     type="number"
-                    placeholder="Total Ports (e.g., 24)"
-                    value={ppFormTotalPorts}
-                    onChange={(e) => setPpFormTotalPorts(e.target.value)}
+                    placeholder="Starting Row in Rack (e.g., 1)"
+                    value={ppFormRowInRack}
+                    onChange={(e) => setPpFormRowInRack(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     min="1"
-                    required
-                />
+                    required={!!ppFormRackId}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <HardDrive size={20} className="text-gray-500" />
+                  <input
+                    type="number"
+                    placeholder="Units Occupied (e.g., 1, 2)"
+                    value={ppFormUnitsOccupied}
+                    onChange={(e) => setPpFormUnitsOccupied(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    required={!!ppFormRackId}
+                  />
+                </div>
+              </>
+            )}
+            <div className="flex items-center space-x-2">
+              <HardDrive size={20} className="text-gray-500" />
+              <input
+                type="number"
+                placeholder="Total Ports (e.g., 24)"
+                value={ppFormTotalPorts}
+                onChange={(e) => setPpFormTotalPorts(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                min="1"
+                required
+              />
             </div>
             <div className="flex items-start space-x-2">
-                <Info size={20} className="text-gray-500 mt-2" />
-                <textarea
-                    placeholder="Description (Optional)"
-                    value={ppFormDesc}
-                    onChange={(e) => setPpFormDesc(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                    rows="3"
-                ></textarea>
+              <Info size={20} className="text-gray-500 mt-2" />
+              <textarea
+                placeholder="Description (Optional)"
+                value={ppFormDesc}
+                onChange={(e) => setPpFormDesc(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                rows="3"
+              ></textarea>
             </div>
             <div className="flex space-x-3 justify-end">
               {editingPatchPanel && (
@@ -338,6 +431,7 @@ function PatchPanelList({
                     setPpFormLocationId("");
                     setPpFormRowInRack("");
                     setPpFormRackId("");
+                    setPpFormUnitsOccupied(1);
                     setPpFormTotalPorts(1);
                     setPpFormDesc("");
                     setIsAddPpFormExpanded(false);
@@ -372,19 +466,24 @@ function PatchPanelList({
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
                 {pp.location_name || "N/A"}
-                {pp.location?.door_number && ` (Door: ${pp.location.door_number})`}
+                {pp.location?.door_number &&
+                  ` (Door: ${pp.location.door_number})`}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
                 {pp.rack_name || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Server size={16} className="text-gray-500 mr-2" /> Row in Rack:{" "}
-                {pp.row_in_rack || "N/A"}
+                <Server size={16} className="text-gray-500 mr-2" /> Starting
+                Row: {pp.row_in_rack || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <HardDrive size={16} className="text-gray-500 mr-2" /> Total Ports:{" "}
-                {pp.total_ports || "N/A"}
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Units:{" "}
+                {pp.units_occupied || "N/A"}U
+              </p>
+              <p className="text-sm text-gray-700 mb-1 flex items-center">
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Total
+                Ports: {pp.total_ports || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
                 <Info

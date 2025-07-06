@@ -2,7 +2,7 @@
 // This component displays a searchable list of PCs in a card format,
 // now including filter options by In Domain, OS, Office, Type, Usage, Model, Location, and Rack.
 // Added multi_port, type, model (replaces ports_name), and usage fields to PC creation/edit form and display.
-// NEW: Added row_in_rack and rack_id for 'Server' type PCs.
+// UPDATED: Added row_in_rack and units_occupied for 'Server' type PCs.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -56,6 +56,7 @@ function PcList({
   const [pcFormUsage, setPcFormUsage] = useState(""); // New state for PC usage
   const [pcFormRowInRack, setPcFormRowInRack] = useState(""); // NEW: State for row in rack
   const [pcFormRackId, setPcFormRackId] = useState(""); // NEW: State for rack ID
+  const [pcFormUnitsOccupied, setPcFormUnitsOccupied] = useState(1); // NEW: State for units occupied
 
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false);
 
@@ -152,6 +153,9 @@ function PcList({
         (pc.type || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.usage || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (pc.row_in_rack || "").toLowerCase().includes(lowerCaseSearchTerm) || // NEW: Search by row in rack
+        (pc.units_occupied ? `${pc.units_occupied}u` : "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) || // NEW: Search by units occupied
         (pc.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) || // Search by old rack_name field
         pcRackNameWithLocation.toLowerCase().includes(lowerCaseSearchTerm); // NEW: Search by combined rack name
 
@@ -226,6 +230,7 @@ function PcList({
     setPcFormUsage(pc.usage || "");
     setPcFormRowInRack(pc.row_in_rack || ""); // NEW
     setPcFormRackId(pc.rack_id || ""); // NEW
+    setPcFormUnitsOccupied(pc.units_occupied || 1); // NEW: Set units occupied for editing
     setIsAddPcFormExpanded(true); // Expand form when editing
   };
 
@@ -241,17 +246,39 @@ function PcList({
 
     // NEW: Validate rack fields if type is 'Server'
     if (pcFormType === "Server") {
-      if (!pcFormRackId || !pcFormRowInRack.trim()) {
-        alert("For Server type PCs, Rack and Row in Rack are required.");
+      if (
+        !pcFormRackId ||
+        pcFormRowInRack === "" ||
+        pcFormUnitsOccupied === ""
+      ) {
+        alert(
+          "For Server type PCs, Rack, Starting Row in Rack, and Units Occupied are required."
+        );
         return;
       }
       // Additional validation for row_in_rack if needed (e.g., numeric, within rack units)
       const selectedRack = racks.find((r) => String(r.id) === pcFormRackId);
       if (selectedRack) {
-        const rowNum = parseInt(pcFormRowInRack);
-        if (isNaN(rowNum) || rowNum < 1 || rowNum > selectedRack.total_units) {
+        const startRow = parseInt(pcFormRowInRack);
+        const units = parseInt(pcFormUnitsOccupied);
+
+        if (
+          isNaN(startRow) ||
+          startRow < 1 ||
+          startRow > selectedRack.total_units
+        ) {
           alert(
-            `Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`
+            `Starting Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`
+          );
+          return;
+        }
+        if (isNaN(units) || units < 1) {
+          alert("Units Occupied must be a positive number.");
+          return;
+        }
+        if (startRow + units - 1 > selectedRack.total_units) {
+          alert(
+            `Device extends beyond total units of the rack (${selectedRack.total_units}U).`
           );
           return;
         }
@@ -270,8 +297,10 @@ function PcList({
       multi_port: pcFormMultiPort,
       type: pcFormType,
       usage: pcFormUsage,
-      row_in_rack: pcFormType === "Server" ? pcFormRowInRack : null, // NEW: Conditionally set
-      rack_id: pcFormType === "Server" ? parseInt(pcFormRackId) : null, // NEW: Conditionally set
+      row_in_rack: pcFormType === "Server" ? parseInt(pcFormRowInRack) : null, // NEW: Conditionally set and parse
+      rack_id: pcFormType === "Server" ? parseInt(pcFormRackId) : null, // NEW: Conditionally set and parse
+      units_occupied:
+        pcFormType === "Server" ? parseInt(pcFormUnitsOccupied) : 1, // NEW: Conditionally set and parse
     };
 
     if (editingPc) {
@@ -293,6 +322,7 @@ function PcList({
     setPcFormUsage("");
     setPcFormRowInRack(""); // NEW: Reset
     setPcFormRackId(""); // NEW: Reset
+    setPcFormUnitsOccupied(1); // NEW: Reset
     setIsAddPcFormExpanded(false); // Collapse form after submission
   };
 
@@ -567,10 +597,11 @@ function PcList({
                 value={pcFormType}
                 onChange={(e) => {
                   setPcFormType(e.target.value);
-                  // Clear rack/row if switching from Server to Workstation
+                  // Clear rack/row/units if switching from Server to Workstation
                   if (e.target.value === "Workstation") {
                     setPcFormRackId("");
                     setPcFormRowInRack("");
+                    setPcFormUnitsOccupied(1);
                   }
                 }}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -589,9 +620,10 @@ function PcList({
                   <select
                     value={pcFormRackId}
                     onChange={(e) => setPcFormRackId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    required={pcFormType === "Server"}
                   >
-                    <option value="">-- Select Rack (Optional) --</option>
+                    <option value="">-- Select Rack --</option>
                     {sortedRacks.map((rack) => (
                       <option key={rack.id} value={rack.id}>
                         {rack.name} ({rack.location_name}
@@ -610,33 +642,65 @@ function PcList({
                 <div className="flex items-center space-x-2">
                   <Server size={20} className="text-gray-500" />
                   <input
-                    type="text"
-                    placeholder="Row in Rack (e.g., 1U, 2U)"
+                    type="number"
+                    placeholder="Starting Row in Rack (e.g., 1)"
                     value={pcFormRowInRack}
                     onChange={(e) => setPcFormRowInRack(e.target.value)}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    required={pcFormType === "Server"}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <HardDrive size={20} className="text-gray-500" />
+                  <input
+                    type="number"
+                    placeholder="Units Occupied (e.g., 1, 2, 4)"
+                    value={pcFormUnitsOccupied}
+                    onChange={(e) => setPcFormUnitsOccupied(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    min="1"
+                    required={pcFormType === "Server"}
                   />
                 </div>
               </>
             )}
 
-            <div className="flex items-center space-x-2">
-              <Activity size={20} className="text-gray-500" />
-              <select // PC Usage dropdown
-                value={pcFormUsage}
-                onChange={(e) => setPcFormUsage(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">-- Select Usage (Optional) --</option>
-                {usageOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-                {/* Option to add custom usage (handled client-side for simplicity, or could have a modal) */}
-                <option value="other">Add Custom Usage...</option>
-              </select>
-            </div>
+            <input
+              type="text"
+              placeholder="Operating System (Optional)"
+              value={pcFormOs}
+              onChange={(e) => setPcFormOs(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Model (Optional)"
+              value={pcFormModel}
+              onChange={(e) => setPcFormModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Office (Optional)"
+              value={pcFormOffice}
+              onChange={(e) => setPcFormOffice(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            />
+            <select // PC Usage dropdown
+              value={pcFormUsage}
+              onChange={(e) => setPcFormUsage(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Select Usage (Optional) --</option>
+              {usageOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              {/* Option to add custom usage - would require a separate input field to appear */}
+              {/* <option value="other">Add Custom Usage..."> */}
+            </select>
             {pcFormUsage === "other" && (
               <input
                 type="text"
@@ -655,46 +719,13 @@ function PcList({
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               />
             )}
-            <div className="flex items-center space-x-2">
-              <Tag size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Model (e.g., Dell OptiPlex 7010)"
-                value={pcFormModel}
-                onChange={(e) => setPcFormModel(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Cpu size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Operating System (Optional)"
-                value={pcFormOs}
-                onChange={(e) => setPcFormOs(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <MapPin size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Office (Optional)"
-                value={pcFormOffice}
-                onChange={(e) => setPcFormOffice(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-start space-x-2">
-              <Info size={20} className="text-gray-500 mt-2" />
-              <textarea
-                placeholder="Description (Optional)"
-                value={pcFormDesc}
-                onChange={(e) => setPcFormDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                rows="3"
-              ></textarea>
-            </div>
+            <textarea
+              placeholder="Description (Optional)"
+              value={pcFormDesc}
+              onChange={(e) => setPcFormDesc(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+              rows="3"
+            ></textarea>
             <div className="flex space-x-3 justify-end">
               {editingPc && (
                 <button
@@ -714,6 +745,7 @@ function PcList({
                     setPcFormUsage("");
                     setPcFormRowInRack("");
                     setPcFormRackId("");
+                    setPcFormUnitsOccupied(1);
                     setIsAddPcFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -799,8 +831,12 @@ function PcList({
                     {pc.rack_name || "N/A"}
                   </p>
                   <p className="text-sm text-gray-700 mb-1 flex items-center">
-                    <Server size={16} className="text-gray-500 mr-2" /> Row in
-                    Rack: {pc.row_in_rack || "N/A"}
+                    <Server size={16} className="text-gray-500 mr-2" /> Starting
+                    Row: {pc.row_in_rack || "N/A"}
+                  </p>
+                  <p className="text-sm text-gray-700 mb-1 flex items-center">
+                    <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
+                    Units: {pc.units_occupied || "N/A"}U
                   </p>
                 </>
               )}

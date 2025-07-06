@@ -3,7 +3,8 @@
 // using Konva, with enhanced visual styling for nodes and edges.
 // New features: Node tooltips on hover, animated "down" connections, and UI controls for zoom/pan.
 // Node visuals are now Lucide icons (Laptop, Server, Split) instead of simple rectangles.
-// UPDATED: Displaying rack and row for server PCs in tooltips and using correct icons.
+// UPDATED: Displaying rack and row for server PCs in tooltips and using correct icons,
+// and handling units_occupied for all rack-mounted devices.
 
 import React, { useCallback, useState, useEffect, useRef } from "react";
 import {
@@ -131,19 +132,22 @@ const SwitchNodeKonva = ({
 }) => {
   const rectRef = useRef();
 
-  // New fields: row_in_rack, rack_name, source_port, model, description, usage
+  // New fields: row_in_rack, units_occupied, rack_name, source_port, model, description, usage
   const labelText = `${node.label}\n(${node.data.location_name || "N/A"})\n${
     node.data.model || "N/A"
   }`;
-  const tooltipText = `Name: ${node.label}\nIP: ${
+  let tooltipText = `Name: ${node.label}\nIP: ${
     node.data.ip_address || "N/A"
   }\nLocation: ${node.data.location_name || "N/A"}${
     node.data.location?.door_number
       ? ` (Door: ${node.data.location.door_number})`
       : ""
-  }\nRack: ${node.data.rack_name || "N/A"} (Row: ${
-    node.data.row_in_rack || "N/A"
-  })\nModel: ${node.data.model || "N/A"}\nTotal Ports: ${
+  }\nRack: ${node.data.rack_name || "N/A"}`;
+  // NEW: Add units_occupied to tooltip
+  if (node.data.row_in_rack !== null && node.data.units_occupied !== null) {
+    tooltipText += ` (Starting Row: ${node.data.row_in_rack}, Units: ${node.data.units_occupied}U)`;
+  }
+  tooltipText += `\nModel: ${node.data.model || "N/A"}\nTotal Ports: ${
     node.data.total_ports
   }\nSource Port: ${node.data.source_port || "N/A"}\nUsage: ${
     node.data.usage || "N/A"
@@ -215,7 +219,7 @@ const PcNodeKonva = ({
   const rectRef = useRef();
 
   // New fields: username, in_domain, operating_system, model (replaces ports_name), office, multi_port, type, usage
-  // UPDATED: Include rack and row in rack for Server type PCs
+  // UPDATED: Include rack and row in rack, and units_occupied for Server type PCs
   const labelText = `${node.label}\n(${node.data.office || "N/A"})\n${
     node.data.operating_system || "N/A"
   }`;
@@ -231,9 +235,10 @@ const PcNodeKonva = ({
 
   // NEW: Add rack and row details to tooltip if it's a Server PC
   if (node.data.type === "Server") {
-    tooltipText += `\nRack: ${node.data.rack_name || "N/A"} (Row: ${
-      node.data.row_in_rack || "N/A"
-    })`;
+    tooltipText += `\nRack: ${node.data.rack_name || "N/A"}`;
+    if (node.data.row_in_rack !== null && node.data.units_occupied !== null) {
+      tooltipText += ` (Starting Row: ${node.data.row_in_rack}, Units: ${node.data.units_occupied}U)`;
+    }
   }
   tooltipText += `\nDescription: ${node.data.description || "N/A"}`;
 
@@ -328,19 +333,22 @@ const PatchPanelNodeKonva = ({
 }) => {
   const rectRef = useRef();
 
-  // New fields: row_in_rack, rack_name, description, location.door_number (via location)
+  // New fields: row_in_rack, units_occupied, rack_name, description, location.door_number (via location)
   const labelText = `${node.label}\n(${node.data.location_name || "N/A"})\n${
     node.data.rack_name || "N/A"
   }`;
-  const tooltipText = `Name: ${node.label}\nLocation: ${
+  let tooltipText = `Name: ${node.label}\nLocation: ${
     node.data.location_name || "N/A"
   }${
     node.data.location?.door_number
       ? ` (Door: ${node.data.location.door_number})`
       : ""
-  }\nRack: ${node.data.rack_name || "N/A"} (Row: ${
-    node.data.row_in_rack || "N/A"
-  })\nTotal Ports: ${node.data.total_ports}\nDescription: ${
+  }\nRack: ${node.data.rack_name || "N/A"}`;
+  // NEW: Add units_occupied to tooltip
+  if (node.data.row_in_rack !== null && node.data.units_occupied !== null) {
+    tooltipText += ` (Starting Row: ${node.data.row_in_rack}, Units: ${node.data.units_occupied}U)`;
+  }
+  tooltipText += `\nTotal Ports: ${node.data.total_ports}\nDescription: ${
     node.data.description || "N/A"
   }`;
 

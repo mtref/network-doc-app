@@ -60,8 +60,9 @@ class PC(db.Model):
     usage = db.Column(db.String(100), nullable=True) # e.g., 'Production', 'Development'
     
     # Fields for linking to Rack for 'Server' type PCs
-    row_in_rack = db.Column(db.String(50), nullable=True) # e.g., "1U", "2U"
+    row_in_rack = db.Column(db.Integer, nullable=True) # Changed to Integer
     rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    units_occupied = db.Column(db.Integer, nullable=False, default=1) # NEW field: units_occupied
     # Define relationship to Rack model
     rack = db.relationship('Rack', backref='pcs_in_rack', lazy=True)
 
@@ -82,6 +83,7 @@ class PC(db.Model):
             'usage': self.usage,
             'row_in_rack': self.row_in_rack,
             'rack_id': self.rack_id,
+            'units_occupied': self.units_occupied, # Include in to_dict
             'rack_name': self.rack.name if self.rack else None, # Denormalized rack name for convenience
             'rack': self.rack.to_dict() if self.rack else None, # Include full rack dict
         }
@@ -92,8 +94,9 @@ class PatchPanel(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='patch_panels_in_location', lazy=True)
-    row_in_rack = db.Column(db.String(50), nullable=True) # e.g., "1U", "2U"
+    row_in_rack = db.Column(db.Integer, nullable=True) # Changed to Integer
     rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    units_occupied = db.Column(db.Integer, nullable=False, default=1) # NEW field: units_occupied
     rack = db.relationship('Rack', backref='patch_panels_in_rack', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
     description = db.Column(db.String(255), nullable=True)
@@ -107,6 +110,7 @@ class PatchPanel(db.Model):
             'location_name': self.location.name if self.location else None,
             'row_in_rack': self.row_in_rack,
             'rack_id': self.rack_id,
+            'units_occupied': self.units_occupied, # Include in to_dict
             'rack_name': self.rack.name if self.rack else None,
             'total_ports': self.total_ports,
             'description': self.description,
@@ -121,8 +125,9 @@ class Switch(db.Model):
     ip_address = db.Column(db.String(100), nullable=True)
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=True)
     location = db.relationship('Location', backref='switches_in_location', lazy=True)
-    row_in_rack = db.Column(db.String(50), nullable=True) # e.g., "1U", "2U"
+    row_in_rack = db.Column(db.Integer, nullable=True) # Changed to Integer
     rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    units_occupied = db.Column(db.Integer, nullable=False, default=1) # NEW field: units_occupied
     rack = db.relationship('Rack', backref='switches_in_rack', lazy=True)
     total_ports = db.Column(db.Integer, nullable=False, default=1)
     source_port = db.Column(db.String(100), nullable=True) # e.g., "Eth0/1", "GigaPort-03"
@@ -140,6 +145,7 @@ class Switch(db.Model):
             'location_name': self.location.name if self.location else None,
             'row_in_rack': self.row_in_rack,
             'rack_id': self.rack_id,
+            'units_occupied': self.units_occupied, # Include in to_dict
             'rack_name': self.rack.name if self.rack else None,
             'total_ports': self.total_ports,
             'source_port': self.source_port,

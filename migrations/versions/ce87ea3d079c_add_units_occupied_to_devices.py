@@ -1,8 +1,8 @@
-"""Initial migration
+"""Add units_occupied to devices
 
-Revision ID: 68ed25824b4e
+Revision ID: ce87ea3d079c
 Revises: 
-Create Date: 2025-07-06 21:52:53.233265
+Create Date: 2025-07-06 23:25:31.373701
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '68ed25824b4e'
+revision = 'ce87ea3d079c'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -54,8 +54,9 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('location_id', sa.Integer(), nullable=True),
-    sa.Column('row_in_rack', sa.String(length=50), nullable=True),
+    sa.Column('row_in_rack', sa.Integer(), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
+    sa.Column('units_occupied', sa.Integer(), nullable=False),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
@@ -76,8 +77,9 @@ def upgrade():
     sa.Column('multi_port', sa.Boolean(), nullable=False),
     sa.Column('type', sa.String(length=50), nullable=False),
     sa.Column('usage', sa.String(length=100), nullable=True),
-    sa.Column('row_in_rack', sa.String(length=50), nullable=True),
+    sa.Column('row_in_rack', sa.Integer(), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
+    sa.Column('units_occupied', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
@@ -87,8 +89,9 @@ def upgrade():
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('ip_address', sa.String(length=100), nullable=True),
     sa.Column('location_id', sa.Integer(), nullable=True),
-    sa.Column('row_in_rack', sa.String(length=50), nullable=True),
+    sa.Column('row_in_rack', sa.Integer(), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
+    sa.Column('units_occupied', sa.Integer(), nullable=False),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('source_port', sa.String(length=100), nullable=True),
     sa.Column('model', sa.String(length=100), nullable=True),

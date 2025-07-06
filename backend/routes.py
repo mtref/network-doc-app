@@ -56,8 +56,8 @@ def register_routes(app):
             return jsonify(location.to_dict())
         elif request.method == 'PUT':
             data = request.json
-            if not data or not data.get('name'):
-                return jsonify({'error': 'Location name is required'}), 400
+            if not data:
+                return jsonify({'error': 'No data provided for update'}), 400
             try:
                 updated_location = LocationService.update_location(location, data)
                 return jsonify(updated_location.to_dict())
@@ -390,17 +390,23 @@ def register_routes(app):
                 items = RackService.get_all_racks()
                 data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in items]
             elif entity_type == 'pcs':
-                headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage', 'row_in_rack', 'rack_id', 'rack_name']
+                # UPDATED: Add 'units_occupied' to PC export headers
+                headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name']
                 items = PCService.get_all_pcs()
-                data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.rack_id, pc.rack.name if pc.rack else ''] for pc in items]
+                # UPDATED: Add 'units_occupied' to PC export data
+                data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.units_occupied, pc.rack_id, pc.rack.name if pc.rack else ''] for pc in items]
             elif entity_type == 'patch_panels':
-                headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'rack_id', 'rack_name', 'total_ports', 'description']
+                # UPDATED: Add 'units_occupied' to Patch Panel export headers
+                headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'description']
                 items = PatchPanelService.get_all_patch_panels()
-                data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.location.door_number if pp.location else '', pp.row_in_rack, pp.rack_id, pp.rack.name if pp.rack else '', pp.total_ports, pp.description] for pp in items]
+                # UPDATED: Add 'units_occupied' to Patch Panel export data
+                data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.location.door_number if pp.location else '', pp.row_in_rack, pp.units_occupied, pp.rack_id, pp.rack.name if pp.rack else '', pp.total_ports, pp.description] for pp in items]
             elif entity_type == 'switches':
-                headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'rack_id', 'rack_name', 'total_ports', 'source_port', 'model', 'description', 'usage']
+                # UPDATED: Add 'units_occupied' to Switch export headers
+                headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'source_port', 'model', 'description', 'usage']
                 items = SwitchService.get_all_switches()
-                data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.location.door_number if s.location else '', s.row_in_rack, s.rack_id, s.rack.name if s.rack else '', s.total_ports, s.source_port, s.model, s.description, s.usage] for s in items]
+                # UPDATED: Add 'units_occupied' to Switch export data
+                data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.location.door_number if s.location else '', s.row_in_rack, s.units_occupied, s.rack_id, s.rack.name if s.rack else '', s.total_ports, s.source_port, s.model, s.description, s.usage] for s in items]
             elif entity_type == 'connections':
                 headers = [
                     'connection_id', 'pc_id', 'pc_name', 'pc_ip_address', 'cable_color', 'cable_label',
@@ -495,7 +501,8 @@ def register_routes(app):
                         name = row_dict.get('name')
                         if not name:
                             raise ValueError("Missing 'name' field.")
-                        existing_location = LocationService.get_location_by_id(name) # Assuming get_location_by_id can take name for lookup
+                        # Check for existing location by name before creating
+                        existing_location = db.session.query(Location).filter_by(name=name).first()
                         if existing_location:
                             raise ValueError(f"Location '{name}' already exists. Skipped.")
                         
@@ -531,7 +538,8 @@ def register_routes(app):
 
                         pc_type = row_dict.get('type', 'Workstation')
                         rack_id = None
-                        row_in_rack = row_dict.get('row_in_rack')
+                        row_in_rack = None # Initialize to None
+                        units_occupied = 1 # Initialize to 1
                         rack_name = row_dict.get('rack_name')
 
                         if pc_type == 'Server' and rack_name:
@@ -540,22 +548,33 @@ def register_routes(app):
                                 errors.append(f"Row {i+2}: Rack '{rack_name}' not found for PC '{name}'. Rack link skipped.")
                             else:
                                 rack_id = rack.id
-                                if rack_id and row_in_rack:
-                                    is_occupied, conflicting_device = validate_rack_unit_occupancy(
-                                        db.session,
-                                        rack_id=rack_id,
-                                        row_in_rack=row_in_rack,
-                                        device_type='pc'
-                                    )
-                                    if is_occupied:
-                                        raise ValueError(f"Rack unit '{row_in_rack}' in Rack '{rack_name}' is already occupied by {conflicting_device}. PC '{name}' skipped.")
+                                # Ensure row_in_rack and units_occupied are correctly parsed
+                                try:
+                                    row_in_rack = int(row_dict.get('row_in_rack')) if row_dict.get('row_in_rack') else None
+                                    units_occupied = int(row_dict.get('units_occupied', 1))
+                                    if row_in_rack is None or row_in_rack < 1 or units_occupied < 1:
+                                        raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for Server PCs.")
+                                except (ValueError, TypeError):
+                                    raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for Server PCs.")
+
+                                # UPDATED: Pass units_occupied to validation
+                                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                                    db.session,
+                                    rack_id=rack_id,
+                                    start_row_in_rack=row_in_rack,
+                                    units_occupied=units_occupied,
+                                    device_type='pc'
+                                )
+                                if is_occupied:
+                                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. PC '{name}' skipped.")
                         
-                        # Ensure rack_id and row_in_rack are null if not a Server
+                        # Ensure rack_id, row_in_rack, and units_occupied are null/default if not a Server
                         if pc_type != 'Server':
                             rack_id = None
                             row_in_rack = None
+                            units_occupied = 1 # Default to 1 unit for non-servers
 
-                        existing_pc = PCService.get_pc_by_id(name) # Assuming get_pc_by_id can take name for lookup
+                        existing_pc = db.session.query(PC).filter_by(name=name).first() # Assuming name is unique
                         if existing_pc:
                             # Update existing PC
                             update_data = {
@@ -571,6 +590,7 @@ def register_routes(app):
                                 'usage': row_dict.get('usage', existing_pc.usage),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
+                                'units_occupied': units_occupied, # NEW: Import units_occupied
                             }
                             PCService.update_pc(existing_pc, update_data)
                         else:
@@ -589,6 +609,7 @@ def register_routes(app):
                                 'usage': row_dict.get('usage'),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
+                                'units_occupied': units_occupied, # NEW: Import units_occupied
                             }
                             PCService.create_pc(create_data)
 
@@ -603,15 +624,36 @@ def register_routes(app):
                             raise ValueError(f"Location '{location_name}' not found for Patch Panel '{name}'. Skipped.")
 
                         rack_id = None
+                        row_in_rack = None
+                        units_occupied = 1
                         rack_name = row_dict.get('rack_name')
+
                         if rack_name:
                             rack = db.session.query(Rack).filter_by(name=rack_name).first()
                             if not rack:
                                 errors.append(f"Row {i+2}: Rack '{rack_name}' not found for Patch Panel '{name}'. Linking to Rack skipped.")
                             else:
                                 rack_id = rack.id
+                                try:
+                                    row_in_rack = int(row_dict.get('row_in_rack')) if row_dict.get('row_in_rack') else None
+                                    units_occupied = int(row_dict.get('units_occupied', 1))
+                                    if row_in_rack is None or row_in_rack < 1 or units_occupied < 1:
+                                        raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Patch Panel.")
+                                except (ValueError, TypeError):
+                                    raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Patch Panel.")
 
-                        existing_pp = PatchPanelService.get_patch_panel_by_id(name) # Assuming get_patch_panel_by_id can take name for lookup
+                                # UPDATED: Pass units_occupied to validation
+                                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                                    db.session,
+                                    rack_id=rack_id,
+                                    start_row_in_rack=row_in_rack,
+                                    units_occupied=units_occupied,
+                                    device_type='patch_panel'
+                                )
+                                if is_occupied:
+                                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. Patch Panel '{name}' skipped.")
+
+                        existing_pp = db.session.query(PatchPanel).filter_by(name=name).first() # Assuming name is unique
                         if existing_pp:
                             raise ValueError(f"Patch Panel '{name}' already exists. Skipped.")
                         
@@ -619,7 +661,8 @@ def register_routes(app):
                             'name': name,
                             'location_id': location.id,
                             'rack_id': rack_id,
-                            'row_in_rack': row_dict.get('row_in_rack'),
+                            'row_in_rack': row_in_rack,
+                            'units_occupied': units_occupied, # NEW: Import units_occupied
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'description': row_dict.get('description')
                         }
@@ -636,15 +679,36 @@ def register_routes(app):
                             raise ValueError(f"Location '{location_name}' not found for Switch '{name}'. Skipped.")
 
                         rack_id = None
+                        row_in_rack = None
+                        units_occupied = 1
                         rack_name = row_dict.get('rack_name')
+
                         if rack_name:
                             rack = db.session.query(Rack).filter_by(name=rack_name).first()
                             if not rack:
                                 errors.append(f"Row {i+2}: Rack '{rack_name}' not found for Switch '{name}'. Linking to Rack skipped.")
                             else:
                                 rack_id = rack.id
+                                try:
+                                    row_in_rack = int(row_dict.get('row_in_rack')) if row_dict.get('row_in_rack') else None
+                                    units_occupied = int(row_dict.get('units_occupied', 1))
+                                    if row_in_rack is None or row_in_rack < 1 or units_occupied < 1:
+                                        raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Switch.")
+                                except (ValueError, TypeError):
+                                    raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Switch.")
 
-                        existing_switch = SwitchService.get_switch_by_id(name) # Assuming get_switch_by_id can take name for lookup
+                                # UPDATED: Pass units_occupied to validation
+                                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                                    db.session,
+                                    rack_id=rack_id,
+                                    start_row_in_rack=row_in_rack,
+                                    units_occupied=units_occupied,
+                                    device_type='switch'
+                                )
+                                if is_occupied:
+                                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. Switch '{name}' skipped.")
+
+                        existing_switch = db.session.query(Switch).filter_by(name=name).first() # Assuming name is unique
                         if existing_switch:
                             raise ValueError(f"Switch '{name}' already exists. Skipped.")
                         
@@ -653,7 +717,8 @@ def register_routes(app):
                             'ip_address': row_dict.get('ip_address'),
                             'location_id': location.id,
                             'rack_id': rack_id,
-                            'row_in_rack': row_dict.get('row_in_rack'),
+                            'row_in_rack': row_in_rack,
+                            'units_occupied': units_occupied, # NEW: Import units_occupied
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'source_port': row_dict.get('source_port'),
                             'model': row_dict.get('model'),

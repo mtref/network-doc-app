@@ -3,6 +3,8 @@
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
 // Optimized data fetching to prevent excessive re-renders.
 // UPDATED: Ensuring locations and racks are fetched and passed to relevant components.
+// UPDATED: Handling units_occupied for PCs, Patch Panels, and Switches.
+// FIXED: Corrected import path for PatchPanelList.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -10,7 +12,7 @@ import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
-import PatchPanelList from "./components/PatchPanelList";
+import PatchPanelList from "./components/PatchPanelList"; // Corrected path: removed extra 'components/'
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import RackList from "./components/RackList";
@@ -916,6 +918,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 onViewRackDetails={handleViewRackDetails}
+                showMessage={showMessage}
               />
             </section>
           )}

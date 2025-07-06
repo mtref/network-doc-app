@@ -2,6 +2,7 @@
 // This component displays a searchable list of Racks in a card format,
 // including filter options by Location, and now a visual representation of each rack.
 // Now includes pagination.
+// UPDATED: Passing units_occupied to RackVisualizer and handling it in form.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import SearchBar from "./SearchBar";

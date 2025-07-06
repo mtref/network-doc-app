@@ -1,6 +1,7 @@
 #!/bin/sh
 # start.sh (at the root of your network-doc-app directory)
-# This script is now solely responsible for starting the Flask backend.
+# This script is responsible for starting the Flask backend (Gunicorn)
+# and the Nginx frontend proxy in a single Docker container.
 
 # Wait for a moment to ensure file system is ready (optional, but can help)
 sleep 1
@@ -12,17 +13,15 @@ export PYTHONPATH=/app:$PYTHONPATH
 # IMPORTANT: DO NOT change directory to /app/backend here.
 # Flask and Gunicorn will be run from /app, referencing 'backend/app.py'.
 
-# We no longer need to export FLASK_MIGRATE_DIR as a separate env var.
-# export FLASK_MIGRATE_DIR=/app/backend/migrations
-
-# Run Flask database migrations
-echo "Running Flask database migrations..."
-# Specify the Flask application using its direct file path relative to PYTHONPATH.
-# Use the -d option to explicitly point to the migrations directory.
+# Run Flask database upgrade (applies all pending migrations)
+echo "Running Flask database upgrade..."
 python3 -m flask --app backend/app.py db upgrade -d /app/backend/migrations
 
-# Start Flask backend using Gunicorn (a production-ready WSGI server) in the background
-echo "Starting Flask backend (Gunicorn)..."
-# Reference the application using its full package path: 'backend.app:app'.
-gunicorn -w 4 -b 0.0.0.0:5000 backend.app:app
-# Gunicorn should run in the foreground (no '&') if it's the main process.
+# Start Nginx in the background
+echo "Starting Nginx..."
+nginx -g "daemon off;" & # Start Nginx in background, redirecting its output to /dev/null if desired
+
+# Start Flask backend using Gunicorn in the foreground
+# This command will keep the container running as it is the primary process.
+echo "Starting Flask backend (Gunicorn) in foreground..."
+exec gunicorn -w 4 -b 0.0.0.0:5000 backend.app:app

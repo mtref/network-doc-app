@@ -5,10 +5,10 @@ import os
 import uuid
 from sqlalchemy.orm import joinedload
 from sqlalchemy import cast, Integer
-from werkzeug.utils import secure_filename # For secure filenames
 
 from .extensions import db
 from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
+# UPDATED: Import the modified validate_rack_unit_occupancy and check_rack_unit_decrease_conflict
 from .utils import validate_port_occupancy, validate_rack_unit_occupancy, check_rack_unit_decrease_conflict, allowed_file
 
 # --- Global Constants (can be moved to a config.py if more complex) ---
@@ -98,6 +98,7 @@ class RackService:
             
             # Check for conflicts if reducing total_units
             if new_total_units < rack.total_units:
+                # UPDATED: Pass db.session to check_rack_unit_decrease_conflict
                 has_conflict, error_message = check_rack_unit_decrease_conflict(db.session, rack.id, new_total_units)
                 if has_conflict:
                     raise ValueError(error_message)
@@ -135,21 +136,41 @@ class PCService:
         pc_type = data.get('type', 'Workstation')
         rack_id = data.get('rack_id')
         row_in_rack = data.get('row_in_rack')
+        units_occupied = data.get('units_occupied', 1) # NEW: Get units_occupied
 
-        if pc_type == 'Server' and rack_id and row_in_rack:
+        if pc_type == 'Server' and rack_id and row_in_rack is not None: # row_in_rack can be 0
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1: # Rack units typically start from 1
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # UPDATED: Pass units_occupied to validation
             is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 db.session,
                 rack_id=rack_id,
-                row_in_rack=row_in_rack,
+                start_row_in_rack=row_in_rack,
+                units_occupied=units_occupied,
                 device_type='pc'
             )
             if is_occupied:
-                raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+                raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
         
-        # If PC type is not 'Server', ensure rack_id and row_in_rack are null
+        # If PC type is not 'Server', ensure rack_id, row_in_rack, and units_occupied are null/default
         if pc_type != 'Server':
             rack_id = None
             row_in_rack = None
+            units_occupied = 1 # Default to 1 unit if not a server
 
         new_pc = PC(
             name=data['name'],
@@ -165,6 +186,7 @@ class PCService:
             usage=data.get('usage'),
             row_in_rack=row_in_rack,
             rack_id=rack_id,
+            units_occupied=units_occupied # NEW: Save units_occupied
         )
         db.session.add(new_pc)
         db.session.commit()
@@ -177,25 +199,51 @@ class PCService:
         pc_type = data.get('type', pc.type)
         rack_id = data.get('rack_id', pc.rack_id)
         row_in_rack = data.get('row_in_rack', pc.row_in_rack)
+        units_occupied = data.get('units_occupied', pc.units_occupied) # NEW: Get units_occupied
 
-        # Validate rack occupancy only if type is 'Server' and rack/row are provided/changed
-        if pc_type == 'Server' and rack_id and row_in_rack:
-            if str(rack_id) != str(pc.rack_id) or str(row_in_rack) != str(pc.row_in_rack):
+        # Validate rack occupancy only if type is 'Server' and rack/row/units are provided/changed
+        if pc_type == 'Server' and rack_id and row_in_rack is not None:
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+            
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1: # Rack units typically start from 1
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # Check if rack/row/units changed, or if type changed to Server
+            rack_changed = str(rack_id) != str(pc.rack_id)
+            row_changed = str(row_in_rack) != str(pc.row_in_rack)
+            units_changed = str(units_occupied) != str(pc.units_occupied)
+            type_changed_to_server = pc.type != 'Server' and pc_type == 'Server'
+
+            if rack_changed or row_changed or units_changed or type_changed_to_server:
+                # UPDATED: Pass units_occupied to validation
                 is_occupied, conflicting_device = validate_rack_unit_occupancy(
                     db.session,
                     rack_id=rack_id,
-                    row_in_rack=row_in_rack,
+                    start_row_in_rack=row_in_rack,
+                    units_occupied=units_occupied,
                     device_type='pc',
                     exclude_device_id=pc.id
                 )
                 if is_occupied:
-                    raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
         
         # If PC type changes from 'Server' to 'Workstation', clear rack details
         if pc_type != 'Server':
             rack_id = None
             row_in_rack = None
-        
+            units_occupied = 1 # Reset to default for non-server
+
         pc.name = data.get('name', pc.name)
         pc.ip_address = data.get('ip_address', pc.ip_address)
         pc.username = data.get('username', pc.username)
@@ -209,6 +257,7 @@ class PCService:
         pc.usage = data.get('usage', pc.usage)
         pc.row_in_rack = row_in_rack
         pc.rack_id = rack_id
+        pc.units_occupied = units_occupied # NEW: Update units_occupied
 
         db.session.commit()
         db.session.refresh(pc)
@@ -254,15 +303,35 @@ class PatchPanelService:
         """Creates a new patch panel with validation."""
         rack_id = data.get('rack_id')
         row_in_rack = data.get('row_in_rack')
-        if rack_id and row_in_rack:
+        units_occupied = data.get('units_occupied', 1) # NEW: Get units_occupied
+
+        if rack_id and row_in_rack is not None:
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1:
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # UPDATED: Pass units_occupied to validation
             is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 db.session,
                 rack_id=rack_id,
-                row_in_rack=row_in_rack,
+                start_row_in_rack=row_in_rack,
+                units_occupied=units_occupied,
                 device_type='patch_panel'
             )
             if is_occupied:
-                raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+                raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
 
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_pp = PatchPanel(
@@ -270,6 +339,7 @@ class PatchPanelService:
             location_id=data.get('location_id'),
             row_in_rack=row_in_rack,
             rack_id=rack_id,
+            units_occupied=units_occupied, # NEW: Save units_occupied
             total_ports=total_ports,
             description=data.get('description')
         )
@@ -283,21 +353,48 @@ class PatchPanelService:
         """Updates an existing patch panel with validation."""
         rack_id = data.get('rack_id', pp.rack_id)
         row_in_rack = data.get('row_in_rack', pp.row_in_rack)
-        if rack_id and row_in_rack and (str(rack_id) != str(pp.rack_id) or str(row_in_rack) != str(pp.row_in_rack)):
-             is_occupied, conflicting_device = validate_rack_unit_occupancy(
-                db.session,
-                rack_id=rack_id,
-                row_in_rack=row_in_rack,
-                device_type='patch_panel',
-                exclude_device_id=pp.id
-            )
-             if is_occupied:
-                 raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+        units_occupied = data.get('units_occupied', pp.units_occupied) # NEW: Get units_occupied
+
+        if rack_id and row_in_rack is not None:
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+            
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1:
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # Check if rack/row/units changed
+            rack_changed = str(rack_id) != str(pp.rack_id)
+            row_changed = str(row_in_rack) != str(pp.row_in_rack)
+            units_changed = str(units_occupied) != str(pp.units_occupied)
+
+            if rack_changed or row_changed or units_changed:
+                # UPDATED: Pass units_occupied to validation
+                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                    db.session,
+                    rack_id=rack_id,
+                    start_row_in_rack=row_in_rack,
+                    units_occupied=units_occupied,
+                    device_type='patch_panel',
+                    exclude_device_id=pp.id
+                )
+                if is_occupied:
+                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
 
         pp.name = data.get('name', pp.name)
         pp.location_id = data.get('location_id', pp.location_id)
         pp.row_in_rack = row_in_rack
         pp.rack_id = rack_id
+        pp.units_occupied = units_occupied # NEW: Update units_occupied
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
         pp.description = data.get('description', pp.description)
         db.session.commit()
@@ -357,6 +454,7 @@ class PatchPanelService:
             'patch_panel_name': patch_panel.name,
             'patch_panel_location': patch_panel.location.name if patch_panel.location else None,
             'row_in_rack': patch_panel.row_in_rack,
+            'units_occupied': patch_panel.units_occupied, # NEW: Include in status
             'rack_name': patch_panel.rack.name if patch_panel.rack else None,
             'description': patch_panel.description,
             'total_ports': patch_panel.total_ports,
@@ -381,15 +479,35 @@ class SwitchService:
         """Creates a new switch with validation."""
         rack_id = data.get('rack_id')
         row_in_rack = data.get('row_in_rack')
-        if rack_id and row_in_rack:
+        units_occupied = data.get('units_occupied', 1) # NEW: Get units_occupied
+
+        if rack_id and row_in_rack is not None:
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+            
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1:
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # UPDATED: Pass units_occupied to validation
             is_occupied, conflicting_device = validate_rack_unit_occupancy(
                 db.session,
                 rack_id=rack_id,
-                row_in_rack=row_in_rack,
+                start_row_in_rack=row_in_rack,
+                units_occupied=units_occupied,
                 device_type='switch'
             )
             if is_occupied:
-                raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+                raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
 
         total_ports = int(data.get('total_ports', 1)) if str(data.get('total_ports', 1)).isdigit() else 1
         new_switch = Switch(
@@ -398,6 +516,7 @@ class SwitchService:
             location_id=data.get('location_id'),
             row_in_rack=row_in_rack,
             rack_id=rack_id,
+            units_occupied=units_occupied, # NEW: Save units_occupied
             total_ports=total_ports,
             source_port=data.get('source_port'),
             model=data.get('model'),
@@ -414,22 +533,49 @@ class SwitchService:
         """Updates an existing switch with validation."""
         rack_id = data.get('rack_id', _switch.rack_id)
         row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
-        if rack_id and row_in_rack and (str(rack_id) != str(_switch.rack_id) or str(row_in_rack) != str(_switch.row_in_rack)):
-             is_occupied, conflicting_device = validate_rack_unit_occupancy(
-                db.session,
-                rack_id=rack_id,
-                row_in_rack=row_in_rack,
-                device_type='switch',
-                exclude_device_id=_switch.id
-            )
-             if is_occupied:
-                 raise ValueError(f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}.")
+        units_occupied = data.get('units_occupied', _switch.units_occupied) # NEW: Get units_occupied
+
+        if rack_id and row_in_rack is not None:
+            # Validate units_occupied is a positive integer
+            try:
+                units_occupied = int(units_occupied)
+                if units_occupied < 1:
+                    raise ValueError('Units occupied must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Units occupied must be a valid integer.')
+            
+            # Validate row_in_rack is a non-negative integer
+            try:
+                row_in_rack = int(row_in_rack)
+                if row_in_rack < 1:
+                    raise ValueError('Row in rack must be at least 1.')
+            except (ValueError, TypeError):
+                raise ValueError('Row in rack must be a valid integer.')
+
+            # Check if rack/row/units changed
+            rack_changed = str(rack_id) != str(_switch.rack_id)
+            row_changed = str(row_in_rack) != str(_switch.row_in_rack)
+            units_changed = str(units_occupied) != str(_switch.units_occupied)
+
+            if rack_changed or row_changed or units_changed:
+                # UPDATED: Pass units_occupied to validation
+                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                    db.session,
+                    rack_id=rack_id,
+                    start_row_in_rack=row_in_rack,
+                    units_occupied=units_occupied,
+                    device_type='switch',
+                    exclude_device_id=_switch.id
+                )
+                if is_occupied:
+                    raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}.")
 
         _switch.name = data.get('name', _switch.name)
         _switch.ip_address = data.get('ip_address', _switch.ip_address)
         _switch.location_id = data.get('location_id', _switch.location_id)
         _switch.row_in_rack = row_in_rack
         _switch.rack_id = rack_id
+        _switch.units_occupied = units_occupied # NEW: Update units_occupied
         _switch.total_ports = int(data.get('total_ports', _switch.total_ports)) if str(data.get('total_ports', _switch.total_ports)).isdigit() else _switch.total_ports
         _switch.source_port = data.get('source_port', _switch.source_port)
         _switch.model = data.get('model', _switch.model)
@@ -493,6 +639,7 @@ class SwitchService:
             'switch_location': _switch.location.name if _switch.location else None,
             'ip_address': _switch.ip_address,
             'row_in_rack': _switch.row_in_rack,
+            'units_occupied': _switch.units_occupied, # NEW: Include in status
             'rack_name': _switch.rack.name if _switch.rack else None,
             'source_port': _switch.source_port,
             'model': _switch.model,

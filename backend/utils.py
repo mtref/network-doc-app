@@ -2,7 +2,7 @@
 # This file contains helper functions used across various modules in the backend.
 
 import os
-from werkzeug.utils import secure_filename
+import uuid
 from sqlalchemy.orm import joinedload
 from sqlalchemy import cast, Integer
 
@@ -78,57 +78,66 @@ def validate_port_occupancy(db_session, target_id, port_number, entity_type, exc
             return True, conflicting_connection.pc.name if conflicting_connection.pc else "Unknown PC"
     return False, None
 
-def validate_rack_unit_occupancy(db_session, rack_id, row_in_rack, device_type, exclude_device_id=None):
+def validate_rack_unit_occupancy(db_session, rack_id, start_row_in_rack, units_occupied, device_type, exclude_device_id=None):
     """
-    Checks if a specific row in a rack is already occupied by another device.
+    Checks if a range of units in a rack is already occupied by another device.
     Returns (True, conflicting_device_name) if occupied, (False, None) if available.
     :param db_session: The SQLAlchemy session object.
     :param rack_id: The ID of the Rack.
-    :param row_in_rack: The row number/identifier in the rack.
+    :param start_row_in_rack: The starting row number/identifier in the rack.
+    :param units_occupied: The number of units the device occupies.
     :param device_type: 'pc', 'patch_panel', or 'switch'.
     :param exclude_device_id: Optional. If provided, a device with this ID will be ignored
                               in the check (useful for updates).
     :return: A tuple (is_occupied, conflicting_device_name)
     """
-    if not rack_id or not row_in_rack:
-        return False, None # No rack or row specified, so no conflict check needed
+    if not rack_id or start_row_in_rack is None or units_occupied is None:
+        return False, None # No rack, row, or units specified, so no conflict check needed
+
+    occupied_range = set(range(start_row_in_rack, start_row_in_rack + units_occupied))
 
     # Check Switches
-    switches_in_row = db_session.query(Switch).filter(
+    all_switches_in_rack = db_session.query(Switch).filter(
         Switch.rack_id == rack_id,
-        Switch.row_in_rack == row_in_rack
+        Switch.row_in_rack.isnot(None),
+        Switch.units_occupied.isnot(None)
     )
     if device_type == 'switch' and exclude_device_id:
-        switches_in_row = switches_in_row.filter(Switch.id != exclude_device_id)
+        all_switches_in_rack = all_switches_in_rack.filter(Switch.id != exclude_device_id)
     
-    conflicting_switch = switches_in_row.first()
-    if conflicting_switch:
-        return True, f"Switch '{conflicting_switch.name}'"
+    for s in all_switches_in_rack.all():
+        s_occupied_range = set(range(s.row_in_rack, s.row_in_rack + s.units_occupied))
+        if not occupied_range.isdisjoint(s_occupied_range):
+            return True, f"Switch '{s.name}' (occupies units {s.row_in_rack}-{s.row_in_rack + s.units_occupied - 1})"
 
     # Check Patch Panels
-    patch_panels_in_row = db_session.query(PatchPanel).filter(
+    all_patch_panels_in_rack = db_session.query(PatchPanel).filter(
         PatchPanel.rack_id == rack_id,
-        PatchPanel.row_in_rack == row_in_rack
+        PatchPanel.row_in_rack.isnot(None),
+        PatchPanel.units_occupied.isnot(None)
     )
     if device_type == 'patch_panel' and exclude_device_id:
-        patch_panels_in_row = patch_panels_in_row.filter(PatchPanel.id != exclude_device_id)
+        all_patch_panels_in_rack = all_patch_panels_in_rack.filter(PatchPanel.id != exclude_device_id)
     
-    conflicting_pp = patch_panels_in_row.first()
-    if conflicting_pp:
-        return True, f"Patch Panel '{conflicting_pp.name}'"
+    for pp in all_patch_panels_in_rack.all():
+        pp_occupied_range = set(range(pp.row_in_rack, pp.row_in_rack + pp.units_occupied))
+        if not occupied_range.isdisjoint(pp_occupied_range):
+            return True, f"Patch Panel '{pp.name}' (occupies units {pp.row_in_rack}-{pp.row_in_rack + pp.units_occupied - 1})"
 
     # Check PCs (of type 'Server')
-    pcs_in_row = db_session.query(PC).filter(
+    all_pcs_in_rack = db_session.query(PC).filter(
         PC.rack_id == rack_id,
-        PC.row_in_rack == row_in_rack,
-        PC.type == 'Server' # Only servers occupy rack space
+        PC.type == 'Server', # Only servers occupy rack space
+        PC.row_in_rack.isnot(None),
+        PC.units_occupied.isnot(None)
     )
     if device_type == 'pc' and exclude_device_id:
-        pcs_in_row = pcs_in_row.filter(PC.id != exclude_device_id)
+        all_pcs_in_rack = all_pcs_in_rack.filter(PC.id != exclude_device_id)
     
-    conflicting_pc = pcs_in_row.first()
-    if conflicting_pc:
-        return True, f"PC '{conflicting_pc.name}' (Server)"
+    for pc in all_pcs_in_rack.all():
+        pc_occupied_range = set(range(pc.row_in_rack, pc.row_in_rack + pc.units_occupied))
+        if not occupied_range.isdisjoint(pc_occupied_range):
+            return True, f"PC '{pc.name}' (Server, occupies units {pc.row_in_rack}-{pc.row_in_rack + pc.units_occupied - 1})"
 
     return False, None
 
@@ -145,28 +154,28 @@ def check_rack_unit_decrease_conflict(db_session, rack_id, new_total_units):
     conflicting_switches = db_session.query(Switch).filter(
         Switch.rack_id == rack_id,
         Switch.row_in_rack.isnot(None),
-        cast(Switch.row_in_rack, Integer) > new_total_units
+        (Switch.row_in_rack + Switch.units_occupied - 1) > new_total_units # Check if device ends beyond new total
     ).first()
     if conflicting_switches:
-        return True, f"Cannot decrease total units to {new_total_units}U. Switch '{conflicting_switches.name}' is assigned to row {conflicting_switches.row_in_rack}."
+        return True, f"Cannot decrease total units to {new_total_units}U. Switch '{conflicting_switches.name}' occupies units {conflicting_switches.row_in_rack}-{conflicting_switches.row_in_rack + conflicting_switches.units_occupied - 1}."
 
     # Check Patch Panels in this rack
     conflicting_pps = db_session.query(PatchPanel).filter(
         PatchPanel.rack_id == rack_id,
         PatchPanel.row_in_rack.isnot(None),
-        cast(PatchPanel.row_in_rack, Integer) > new_total_units
+        (PatchPanel.row_in_rack + PatchPanel.units_occupied - 1) > new_total_units
     ).first()
     if conflicting_pps:
-        return True, f"Cannot decrease total units to {new_total_units}U. Patch Panel '{conflicting_pps.name}' is assigned to row {conflicting_pps.row_in_rack}."
+        return True, f"Cannot decrease total units to {new_total_units}U. Patch Panel '{conflicting_pps.name}' occupies units {conflicting_pps.row_in_rack}-{conflicting_pps.row_in_rack + conflicting_pps.units_occupied - 1}."
 
     # Check Server PCs in this rack
     conflicting_pcs = db_session.query(PC).filter(
         PC.rack_id == rack_id,
         PC.type == 'Server',
         PC.row_in_rack.isnot(None),
-        cast(PC.row_in_rack, Integer) > new_total_units
+        (PC.row_in_rack + PC.units_occupied - 1) > new_total_units
     ).first()
     if conflicting_pcs:
-        return True, f"Cannot decrease total units to {new_total_units}U. Server PC '{conflicting_pcs.name}' is assigned to row {conflicting_pcs.row_in_rack}."
+        return True, f"Cannot decrease total units to {new_total_units}U. Server PC '{conflicting_pcs.name}' occupies units {conflicting_pcs.row_in_rack}-{conflicting_pcs.row_in_rack + conflicting_pcs.units_occupied - 1}."
     
     return False, None

@@ -2,6 +2,7 @@
 // This component displays a modal showing the status (connected/available)
 // of all ports for a given Patch Panel or Switch.
 // It now combines and orders connected and available ports in a single list.
+// UPDATED: Displays units_occupied for rack-mounted devices.
 
 import React, { useState, useEffect } from "react";
 import ReactDOMServer from "react-dom/server";
@@ -36,6 +37,7 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
   const doorNumber = data.door_number || "N/A";
   const row = data.row_in_rack || "N/A";
   const rack = data.rack_name || "N/A";
+  const unitsOccupied = data.units_occupied || "N/A"; // NEW: Get units_occupied
   const sourcePort = isSwitch ? data.source_port || "N/A" : "N/A";
   const model = isSwitch ? data.model || "N/A" : "N/A";
   const usage = isSwitch ? data.usage || "N/A" : "N/A";
@@ -94,9 +96,13 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
                 <strong>Location:</strong> {locationName}
                 {doorNumber !== "N/A" && ` (Door: ${doorNumber})`}
               </p>
-              <p>
-                <strong>Rack:</strong> {rack} (Row: {row})
-              </p>
+              {/* Display Rack and Row with Units Occupied */}
+              {rack !== "N/A" && (
+                <p>
+                  <strong>Rack:</strong> {rack} (Starting Row: {row}, Units:{" "}
+                  {unitsOccupied}U)
+                </p>
+              )}
               {isSwitch && (
                 <>
                   <p>

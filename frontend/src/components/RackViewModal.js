@@ -1,7 +1,8 @@
 // frontend/src/components/RackViewModal.js
 // This modal displays a larger, more detailed view of a single rack,
 // including its visual unit representation and key information.
-// UPDATED: Imports RackVisualizer from its new dedicated file and passes pcs data.
+// UPDATED: Imports RackVisualizer from its new dedicated file and passes pcs data,
+// now handling multi-unit devices.
 
 import React from "react";
 import { XCircle, Columns, MapPin, Info } from "lucide-react";

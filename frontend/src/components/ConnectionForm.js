@@ -3,7 +3,7 @@
 // and to create or edit network connections between them.
 // Now, the PC selection/creation is Step 1, and connection details are Step 2.
 // "Add New" forms for Patch Panel and Switch are accessible via dropdowns in Step 2.
-// UPDATED: Added rack and row in rack fields for 'Server' type PCs.
+// UPDATED: Added rack, row in rack, and units_occupied fields for 'Server' type PCs, Patch Panels, and Switches.
 
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import {
@@ -97,26 +97,29 @@ const ConnectionForm = memo(function ConnectionForm({
   const [newPcMultiPort, setNewPcMultiPort] = useState(false);
   const [newPcType, setNewPcType] = useState("Workstation");
   const [newPcUsage, setNewPcUsage] = useState("");
-  const [newPcRowInRack, setNewPcRowInRack] = useState(""); // NEW
-  const [newPcRackId, setNewPcRackId] = useState(""); // NEW
+  const [newPcRowInRack, setNewPcRowInRack] = useState("");
+  const [newPcRackId, setNewPcRackId] = useState("");
+  const [newPcUnitsOccupied, setNewPcUnitsOccupied] = useState(1); // NEW: units_occupied for PC
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
   const [newPpRowInRack, setNewPpRowInRack] = useState("");
-  const [newPpRackId, setNewPpRackId] = useState(""); // State for Rack ID
+  const [newPpRackId, setNewPpRackId] = useState("");
   const [newPpTotalPorts, setNewPpTotalPorts] = useState(1);
   const [newPpDesc, setNewPpDesc] = useState("");
+  const [newPpUnitsOccupied, setNewPpUnitsOccupied] = useState(1); // NEW: units_occupied for Patch Panel
 
   const [newSwitchName, setNewSwitchName] = useState("");
   const [newSwitchIp, setNewSwitchIp] = useState("");
   const [newSwitchLocationId, setNewSwitchLocationId] = useState("");
   const [newSwitchRowInRack, setNewSwitchRowInRack] = useState("");
-  const [newSwitchRackId, setNewSwitchRackId] = useState(""); // State for Rack ID
+  const [newSwitchRackId, setNewSwitchRackId] = useState("");
   const [newSwitchTotalPorts, setNewSwitchTotalPorts] = useState(1);
   const [newSwitchSourcePort, setNewSwitchSourcePort] = useState("");
   const [newSwitchModel, setNewSwitchModel] = useState("");
   const [newSwitchDesc, setNewSwitchDesc] = useState("");
   const [newSwitchUsage, setNewSwitchUsage] = useState("");
+  const [newSwitchUnitsOccupied, setNewSwitchUnitsOccupied] = useState(1); // NEW: units_occupied for Switch
 
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
@@ -167,32 +170,6 @@ const ConnectionForm = memo(function ConnectionForm({
   useEffect(() => {
     fetchAvailablePcs();
   }, [fetchAvailablePcs]); // Dependency: the memoized callback itself
-
-  // Filter switches based on selectedLocationIdForSwitch
-  useEffect(() => {
-    if (selectedLocationIdForSwitch === "") {
-      setFilteredSwitchesByLocation(switches);
-    } else {
-      const filtered = switches.filter(
-        (s) => String(s.location_id) === selectedLocationIdForSwitch
-      );
-      setFilteredSwitchesByLocation(filtered);
-    }
-    // If a switch was selected but no longer matches the filter, clear it
-    if (
-      switchId &&
-      selectedLocationIdForSwitch !== "" &&
-      !switches.some(
-        (s) =>
-          String(s.id) === switchId &&
-          String(s.location_id) === selectedLocationIdForSwitch
-      )
-    ) {
-      setSwitchId("");
-    }
-  }, [selectedLocationIdForSwitch, switches, switchId]); // Added switchId to dependencies
-
-  const lastCreatedPcIdRef = useRef(null);
 
   useEffect(() => {
     if (editingConnection) {
@@ -266,8 +243,9 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewPcMultiPort(false);
       setNewPcType("Workstation");
       setNewPcUsage("");
-      setNewPcRowInRack(""); // NEW
-      setNewPcRackId(""); // NEW
+      setNewPcRowInRack("");
+      setNewPcRackId("");
+      setNewPcUnitsOccupied(1); // NEW: Reset units_occupied
 
       setNewPpName("");
       setNewPpLocationId("");
@@ -275,6 +253,7 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewPpRackId("");
       setNewPpTotalPorts(1);
       setNewPpDesc("");
+      setNewPpUnitsOccupied(1); // NEW: Reset units_occupied
 
       setNewSwitchName("");
       setNewSwitchIp("");
@@ -286,12 +265,14 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewSwitchModel("");
       setNewSwitchDesc("");
       setNewSwitchUsage("");
+      setNewSwitchUnitsOccupied(1); // NEW: Reset units_occupied
 
       fetchAvailablePcs(); // Re-fetch available PCs when not editing (now this uses the current state of pcs/connections)
     }
   }, [editingConnection, pcs, connections, switches, fetchAvailablePcs]); // Added pcs and connections to dependencies
 
   // Effect to automatically select a newly created PC and move to step 2
+  const lastCreatedPcIdRef = useRef(null);
   useEffect(() => {
     if (
       lastCreatedPcIdRef.current !== null &&
@@ -460,21 +441,38 @@ const ConnectionForm = memo(function ConnectionForm({
       return;
     }
 
-    // NEW: Validate rack fields if type is 'Server' for new PC creation
+    // Validate rack fields if type is 'Server' for new PC creation
     if (newPcType === "Server") {
-      if (!newPcRackId || !newPcRowInRack.trim()) {
+      if (!newPcRackId || newPcRowInRack === "" || newPcUnitsOccupied === "") {
         showMessage(
-          "For Server type PCs, Rack and Row in Rack are required.",
-          3000
+          "For Server type PCs, Rack, Starting Row in Rack, and Units Occupied are required.",
+          5000
         );
         return;
       }
       const selectedRack = racks.find((r) => String(r.id) === newPcRackId);
       if (selectedRack) {
-        const rowNum = parseInt(newPcRowInRack);
-        if (isNaN(rowNum) || rowNum < 1 || rowNum > selectedRack.total_units) {
+        const startRow = parseInt(newPcRowInRack);
+        const units = parseInt(newPcUnitsOccupied);
+
+        if (
+          isNaN(startRow) ||
+          startRow < 1 ||
+          startRow > selectedRack.total_units
+        ) {
           showMessage(
-            `Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`,
+            `Starting Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`,
+            5000
+          );
+          return;
+        }
+        if (isNaN(units) || units < 1) {
+          showMessage("Units Occupied must be a positive number.", 5000);
+          return;
+        }
+        if (startRow + units - 1 > selectedRack.total_units) {
+          showMessage(
+            `Device extends beyond total units of the rack (${selectedRack.total_units}U).`,
             5000
           );
           return;
@@ -495,8 +493,10 @@ const ConnectionForm = memo(function ConnectionForm({
         multi_port: newPcMultiPort,
         type: newPcType,
         usage: newPcUsage,
-        row_in_rack: newPcType === "Server" ? newPcRowInRack : null, // NEW: Conditionally set
-        rack_id: newPcType === "Server" ? parseInt(newPcRackId) : null, // NEW: Conditionally set
+        row_in_rack: newPcType === "Server" ? parseInt(newPcRowInRack) : null, // Parse to int
+        rack_id: newPcType === "Server" ? parseInt(newPcRackId) : null,
+        units_occupied:
+          newPcType === "Server" ? parseInt(newPcUnitsOccupied) : 1, // Parse to int
       });
 
       if (result.success && result.entity) {
@@ -514,8 +514,9 @@ const ConnectionForm = memo(function ConnectionForm({
         setNewPcMultiPort(false);
         setNewPcType("Workstation");
         setNewPcUsage("");
-        setNewPcRowInRack(""); // NEW
-        setNewPcRackId(""); // NEW
+        setNewPcRowInRack("");
+        setNewPcRackId("");
+        setNewPcUnitsOccupied(1);
         setIsNewPcExpanded(false);
       }
     } catch (error) {
@@ -529,12 +530,52 @@ const ConnectionForm = memo(function ConnectionForm({
       showMessage("Patch Panel Name and Location are required.", 3000);
       return;
     }
+
+    if (newPpRackId && (newPpRowInRack === "" || newPpUnitsOccupied === "")) {
+      showMessage(
+        "For rack-mounted Patch Panels, Starting Row in Rack and Units Occupied are required.",
+        5000
+      );
+      return;
+    }
+    if (newPpRackId) {
+      const selectedRack = racks.find((r) => String(r.id) === newPpRackId);
+      if (selectedRack) {
+        const startRow = parseInt(newPpRowInRack);
+        const units = parseInt(newPpUnitsOccupied);
+
+        if (
+          isNaN(startRow) ||
+          startRow < 1 ||
+          startRow > selectedRack.total_units
+        ) {
+          showMessage(
+            `Starting Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`,
+            5000
+          );
+          return;
+        }
+        if (isNaN(units) || units < 1) {
+          showMessage("Units Occupied must be a positive number.", 5000);
+          return;
+        }
+        if (startRow + units - 1 > selectedRack.total_units) {
+          showMessage(
+            `Device extends beyond total units of the rack (${selectedRack.total_units}U).`,
+            5000
+          );
+          return;
+        }
+      }
+    }
+
     try {
       await onAddEntity("patch_panels", {
         name: newPpName,
         location_id: parseInt(newPpLocationId),
-        row_in_rack: newPpRowInRack,
+        row_in_rack: newPpRackId ? parseInt(newPpRowInRack) : null,
         rack_id: newPpRackId ? parseInt(newPpRackId) : null,
+        units_occupied: newPpRackId ? parseInt(newPpUnitsOccupied) : 1,
         total_ports: parseInt(newPpTotalPorts),
         description: newPpDesc,
       });
@@ -542,6 +583,7 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewPpLocationId("");
       setNewPpRowInRack("");
       setNewPpRackId("");
+      setNewPpUnitsOccupied(1);
       setNewPpTotalPorts(1);
       setNewPpDesc("");
       setIsNewPpExpanded(false);
@@ -563,13 +605,56 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       return;
     }
+
+    if (
+      newSwitchRackId &&
+      (newSwitchRowInRack === "" || newSwitchUnitsOccupied === "")
+    ) {
+      showMessage(
+        "For rack-mounted Switches, Starting Row in Rack and Units Occupied are required.",
+        5000
+      );
+      return;
+    }
+    if (newSwitchRackId) {
+      const selectedRack = racks.find((r) => String(r.id) === newSwitchRackId);
+      if (selectedRack) {
+        const startRow = parseInt(newSwitchRowInRack);
+        const units = parseInt(newSwitchUnitsOccupied);
+
+        if (
+          isNaN(startRow) ||
+          startRow < 1 ||
+          startRow > selectedRack.total_units
+        ) {
+          showMessage(
+            `Starting Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`,
+            5000
+          );
+          return;
+        }
+        if (isNaN(units) || units < 1) {
+          showMessage("Units Occupied must be a positive number.", 5000);
+          return;
+        }
+        if (startRow + units - 1 > selectedRack.total_units) {
+          showMessage(
+            `Device extends beyond total units of the rack (${selectedRack.total_units}U).`,
+            5000
+          );
+          return;
+        }
+      }
+    }
+
     try {
       await onAddEntity("switches", {
         name: newSwitchName,
         ip_address: newSwitchIp,
         location_id: parseInt(newSwitchLocationId),
-        row_in_rack: newSwitchRowInRack,
+        row_in_rack: newSwitchRackId ? parseInt(newSwitchRowInRack) : null,
         rack_id: newSwitchRackId ? parseInt(newSwitchRackId) : null,
+        units_occupied: newSwitchRackId ? parseInt(newSwitchUnitsOccupied) : 1,
         total_ports: parseInt(newSwitchTotalPorts),
         source_port: newSwitchSourcePort,
         model: newSwitchModel,
@@ -581,6 +666,7 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewSwitchLocationId("");
       setNewSwitchRowInRack("");
       setNewSwitchRackId("");
+      setNewSwitchUnitsOccupied(1);
       setNewSwitchTotalPorts(1);
       setNewSwitchSourcePort("");
       setNewSwitchModel("");
@@ -786,10 +872,11 @@ const ConnectionForm = memo(function ConnectionForm({
                   value={newPcType}
                   onChange={(e) => {
                     setNewPcType(e.target.value);
-                    // Clear rack/row if switching from Server to Workstation
+                    // Clear rack/row/units if switching from Server to Workstation
                     if (e.target.value === "Workstation") {
                       setNewPcRackId("");
                       setNewPcRowInRack("");
+                      setNewPcUnitsOccupied(1);
                     }
                   }}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -799,7 +886,7 @@ const ConnectionForm = memo(function ConnectionForm({
                   <option value="Server">Server</option>
                 </select>
 
-                {/* NEW: Conditional Rack and Row fields for Server type PCs */}
+                {/* Conditional Rack, Row, and Units Occupied fields for Server type PCs */}
                 {newPcType === "Server" && (
                   <>
                     <div className="flex items-center space-x-2">
@@ -808,8 +895,9 @@ const ConnectionForm = memo(function ConnectionForm({
                         value={newPcRackId}
                         onChange={(e) => setNewPcRackId(e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        required={newPcType === "Server"}
                       >
-                        <option value="">-- Select Rack (Optional) --</option>
+                        <option value="">-- Select Rack --</option>
                         {sortedRacks.map((rack) => (
                           <option key={rack.id} value={rack.id}>
                             {rack.name} ({rack.location_name}
@@ -828,11 +916,25 @@ const ConnectionForm = memo(function ConnectionForm({
                     <div className="flex items-center space-x-2">
                       <Server size={20} className="text-gray-500" />
                       <input
-                        type="text"
-                        placeholder="Row in Rack (e.g., 1U, 2U)"
+                        type="number" // Changed to number input
+                        placeholder="Starting Row in Rack (e.g., 1)"
                         value={newPcRowInRack}
                         onChange={(e) => setNewPcRowInRack(e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        min="1"
+                        required={newPcType === "Server"}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <HardDrive size={20} className="text-gray-500" />
+                      <input
+                        type="number" // Changed to number input
+                        placeholder="Units Occupied (e.g., 1, 2, 4)"
+                        value={newPcUnitsOccupied}
+                        onChange={(e) => setNewPcUnitsOccupied(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        min="1"
+                        required={newPcType === "Server"}
                       />
                     </div>
                   </>
@@ -1529,6 +1631,8 @@ const ConnectionForm = memo(function ConnectionForm({
                     onChange={(e) => {
                       setNewPpLocationId(e.target.value);
                       setNewPpRackId(""); // Reset rack when location changes
+                      setNewPpRowInRack(""); // Reset row
+                      setNewPpUnitsOccupied(1); // Reset units
                     }}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     required
@@ -1546,36 +1650,36 @@ const ConnectionForm = memo(function ConnectionForm({
                       Please add locations first.
                     </p>
                   )}
-                  <input
-                    type="text"
-                    placeholder="Row in Rack (Optional)"
-                    value={newPpRowInRack}
-                    onChange={(e) => setNewPpRowInRack(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  {/* Rack selection for new Patch Panel */}
-                  <select
-                    value={newPpRackId}
-                    onChange={(e) => setNewPpRackId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">-- Select Rack (Optional) --</option>
-                    {sortedRacks
-                      .filter(
-                        (rack) =>
-                          !newPpLocationId ||
-                          (rack.location_id !== undefined &&
-                            String(rack.location_id) === newPpLocationId)
-                      )
-                      .map((rack) => (
-                        <option key={rack.id} value={rack.id}>
-                          {rack.name} ({rack.location_name}
-                          {rack.location?.door_number &&
-                            ` (Door: ${rack.location.door_number})`}
-                          )
-                        </option>
-                      ))}
-                  </select>
+                  {/* Rack, Row, Units Occupied fields for Patch Panel */}
+                  <div className="flex items-center space-x-2">
+                    <Columns size={20} className="text-gray-500" />
+                    <select
+                      value={newPpRackId}
+                      onChange={(e) => {
+                        setNewPpRackId(e.target.value);
+                        setNewPpRowInRack(""); // Reset row when rack changes
+                        setNewPpUnitsOccupied(1); // Reset units
+                      }}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- Select Rack (Optional) --</option>
+                      {sortedRacks
+                        .filter(
+                          (rack) =>
+                            !newPpLocationId ||
+                            (rack.location_id !== undefined &&
+                              String(rack.location_id) === newPpLocationId)
+                        )
+                        .map((rack) => (
+                          <option key={rack.id} value={rack.id}>
+                            {rack.name} ({rack.location_name}
+                            {rack.location?.door_number &&
+                              ` (Door: ${rack.location.door_number})`}
+                            )
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                   {(racks.length === 0 ||
                     (newPpLocationId &&
                       sortedRacks.filter(
@@ -1584,6 +1688,36 @@ const ConnectionForm = memo(function ConnectionForm({
                     <p className="text-sm text-gray-500 mt-1">
                       No racks available for selected location.
                     </p>
+                  )}
+                  {newPpRackId && (
+                    <>
+                      <div className="flex items-center space-x-2">
+                        <Server size={20} className="text-gray-500" />
+                        <input
+                          type="number"
+                          placeholder="Starting Row in Rack (e.g., 1)"
+                          value={newPpRowInRack}
+                          onChange={(e) => setNewPpRowInRack(e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          min="1"
+                          required={!!newPpRackId}
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <HardDrive size={20} className="text-gray-500" />
+                        <input
+                          type="number"
+                          placeholder="Units Occupied (e.g., 1, 2)"
+                          value={newPpUnitsOccupied}
+                          onChange={(e) =>
+                            setNewPpUnitsOccupied(e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          min="1"
+                          required={!!newPpRackId}
+                        />
+                      </div>
+                    </>
                   )}
                   <input
                     type="number"
@@ -1655,6 +1789,8 @@ const ConnectionForm = memo(function ConnectionForm({
                     onChange={(e) => {
                       setNewSwitchLocationId(e.target.value);
                       setNewSwitchRackId(""); // Reset rack when location changes
+                      setNewSwitchRowInRack(""); // Reset row
+                      setNewSwitchUnitsOccupied(1); // Reset units
                     }}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     required
@@ -1672,36 +1808,36 @@ const ConnectionForm = memo(function ConnectionForm({
                       Please add locations first.
                     </p>
                   )}
-                  <input
-                    type="text"
-                    placeholder="Row in Rack (Optional)"
-                    value={newSwitchRowInRack}
-                    onChange={(e) => setNewSwitchRowInRack(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  {/* Rack selection for new Switch */}
-                  <select
-                    value={newSwitchRackId}
-                    onChange={(e) => setNewSwitchRackId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">-- Select Rack (Optional) --</option>
-                    {sortedRacks
-                      .filter(
-                        (rack) =>
-                          !newSwitchLocationId ||
-                          (rack.location_id !== undefined &&
-                            String(rack.location_id) === newSwitchLocationId)
-                      )
-                      .map((rack) => (
-                        <option key={rack.id} value={rack.id}>
-                          {rack.name} ({rack.location_name}
-                          {rack.location?.door_number &&
-                            ` (Door: ${rack.location.door_number})`}
-                          )
-                        </option>
-                      ))}
-                  </select>
+                  {/* Rack, Row, Units Occupied fields for Switch */}
+                  <div className="flex items-center space-x-2">
+                    <Columns size={20} className="text-gray-500" />
+                    <select
+                      value={newSwitchRackId}
+                      onChange={(e) => {
+                        setNewSwitchRackId(e.target.value);
+                        setNewSwitchRowInRack(""); // Reset row when rack changes
+                        setNewSwitchUnitsOccupied(1); // Reset units
+                      }}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- Select Rack (Optional) --</option>
+                      {sortedRacks
+                        .filter(
+                          (rack) =>
+                            !newSwitchLocationId ||
+                            (rack.location_id !== undefined &&
+                              String(rack.location_id) === newSwitchLocationId)
+                        )
+                        .map((rack) => (
+                          <option key={rack.id} value={rack.id}>
+                            {rack.name} ({rack.location_name}
+                            {rack.location?.door_number &&
+                              ` (Door: ${rack.location.door_number})`}
+                            )
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                   {(racks.length === 0 ||
                     (newSwitchLocationId &&
                       sortedRacks.filter(
@@ -1711,6 +1847,38 @@ const ConnectionForm = memo(function ConnectionForm({
                     <p className="text-sm text-gray-500 mt-1">
                       No racks available for selected location.
                     </p>
+                  )}
+                  {newSwitchRackId && (
+                    <>
+                      <div className="flex items-center space-x-2">
+                        <Server size={20} className="text-gray-500" />
+                        <input
+                          type="number"
+                          placeholder="Starting Row in Rack (e.g., 1)"
+                          value={newSwitchRowInRack}
+                          onChange={(e) =>
+                            setNewSwitchRowInRack(e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          min="1"
+                          required={!!newSwitchRackId}
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <HardDrive size={20} className="text-gray-500" />
+                        <input
+                          type="number"
+                          placeholder="Units Occupied (e.g., 1, 2)"
+                          value={newSwitchUnitsOccupied}
+                          onChange={(e) =>
+                            setNewSwitchUnitsOccupied(e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          min="1"
+                          required={!!newSwitchRackId}
+                        />
+                      </div>
+                    </>
                   )}
                   <input
                     type="number"
