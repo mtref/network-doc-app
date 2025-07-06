@@ -1,7 +1,8 @@
 // frontend/src/components/PortStatusModal.js
 // This component displays a modal showing the status (connected/available)
 // of all ports for a given Patch Panel or Switch.
-// It now combines and orders connected and available ports in a single list.
+// It now includes separate collapse/expand functionality for the detailed port list.
+// The print feature has been removed.
 
 import React, { useState, useEffect } from "react";
 import ReactDOMServer from "react-dom/server";
@@ -17,8 +18,7 @@ import {
 } from "lucide-react";
 
 function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
-  // Initialize to true to make it expanded by default
-  const [isDetailedListExpanded, setIsDetailedListExpanded] = useState(true);
+  const [isDetailedListExpanded, setIsDetailedListExpanded] = useState(false);
 
   if (!isOpen || !data) {
     return null;
@@ -43,12 +43,6 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
   // Calculate connected and available ports for summary
   const connectedPortsCount = ports.filter((p) => p.is_connected).length;
   const availablePortsCount = ports.filter((p) => !p.is_connected).length;
-
-  // Combine all ports and sort them by port number
-  const allSortedPorts = [...ports].sort((a, b) => {
-    // Ensure comparison is numerical
-    return parseInt(a.port_number) - parseInt(b.port_number);
-  });
 
   return (
     // Increased z-index to z-[60] to ensure it stacks above z-50 modals
@@ -116,13 +110,13 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
             </div>
           </div>
 
-          {/* Combined and Detailed Port List */}
+          {/* Detailed Port List */}
           <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
             <div
               className="flex justify-between items-center cursor-pointer mb-3"
               onClick={() => setIsDetailedListExpanded(!isDetailedListExpanded)}
             >
-              <h4 className="font-bold text-gray-700">All Ports:</h4>
+              <h4 className="font-bold text-gray-700">Detailed Port List:</h4>
               {isDetailedListExpanded ? (
                 <ChevronUp size={20} className="text-gray-600" />
               ) : (
@@ -131,42 +125,78 @@ function PortStatusModal({ isOpen, onClose, data, entityType, cssContent }) {
             </div>
             <div
               className={`collapsible-content ${
-                allSortedPorts.length > 0 && isDetailedListExpanded
-                  ? "expanded"
-                  : ""
+                isDetailedListExpanded ? "expanded" : ""
               }`}
             >
-              {allSortedPorts.length > 0 ? (
-                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
-                  {" "}
-                  {/* Twelve-column grid layout */}
-                  {allSortedPorts.map((port) => (
-                    <div
-                      key={`port-${port.port_number}`}
-                      className="flex flex-col items-center p-2 bg-white rounded-md shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors duration-150"
-                    >
-                      {port.is_connected ? (
-                        port.is_up ? (
-                          <CheckCircle
-                            size={20}
-                            className="text-green-500 mb-1"
+              <div>
+                <h4 className="font-bold text-gray-700 mb-2">
+                  Connected Ports:
+                </h4>
+                {ports.filter((p) => p.is_connected).length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {ports
+                      .filter((p) => p.is_connected)
+                      .map((port) => (
+                        <li
+                          key={`view-conn-${port.port_number}`}
+                          className="flex items-center"
+                        >
+                          {port.is_up ? (
+                            <CheckCircle
+                              size={16}
+                              className="text-green-500 mr-2 flex-shrink-0"
+                            />
+                          ) : (
+                            <WifiOff
+                              size={16}
+                              className="text-red-500 mr-2 flex-shrink-0"
+                            />
+                          )}
+                          Port {port.port_number}: Connected to{" "}
+                          <span className="font-medium">
+                            {port.connected_by_pc}
+                          </span>{" "}
+                          (Status:{" "}
+                          <span
+                            className={`font-semibold ${
+                              port.is_up ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {port.is_up ? "Up" : "Down"}
+                          </span>
+                          )
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p>No connected ports.</p>
+                )}
+              </div>
+              <div className="mt-4">
+                <h4 className="font-bold text-gray-700 mb-2">
+                  Available Ports:
+                </h4>
+                {ports.filter((p) => !p.is_connected).length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {ports
+                      .filter((p) => !p.is_connected)
+                      .map((port) => (
+                        <li
+                          key={`view-avail-${port.port_number}`}
+                          className="flex items-center"
+                        >
+                          <CircleDot
+                            size={16}
+                            className="text-gray-500 mr-2 flex-shrink-0"
                           />
-                        ) : (
-                          <WifiOff size={20} className="text-red-500 mb-1" />
-                        )
-                      ) : (
-                        <CircleDot size={20} className="text-gray-500 mb-1" />
-                      )}
-                      <span className="font-medium text-gray-800 text-sm">
-                        {port.port_number}
-                      </span>{" "}
-                      {/* Only port number */}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-600">No ports found for this device.</p>
-              )}
+                          Port {port.port_number}
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p>No available ports.</p>
+                )}
+              </div>
             </div>
           </div>
           {/* Legend */}

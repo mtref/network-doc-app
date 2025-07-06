@@ -560,8 +560,8 @@ function App() {
           switches={switches}
           patchPanels={patchPanels}
           pcs={pcs}
-          onShowPortStatus={handleShowPortStatus} // Pass to RackViewModal
-          onViewPcDetails={handleViewPcDetails} // Pass to RackViewModal
+          onShowPortStatus={handleShowPortStatus}
+          onViewPcDetails={handleViewPcDetails}
         />
       )}
 

@@ -5,7 +5,7 @@
 
 import React from "react";
 import { XCircle, Columns, MapPin, Info } from "lucide-react";
-import { RackVisualizer } from "./RackVisualizer"; // NEW: Import RackVisualizer from its own file
+import { RackVisualizer } from "./RackVisualizer";
 
 function RackViewModal({
   isOpen,
@@ -77,8 +77,8 @@ function RackViewModal({
                 switches={Array.isArray(switches) ? switches : []}
                 patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
                 pcs={Array.isArray(pcs) ? pcs : []}
-                onShowPortStatus={onShowPortStatus} // Now correctly passed
-                onViewPcDetails={onViewPcDetails} // Now correctly passed
+                onShowPortStatus={onShowPortStatus} // Now correctly passed from RackViewModal to RackVisualizer
+                onViewPcDetails={onViewPcDetails} // Now correctly passed from RackViewModal to RackVisualizer
                 isModalView={true} // Explicitly set to true for modal view
               />
             </div>

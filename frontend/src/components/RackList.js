@@ -34,10 +34,6 @@ function RackList({
   onShowPortStatus,
   onViewRackDetails,
 }) {
-  // --- NEW LOG HERE ---
-  console.log("RackList.js: Received PCs prop:", pcs);
-  // --- END NEW LOG ---
-
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
   const [editingRack, setEditingRack] = useState(null); // State for editing a Rack
