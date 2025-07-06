@@ -1,8 +1,8 @@
 """Initial schema setup with all models and fields
 
-Revision ID: 40d8b3481e5e
+Revision ID: 77757f0d01b1
 Revises: 
-Create Date: 2025-07-06 11:34:26.852282
+Create Date: 2025-07-06 15:28:35.626731
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '40d8b3481e5e'
+revision = '77757f0d01b1'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -48,7 +48,7 @@ def upgrade():
     sa.Column('orientation', sa.String(length=50), nullable=False),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name')
+    sa.UniqueConstraint('name', 'location_id', name='_name_location_uc')
     )
     op.create_table('patch_panels',
     sa.Column('id', sa.Integer(), nullable=False),

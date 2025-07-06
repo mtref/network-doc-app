@@ -10,6 +10,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS # For handling Cross-Origin Resource Sharing
 from sqlalchemy.orm import joinedload # To eager load related data
 from werkzeug.utils import secure_filename # For secure filenames
+from sqlalchemy import UniqueConstraint # NEW: Import UniqueConstraint
 
 import os
 import uuid # For unique filenames
@@ -83,12 +84,15 @@ print("--- app.py: Location model defined ---")
 class Rack(db.Model):
     __tablename__ = 'racks'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False) # MODIFIED: Removed unique=True
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'), nullable=False)
     location = db.relationship('Location', backref='racks_in_location', lazy=True)
     description = db.Column(db.String(255), nullable=True)
     total_units = db.Column(db.Integer, nullable=False, default=42)
     orientation = db.Column(db.String(50), nullable=False, default='bottom-up')
+
+    # NEW: Composite Unique Constraint
+    __table_args__ = (UniqueConstraint('name', 'location_id', name='_name_location_uc'),)
 
     def to_dict(self):
         return {
@@ -483,6 +487,9 @@ def handle_racks():
             return jsonify(new_rack.to_dict()), 201
         except Exception as e:
             db.session.rollback()
+            # Check for UniqueConstraint violation (name, location_id)
+            if "UNIQUE constraint failed: racks.name, racks.location_id" in str(e):
+                return jsonify({'error': f"A rack with the name '{data['name']}' already exists in this location."}), 409
             return jsonify({'error': str(e)}), 500
     else:
         racks = Rack.query.options(joinedload(Rack.location)).all()
@@ -498,8 +505,8 @@ def handle_rack_by_id(rack_id):
         return jsonify(rack.to_dict())
     elif request.method == 'PUT':
         data = request.json
-        if not data or not data.get('name') or not data.get('location_id'):
-            return jsonify({'error': 'Rack name and location_id are required'}), 400
+        if not data:
+            return jsonify({'error': 'No data provided for update'}), 400
         
         # NEW VALIDATION LOGIC FOR DECREASING TOTAL_UNITS
         if 'total_units' in data:
@@ -553,6 +560,9 @@ def handle_rack_by_id(rack_id):
             return jsonify(rack.to_dict())
         except Exception as e:
             db.session.rollback()
+            # Check for UniqueConstraint violation (name, location_id)
+            if "UNIQUE constraint failed: racks.name, racks.location_id" in str(e):
+                return jsonify({'error': f"A rack with the name '{data['name']}' already exists in this location."}), 409
             return jsonify({'error': str(e)}), 500
     else:
         try:
@@ -1413,9 +1423,9 @@ def import_data(entity_type):
                     error_count += 1
                     continue
 
-                existing_rack = Rack.query.filter_by(name=name).first()
+                existing_rack = Rack.query.filter_by(name=name, location_id=location.id).first() # MODIFIED: Check composite uniqueness
                 if existing_rack:
-                    errors.append(f"Row {i+2}: Rack '{name}' already exists. Skipped.")
+                    errors.append(f"Row {i+2}: Rack '{name}' already exists in this location. Skipped.") # MODIFIED message
                     error_count += 1
                     continue
 
