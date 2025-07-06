@@ -1,6 +1,7 @@
 // frontend/src/components/RackList.js
 // This component displays a searchable list of Racks in a card format,
 // including filter options by Location, and now a visual representation of each rack.
+// Now includes pagination.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import SearchBar from "./SearchBar";
@@ -32,8 +33,8 @@ function RackList({
   pcs,
   onShowPortStatus,
   onViewRackDetails,
-  showMessage, // Destructure showMessage prop
-  onViewPcDetails, // NEW: Destructure onViewPcDetails prop
+  showMessage,
+  onViewPcDetails,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
@@ -47,8 +48,11 @@ function RackList({
   const [isAddRackFormExpanded, setIsAddRackFormExpanded] = useState(false);
 
   const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
-
   const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(9); // Default to 9 items per page
 
   useEffect(() => {
     const uniqueLocations = [
@@ -93,6 +97,7 @@ function RackList({
       return matchesSearch && matchesLocation;
     });
     setFilteredRacks(filtered);
+    setCurrentPage(1); // Reset to first page on filter/search change
   }, [racks, searchTerm, selectedLocationFilter, locations]);
 
   const handleEdit = useCallback((rack) => {
@@ -159,6 +164,14 @@ function RackList({
     a.name.localeCompare(b.name)
   );
   const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredRacks.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredRacks.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
     <div className="space-y-6">
@@ -339,65 +352,120 @@ function RackList({
 
       {/* Rack List Display */}
       {filteredRacks.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredRacks.map((rack) => (
-            <div
-              key={rack.id}
-              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200 p-5"
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {currentItems.map(
+              (
+                rack // Use currentItems for pagination
+              ) => (
+                <div
+                  key={rack.id}
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200 p-5"
+                >
+                  <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
+                    <Columns size={20} className="text-blue-500 mr-2" />{" "}
+                    {rack.name}
+                  </h4>
+                  <p className="text-sm text-gray-700 mb-1 flex items-center">
+                    <MapPin size={16} className="text-gray-500 mr-2" />{" "}
+                    Location: {rack.location_name || "N/A"}
+                    {rack.location?.door_number &&
+                      ` (Door: ${rack.location.door_number})`}
+                  </p>
+                  <p className="text-sm text-gray-700 mb-1 flex items-center">
+                    <Info
+                      size={16}
+                      className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                    />{" "}
+                    Description: {rack.description || "No description"}
+                  </p>
+
+                  {/* Rack Visualizer Component */}
+                  <RackVisualizer
+                    rack={rack}
+                    switches={Array.isArray(switches) ? switches : []}
+                    patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
+                    pcs={Array.isArray(pcs) ? pcs : []}
+                    onShowPortStatus={onShowPortStatus}
+                    onViewPcDetails={onViewPcDetails}
+                    isModalView={false}
+                  />
+
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <button
+                      onClick={() => handleEdit(rack)}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => onDeleteEntity("racks", rack.id)}
+                      className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
+                    >
+                      Delete
+                    </button>
+                    {/* View Rack Details Button */}
+                    <button
+                      onClick={() => onViewRackDetails(rack)}
+                      className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
+                      title="View Rack Details"
+                    >
+                      <Maximize size={16} className="mr-1" /> View Rack
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex justify-center items-center space-x-2 mt-8">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
-                <Columns size={20} className="text-blue-500 mr-2" /> {rack.name}
-              </h4>
-              <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {rack.location_name || "N/A"}
-                {rack.location?.door_number &&
-                  ` (Door: ${rack.location.door_number})`}
-              </p>
-              <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Info
-                  size={16}
-                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-                />{" "}
-                Description: {rack.description || "No description"}
-              </p>
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+              (pageNumber) => (
+                <button
+                  key={pageNumber}
+                  onClick={() => paginate(pageNumber)}
+                  className={`px-4 py-2 rounded-md ${
+                    currentPage === pageNumber
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
 
-              {/* Rack Visualizer Component */}
-              <RackVisualizer
-                rack={rack}
-                switches={Array.isArray(switches) ? switches : []}
-                patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
-                pcs={Array.isArray(pcs) ? pcs : []}
-                onShowPortStatus={onShowPortStatus}
-                onViewPcDetails={onViewPcDetails} // Pass onViewPcDetails here
-                isModalView={false}
-              />
-
-              <div className="flex justify-end space-x-2 mt-4">
-                <button
-                  onClick={() => handleEdit(rack)}
-                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => onDeleteEntity("racks", rack.id)}
-                  className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                >
-                  Delete
-                </button>
-                {/* View Rack Details Button */}
-                <button
-                  onClick={() => onViewRackDetails(rack)}
-                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
-                  title="View Rack Details"
-                >
-                  <Maximize size={16} className="mr-1" /> View Rack
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            {/* Items per page selector */}
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1); // Reset to page 1 when items per page changes
+              }}
+              className="ml-4 p-2 border border-gray-300 rounded-md text-sm"
+            >
+              <option value={6}>6 per page</option>
+              <option value={12}>12 per page</option>
+              <option value={24}>24 per page</option>
+              <option value={48}>48 per page</option>
+            </select>
+          </div>
+        </>
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
           {searchTerm
