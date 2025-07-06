@@ -1,8 +1,8 @@
 """Initial schema setup with all models and fields
 
-Revision ID: 2808d890e5dc
+Revision ID: 40d8b3481e5e
 Revises: 
-Create Date: 2025-07-04 21:20:35.139380
+Create Date: 2025-07-06 11:34:26.852282
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '2808d890e5dc'
+revision = '40d8b3481e5e'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -25,21 +25,19 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
-    op.create_table('pcs',
+    op.create_table('pdf_templates',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('ip_address', sa.String(length=100), nullable=True),
-    sa.Column('username', sa.String(length=100), nullable=True),
-    sa.Column('in_domain', sa.Boolean(), nullable=False),
-    sa.Column('operating_system', sa.String(length=100), nullable=True),
-    sa.Column('model', sa.String(length=255), nullable=True),
-    sa.Column('office', sa.String(length=100), nullable=True),
-    sa.Column('description', sa.String(length=255), nullable=True),
-    sa.Column('multi_port', sa.Boolean(), nullable=False),
-    sa.Column('type', sa.String(length=50), nullable=False),
-    sa.Column('usage', sa.String(length=100), nullable=True),
+    sa.Column('original_filename', sa.String(length=255), nullable=False),
+    sa.Column('stored_filename', sa.String(length=255), nullable=False),
+    sa.Column('upload_date', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name')
+    sa.UniqueConstraint('stored_filename')
+    )
+    op.create_table('app_settings',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('default_pdf_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['default_pdf_id'], ['pdf_templates.id'], ),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('racks',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -62,6 +60,26 @@ def upgrade():
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.ForeignKeyConstraint(['location_id'], ['locations.id'], ),
+    sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('name')
+    )
+    op.create_table('pcs',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('ip_address', sa.String(length=100), nullable=True),
+    sa.Column('username', sa.String(length=100), nullable=True),
+    sa.Column('in_domain', sa.Boolean(), nullable=False),
+    sa.Column('operating_system', sa.String(length=100), nullable=True),
+    sa.Column('model', sa.String(length=255), nullable=True),
+    sa.Column('office', sa.String(length=100), nullable=True),
+    sa.Column('description', sa.String(length=255), nullable=True),
+    sa.Column('multi_port', sa.Boolean(), nullable=False),
+    sa.Column('type', sa.String(length=50), nullable=False),
+    sa.Column('usage', sa.String(length=100), nullable=True),
+    sa.Column('row_in_rack', sa.String(length=50), nullable=True),
+    sa.Column('rack_name', sa.String(length=100), nullable=True),
+    sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
@@ -117,8 +135,10 @@ def downgrade():
     op.drop_table('connection_hops')
     op.drop_table('connections')
     op.drop_table('switches')
+    op.drop_table('pcs')
     op.drop_table('patch_panels')
     op.drop_table('racks')
-    op.drop_table('pcs')
+    op.drop_table('app_settings')
+    op.drop_table('pdf_templates')
     op.drop_table('locations')
     # ### end Alembic commands ###

@@ -2,6 +2,7 @@
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
 // Optimized data fetching to prevent excessive re-renders.
+// UPDATED: Ensuring locations and racks are fetched and passed to relevant components.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -10,13 +11,11 @@ import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
 import PatchPanelList from "./components/PatchPanelList";
-// import PrintableConnectionForm from "./components/PrintableConnectionForm"; // REMOVED
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import RackList from "./components/RackList";
 import RackViewModal from "./components/RackViewModal";
 import { Printer } from "lucide-react";
-// import ReactDOMServer from "react-dom/server"; // REMOVED (not needed without HTML string rendering)
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -106,22 +105,30 @@ function App() {
   }, []);
 
   // Centralized data fetching function
-  const fetchData = useCallback(async (endpoint, setter) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/${endpoint}`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+  const fetchData = useCallback(
+    async (endpoint, setter) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/${endpoint}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.error || `HTTP error! status: ${response.status}`
+          );
+        }
+        const data = await response.json();
+        setter(data);
+        // --- NEW CONSOLE LOG ADDED HERE ---
+        if (endpoint === "pcs") {
+          console.log("App.js: Fetched PCs and set state:", data);
+        }
+        // --- END NEW CONSOLE LOG ---
+      } catch (error) {
+        console.error(`Failed to fetch ${endpoint}:`, error);
+        showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
       }
-      const data = await response.json();
-      setter(data);
-    } catch (error) {
-      console.error(`Failed to fetch ${endpoint}:`, error);
-      showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
-    }
-  }, [showMessage]);
+    },
+    [showMessage]
+  );
 
   // Effect to fetch all initial data on component mount
   useEffect(() => {
@@ -131,7 +138,7 @@ function App() {
       await fetchData("switches", setSwitches);
       await fetchData("connections", setConnections);
       await fetchData("locations", setLocations);
-      await fetchData("racks", setRacks);
+      await fetchData("racks", setRacks); // Ensure racks are fetched
 
       // Fetch PDF templates and default settings
       try {
@@ -156,77 +163,98 @@ function App() {
   }, [fetchData]);
 
   // Handlers for CRUD operations - explicitly trigger re-fetches after changes
-  const handleAddConnection = useCallback(async (newConnectionData) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/connections`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newConnectionData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
+  const handleAddConnection = useCallback(
+    async (newConnectionData) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/connections`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newConnectionData),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          showMessage(
+            errorData.error || `HTTP error! status: ${response.status}`,
+            8000
+          );
+          return {
+            success: false,
+            error: errorData.error || `HTTP error! status: ${response.status}`,
+          };
+        }
+        showMessage("Connection added successfully!");
+        setEditingConnection(null);
+        await fetchData("connections", setConnections);
+        await fetchData("pcs", setPcs); // Re-fetch PCs to update availability status
+        return { success: true };
+      } catch (error) {
+        console.error("Error adding connection:", error);
+        showMessage(`Error adding connection: ${error.message}`, 8000);
+        return { success: false, error: error.message };
       }
-      showMessage("Connection added successfully!");
-      setEditingConnection(null);
-      await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs);
-      return { success: true };
-    } catch (error) {
-      console.error("Error adding connection:", error);
-      showMessage(`Error adding connection: ${error.message}`, 8000);
-      return { success: false, error: error.message };
-    }
-  }, [fetchData, showMessage]);
+    },
+    [fetchData, showMessage]
+  );
 
-  const handleUpdateConnection = useCallback(async (id, updatedConnectionData) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedConnectionData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 8000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
+  const handleUpdateConnection = useCallback(
+    async (id, updatedConnectionData) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedConnectionData),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          showMessage(
+            errorData.error || `HTTP error! status: ${response.status}`,
+            8000
+          );
+          return {
+            success: false,
+            error: errorData.error || `HTTP error! status: ${response.status}`,
+          };
+        }
+        showMessage("Connection updated successfully!");
+        setEditingConnection(null);
+        await fetchData("connections", setConnections);
+        await fetchData("pcs", setPcs); // Re-fetch PCs to update availability status
+        return { success: true };
+      } catch (error) {
+        console.error("Error updating connection:", error);
+        showMessage(`Error updating connection: ${error.message}`, 8000);
+        return { success: false, error: error.message };
       }
-      showMessage("Connection updated successfully!");
-      setEditingConnection(null);
-      await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs);
-      return { success: true };
-    } catch (error) {
-      console.error("Error updating connection:", error);
-      showMessage(`Error updating connection: ${error.message}`, 8000);
-      return { success: false, error: error.message };
-    }
-  }, [fetchData, showMessage]);
+    },
+    [fetchData, showMessage]
+  );
 
-  const handleDeleteConnection = useCallback(async (id) => {
-    if (!window.confirm("Are you sure you want to delete this connection?")) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+  const handleDeleteConnection = useCallback(
+    async (id) => {
+      if (!window.confirm("Are you sure you want to delete this connection?")) {
+        return;
       }
-      showMessage("Connection deleted successfully!");
-      await fetchData("connections", setConnections);
-      await fetchData("pcs", setPcs);
-    } catch (error) {
-      console.error("Error deleting connection:", error);
-      showMessage(`Error deleting connection: ${error.message}`, 5000);
-    }
-  }, [fetchData, showMessage]);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/connections/${id}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || `HTTP error! status: ${response.status}`
+          );
+        }
+        showMessage("Connection deleted successfully!");
+        await fetchData("connections", setConnections);
+        await fetchData("pcs", setPcs); // Re-fetch PCs to update availability status
+      } catch (error) {
+        console.error("Error deleting connection:", error);
+        showMessage(`Error deleting connection: ${error.message}`, 5000);
+      }
+    },
+    [fetchData, showMessage]
+  );
 
   const handleEditConnection = useCallback((connection) => {
     const formattedConnection = {
@@ -238,14 +266,17 @@ function App() {
         connection.is_switch_port_up !== undefined
           ? connection.is_switch_port_up
           : true,
-      cable_color: connection.cable_color || '',
-      cable_label: connection.cable_label || '',
+      cable_color: connection.cable_color || "",
+      cable_label: connection.cable_label || "",
       hops: connection.hops.map((hop) => ({
         patch_panel_id: hop.patch_panel?.id,
         patch_panel_port: hop.patch_panel_port,
         is_port_up: hop.is_port_up,
-        cable_color: hop.cable_color || '',
-        cable_label: hop.cable_label || '',
+        cable_color: hop.cable_color || "",
+        cable_label: hop.cable_label || "",
+        location_id: hop.patch_panel?.location_id
+          ? String(hop.patch_panel.location_id)
+          : "",
       })),
       pc: connection.pc,
       switch: connection.switch,
@@ -253,126 +284,154 @@ function App() {
     setEditingConnection(formattedConnection);
   }, []);
 
-  const handleAddEntity = useCallback(async (type, data) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/${type}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 5000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
+  const handleAddEntity = useCallback(
+    async (type, data) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/${type}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          showMessage(
+            errorData.error || `HTTP error! status: ${response.status}`,
+            5000
+          );
+          return {
+            success: false,
+            error: errorData.error || `HTTP error! status: ${response.status}`,
+          };
+        }
+        const newEntity = await response.json();
+        showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
+        // Re-fetch data for relevant lists
+        if (type === "pcs") setPcs((prev) => [...prev, newEntity]);
+        if (type === "patch_panels")
+          setPatchPanels((prev) => [...prev, newEntity]);
+        if (type === "switches") setSwitches((prev) => [...prev, newEntity]);
+        if (type === "locations") setLocations((prev) => [...prev, newEntity]);
+        if (type === "racks") setRacks((prev) => [...prev, newEntity]);
+        await fetchData("connections", setConnections); // Connections might depend on any new entity
+
+        // Specific re-fetches for lists that depend on newly added entities
+        if (type === "racks") await fetchData("racks", setRacks);
+        if (type === "patch_panels")
+          await fetchData("patch_panels", setPatchPanels);
+        if (type === "switches") await fetchData("switches", setSwitches);
+        if (type === "pcs") await fetchData("pcs", setPcs); // Re-fetch PCs to update their rack details
+
+        return { success: true, entity: newEntity };
+      } catch (error) {
+        console.error(`Error adding ${type}:`, error);
+        showMessage(`Error adding ${type}: ${error.message}`, 5000);
+        return { success: false, error: error.message };
       }
-      const newEntity = await response.json();
-      showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
-      // Re-fetch data for relevant lists
-      if (type === "pcs") setPcs(prev => [...prev, newEntity]);
-      if (type === "patch_panels") setPatchPanels(prev => [...prev, newEntity]);
-      if (type === "switches") setSwitches(prev => [...prev, newEntity]);
-      if (type === "locations") setLocations(prev => [...prev, newEntity]);
-      if (type === "racks") setRacks(prev => [...prev, newEntity]);
-      await fetchData("connections", setConnections); // Connections might depend on any new entity
+    },
+    [fetchData, showMessage]
+  );
 
-      if (type === "racks") await fetchData("racks", setRacks); 
-      if (type === "patch_panels") await fetchData("patch_panels", setPatchPanels);
-      if (type === "switches") await fetchData("switches", setSwitches);
-
-      return { success: true, entity: newEntity };
-    } catch (error) {
-      console.error(`Error adding ${type}:`, error);
-      showMessage(`Error adding ${type}: ${error.message}`, 5000);
-      return { success: false, error: error.message };
-    }
-  }, [fetchData, showMessage]);
-
-  const handleUpdateEntity = useCallback(async (type, id, data) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        showMessage(errorData.error || `HTTP error! status: ${response.status}`, 5000);
-        return { success: false, error: errorData.error || `HTTP error! status: ${response.status}` };
+  const handleUpdateEntity = useCallback(
+    async (type, id, data) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          showMessage(
+            errorData.error || `HTTP error! status: ${response.status}`,
+            5000
+          );
+          return {
+            success: false,
+            error: errorData.error || `HTTP error! status: ${response.status}`,
+          };
+        }
+        showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
+        // Re-fetch data for relevant lists
+        if (type === "pcs") await fetchData("pcs", setPcs);
+        if (type === "patch_panels")
+          await fetchData("patch_panels", setPatchPanels);
+        if (type === "switches") await fetchData("switches", setSwitches);
+        if (type === "locations") await fetchData("locations", setLocations);
+        if (type === "racks") await fetchData("racks", setRacks);
+        await fetchData("connections", setConnections);
+        return { success: true };
+      } catch (error) {
+        console.error(`Error updating ${type}:`, error);
+        showMessage(`Error updating ${type}: ${error.message}`, 5000);
+        return { success: false, error: error.message };
       }
-      showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-      // Re-fetch data for relevant lists
-      if (type === "pcs") await fetchData("pcs", setPcs);
-      if (type === "patch_panels")
-        await fetchData("patch_panels", setPatchPanels);
-      if (type === "switches") await fetchData("switches", setSwitches);
-      if (type === "locations") await fetchData("locations", setLocations);
-      if (type === "racks") await fetchData("racks", setRacks);
-      await fetchData("connections", setConnections);
-      return { success: true };
-    } catch (error) {
-      console.error(`Error updating ${type}:`, error);
-      showMessage(`Error updating ${type}: ${error.message}`, 5000);
-      return { success: false, error: error.message };
-    }
-  }, [fetchData, showMessage]);
+    },
+    [fetchData, showMessage]
+  );
 
-  const handleDeleteEntity = useCallback(async (type, id) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete this ${type.slice(
-          0,
-          -1
-        )}? This will also delete associated connections.`
-      )
-    ) {
-      return;
-    }
-    try {
-      const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
+  const handleDeleteEntity = useCallback(
+    async (type, id) => {
+      if (
+        !window.confirm(
+          `Are you sure you want to delete this ${type.slice(
+            0,
+            -1
+          )}? This will also delete associated connections.`
+        )
+      ) {
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/${type}/${id}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || `HTTP error! status: ${response.status}`
+          );
+        }
+        showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
+        // Re-fetch data for relevant lists
+        if (type === "pcs") await fetchData("pcs", setPcs);
+        if (type === "patch_panels")
+          await fetchData("patch_panels", setPatchPanels);
+        if (type === "switches") await fetchData("switches", setSwitches);
+        if (type === "locations") await fetchData("locations", setLocations);
+        if (type === "racks") await fetchData("racks", setRacks);
+        await fetchData("connections", setConnections);
+      } catch (error) {
+        console.error(`Error deleting ${type}:`, error);
+        showMessage(`Error deleting ${type}: ${error.message}`, 5000);
+      }
+    },
+    [fetchData, showMessage]
+  );
+
+  const handleShowPortStatus = useCallback(
+    async (entityType, entityId) => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/${entityType}/${entityId}/ports`
         );
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.error || `HTTP error! status: ${response.status}`
+          );
+        }
+        const data = await response.json();
+        setPortStatusData(data);
+        setModalEntityType(entityType);
+        setModalEntityId(entityId);
+        setShowPortStatusModal(true);
+      } catch (error) {
+        console.error(`Failed to fetch ${entityType} port status:`, error);
+        showMessage(`Error fetching port status: ${error.message}`, 5000);
       }
-      showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-      // Re-fetch data for relevant lists
-      if (type === "pcs") await fetchData("pcs", setPcs);
-      if (type === "patch_panels")
-        await fetchData("patch_panels", setPatchPanels);
-      if (type === "switches") await fetchData("switches", setSwitches);
-      if (type === "locations") await fetchData("locations", setLocations);
-      if (type === "racks") await fetchData("racks", setRacks);
-      await fetchData("connections", setConnections);
-    } catch (error) {
-      console.error(`Error deleting ${type}:`, error);
-      showMessage(`Error deleting ${type}: ${error.message}`, 5000);
-    }
-  }, [fetchData, showMessage]);
-
-  const handleShowPortStatus = useCallback(async (entityType, entityId) => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/${entityType}/${entityId}/ports`
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
-      }
-      const data = await response.json();
-      setPortStatusData(data);
-      setModalEntityType(entityType);
-      setModalEntityId(entityId);
-      setShowPortStatusModal(true);
-    } catch (error) {
-      console.error(`Failed to fetch ${entityType} port status:`, error);
-      showMessage(`Error fetching port status: ${error.message}`, 5000);
-    }
-  }, [showMessage]);
+    },
+    [showMessage]
+  );
 
   const handleClosePortStatusModal = useCallback(() => {
     setShowPortStatusModal(false);
@@ -408,27 +467,38 @@ function App() {
   }, []);
 
   // Modified handlePrintForm: Now only opens the selected PDF template
-  const handlePrintForm = useCallback((connectionToPrint = null) => { // connectionToPrint is now optional, as we're just opening a template
-    const selectedTemplate = pdfTemplates.find(t => t.id === selectedPrintTemplateId);
+  const handlePrintForm = useCallback(
+    (connectionToPrint = null) => {
+      // connectionToPrint is now optional, as we're just opening a template
+      const selectedTemplate = pdfTemplates.find(
+        (t) => t.id === selectedPrintTemplateId
+      );
 
-    if (!selectedTemplate) {
-        showMessage("Please select a PDF template to print from the dropdown.", 5000);
+      if (!selectedTemplate) {
+        showMessage(
+          "Please select a PDF template to print from the dropdown.",
+          5000
+        );
         return;
-    }
+      }
 
-    const pdfUrl = `${API_BASE_URL}/pdf_templates/download/${selectedTemplate.stored_filename}`;
-    
-    // Open the PDF in a new tab
-    const printWindow = window.open(pdfUrl, '_blank');
-    if (!printWindow) {
+      const pdfUrl = `${API_BASE_URL}/pdf_templates/download/${selectedTemplate.stored_filename}`;
+
+      // Open the PDF in a new tab
+      const printWindow = window.open(pdfUrl, "_blank");
+      if (!printWindow) {
         showMessage("Please allow pop-ups to open the PDF.", 5000);
-    } else {
-        showMessage(`Opening "${selectedTemplate.original_filename}" for printing.`, 3000);
+      } else {
+        showMessage(
+          `Opening "${selectedTemplate.original_filename}" for printing.`,
+          3000
+        );
         // Note: Direct programmatic printing of an opened PDF might not be universally supported
         // or desirable for user experience. Users typically print from the PDF viewer.
-    }
-  }, [selectedPrintTemplateId, pdfTemplates, showMessage]);
-
+      }
+    },
+    [selectedPrintTemplateId, pdfTemplates, showMessage]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-200 font-inter p-4 sm:p-8">
@@ -470,6 +540,7 @@ function App() {
           rack={selectedRackForView}
           switches={switches}
           patchPanels={patchPanels}
+          pcs={pcs}
           onShowPortStatus={handleShowPortStatus}
         />
       )}
@@ -585,38 +656,50 @@ function App() {
               </section>
 
               <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-blue-700 mb-4">Print Options</h3>
+                <h3 className="text-xl font-bold text-blue-700 mb-4">
+                  Print Options
+                </h3>
                 <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-                    {/* PDF Template Selector */}
-                    <div className="flex items-center space-x-2">
-                        <label htmlFor="pdf-template-select" className="text-gray-700 font-medium">
-                            PDF Template:
-                        </label>
-                        <select
-                            id="pdf-template-select"
-                            value={selectedPrintTemplateId || ''}
-                            onChange={(e) => setSelectedPrintTemplateId(e.target.value ? parseInt(e.target.value) : null)}
-                            className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        >
-                            <option value="">-- None (No PDF Template) --</option>
-                            {pdfTemplates.map(template => (
-                                <option key={template.id} value={template.id}>
-                                    {template.original_filename} {template.id === defaultPdfId && "(Default)"}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    
-                    {/* Print Button (now opens selected PDF template) */}
-                    <button
-                        onClick={() => handlePrintForm()} // No connection data here, just open the template
-                        className="px-6 py-3 bg-indigo-600 text-white rounded-md shadow-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center"
+                  {/* PDF Template Selector */}
+                  <div className="flex items-center space-x-2">
+                    <label
+                      htmlFor="pdf-template-select"
+                      className="text-gray-700 font-medium"
                     >
-                        <Printer size={20} className="mr-2" /> Print Selected PDF Template
-                    </button>
+                      PDF Template:
+                    </label>
+                    <select
+                      id="pdf-template-select"
+                      value={selectedPrintTemplateId || ""}
+                      onChange={(e) =>
+                        setSelectedPrintTemplateId(
+                          e.target.value ? parseInt(e.target.value) : null
+                        )
+                      }
+                      className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- None (No PDF Template) --</option>
+                      {pdfTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.original_filename}{" "}
+                          {template.id === defaultPdfId && "(Default)"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Print Button (now opens selected PDF template) */}
+                  <button
+                    onClick={() => handlePrintForm()} // No connection data here, just open the template
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-md shadow-md hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center"
+                  >
+                    <Printer size={20} className="mr-2" /> Print Selected PDF
+                    Template
+                  </button>
                 </div>
                 <p className="mt-4 text-sm text-gray-500">
-                    This will open the selected PDF template in a new tab for printing.
+                  This will open the selected PDF template in a new tab for
+                  printing.
                 </p>
               </div>
 
@@ -648,6 +731,8 @@ function App() {
                 onAddEntity={handleAddEntity}
                 onUpdateEntity={handleUpdateEntity}
                 onDeleteEntity={handleDeleteEntity}
+                locations={locations}
+                racks={racks}
               />
             </section>
           )}
@@ -664,7 +749,7 @@ function App() {
                 onDeleteEntity={handleDeleteEntity}
                 onShowPortStatus={handleShowPortStatus}
                 locations={locations}
-                racks={racks} 
+                racks={racks}
                 onViewDiagram={handleViewSwitchDiagram}
               />
             </section>
@@ -692,7 +777,7 @@ function App() {
               <h2 className="text-2xl font-bold text-blue-700 mb-6">
                 Manage Locations
               </h2>
-              <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-6">
+              <div className="bg-white p-6 rounded-lg border border-blue-200 shadow-inner">
                 <h3 className="text-xl font-bold text-blue-700 mb-4">
                   Add New Location
                 </h3>
@@ -739,15 +824,27 @@ function App() {
                       className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
                     >
                       <span className="text-lg font-medium text-gray-800">
-                        {location.name}{location.door_number ? ` (Door: ${location.door_number})` : ''}
+                        {location.name}
+                        {location.door_number
+                          ? ` (Door: ${location.door_number})`
+                          : ""}
                       </span>
                       <div className="flex space-x-2">
                         <button
                           onClick={() => {
-                            const newName = prompt("Enter new name for location:", location.name);
-                            const newDoorNumber = prompt("Enter new door number for location:", location.door_number || '');
+                            const newName = prompt(
+                              "Enter new name for location:",
+                              location.name
+                            );
+                            const newDoorNumber = prompt(
+                              "Enter new door number for location:",
+                              location.door_number || ""
+                            );
                             if (newName !== null && newName.trim()) {
-                                handleUpdateEntity("locations", location.id, { name: newName, door_number: newDoorNumber });
+                              handleUpdateEntity("locations", location.id, {
+                                name: newName,
+                                door_number: newDoorNumber,
+                              });
                             }
                           }}
                           className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
@@ -782,26 +879,27 @@ function App() {
               <RackList
                 racks={racks}
                 locations={locations}
-                switches={switches} 
+                switches={switches}
                 patchPanels={patchPanels}
+                pcs={pcs}
                 onAddEntity={handleAddEntity}
                 onUpdateEntity={handleUpdateEntity}
                 onDeleteEntity={handleDeleteEntity}
-                onShowPortStatus={handleShowPortStatus} 
-                onViewRackDetails={handleViewRackDetails} 
+                onShowPortStatus={handleShowPortStatus}
+                onViewRackDetails={handleViewRackDetails}
               />
             </section>
           )}
 
           {activeTab === "settings" && (
             <SettingsPage
-                showMessage={showMessage}
-                pdfTemplates={pdfTemplates}
-                setPdfTemplates={setPdfTemplates}
-                defaultPdfId={defaultPdfId}
-                setDefaultPdfId={setDefaultPdfId}
-                setSelectedPrintTemplateId={setSelectedPrintTemplateId}
-                fetchPdfTemplates={fetchData} // Pass the general fetchData for PDF templates
+              showMessage={showMessage}
+              pdfTemplates={pdfTemplates}
+              setPdfTemplates={setPdfTemplates}
+              defaultPdfId={defaultPdfId}
+              setDefaultPdfId={setDefaultPdfId}
+              setSelectedPrintTemplateId={setSelectedPrintTemplateId}
+              fetchPdfTemplates={fetchData} // Pass the general fetchData for PDF templates
             />
           )}
         </main>

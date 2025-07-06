@@ -3,6 +3,7 @@
 // and to create or edit network connections between them.
 // Now, the PC selection/creation is Step 1, and connection details are Step 2.
 // "Add New" forms for Patch Panel and Switch are accessible via dropdowns in Step 2.
+// UPDATED: Added rack and row in rack fields for 'Server' type PCs.
 
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import {
@@ -22,6 +23,7 @@ import {
   HardDrive, // For PC type Server
   MonitorCheck, // For PC type Workstation
   MapPin, // Icon for Location selection
+  Columns, // Icon for Rack
 } from "lucide-react";
 
 // Base URL for the backend API.
@@ -57,11 +59,25 @@ const ConnectionForm = memo(function ConnectionForm({
     []
   );
 
-  const [selectedLocationIdForSwitch, setSelectedLocationIdForSwitch] = useState("");
-  const [filteredSwitchesByLocation, setFilteredSwitchesByLocation] = useState([]);
+  const [selectedLocationIdForSwitch, setSelectedLocationIdForSwitch] =
+    useState("");
+  const [filteredSwitchesByLocation, setFilteredSwitchesByLocation] = useState(
+    []
+  );
 
   const [cableColorOptions, setCableColorOptions] = useState(
-    ["Blue", "Green", "Red", "Yellow", "Orange", "Black", "White", "Grey", "Purple", "Brown"].sort()
+    [
+      "Blue",
+      "Green",
+      "Red",
+      "Yellow",
+      "Orange",
+      "Black",
+      "White",
+      "Grey",
+      "Purple",
+      "Brown",
+    ].sort()
   );
   const [showAddColorInput, setShowAddColorInput] = useState(false);
   const [newCustomColor, setNewCustomColor] = useState("");
@@ -81,6 +97,8 @@ const ConnectionForm = memo(function ConnectionForm({
   const [newPcMultiPort, setNewPcMultiPort] = useState(false);
   const [newPcType, setNewPcType] = useState("Workstation");
   const [newPcUsage, setNewPcUsage] = useState("");
+  const [newPcRowInRack, setNewPcRowInRack] = useState(""); // NEW
+  const [newPcRackId, setNewPcRackId] = useState(""); // NEW
 
   const [newPpName, setNewPpName] = useState("");
   const [newPpLocationId, setNewPpLocationId] = useState("");
@@ -104,8 +122,15 @@ const ConnectionForm = memo(function ConnectionForm({
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
 
   // Usage options for PC and Switch forms
-  const usageOptions = ["Production", "Development", "Test", "Staging", "Backup", "Monitoring", "Other"];
-
+  const usageOptions = [
+    "Production",
+    "Development",
+    "Test",
+    "Staging",
+    "Backup",
+    "Monitoring",
+    "Other",
+  ];
 
   // IMPORTANT: The fetchAvailablePcs callback now depends on 'pcs' and 'connections' props.
   // This ensures it gets recreated and re-executed when these underlying data change.
@@ -117,14 +142,16 @@ const ConnectionForm = memo(function ConnectionForm({
       // This logic must exactly match your backend's /available_pcs endpoint
       // for consistent filtering on the frontend without extra API calls here.
       const connected_single_port_pc_ids = new Set(
-        all_connections.filter(conn => conn.pc && !conn.pc.multi_port).map(conn => conn.pc.id)
+        all_connections
+          .filter((conn) => conn.pc && !conn.pc.multi_port)
+          .map((conn) => conn.pc.id)
       );
 
       const filteredPcs = [];
       for (const pc of all_pcs) {
-          if (pc.multi_port || !connected_single_port_pc_ids.has(pc.id)) {
-              filteredPcs.push(pc);
-          }
+        if (pc.multi_port || !connected_single_port_pc_ids.has(pc.id)) {
+          filteredPcs.push(pc);
+        }
       }
 
       setAvailablePcsForConnection(
@@ -152,12 +179,18 @@ const ConnectionForm = memo(function ConnectionForm({
       setFilteredSwitchesByLocation(filtered);
     }
     // If a switch was selected but no longer matches the filter, clear it
-    if (switchId && selectedLocationIdForSwitch !== "" &&
-        !switches.some(s => String(s.id) === switchId && String(s.location_id) === selectedLocationIdForSwitch)) {
-        setSwitchId("");
+    if (
+      switchId &&
+      selectedLocationIdForSwitch !== "" &&
+      !switches.some(
+        (s) =>
+          String(s.id) === switchId &&
+          String(s.location_id) === selectedLocationIdForSwitch
+      )
+    ) {
+      setSwitchId("");
     }
   }, [selectedLocationIdForSwitch, switches, switchId]); // Added switchId to dependencies
-
 
   const lastCreatedPcIdRef = useRef(null);
 
@@ -166,7 +199,9 @@ const ConnectionForm = memo(function ConnectionForm({
       setPcId(editingConnection.pc_id || "");
       setSwitchId(editingConnection.switch_id || "");
       if (editingConnection.switch?.location_id) {
-        setSelectedLocationIdForSwitch(String(editingConnection.switch.location_id));
+        setSelectedLocationIdForSwitch(
+          String(editingConnection.switch.location_id)
+        );
       } else {
         setSelectedLocationIdForSwitch("");
       }
@@ -186,7 +221,9 @@ const ConnectionForm = memo(function ConnectionForm({
           is_port_up: hop.is_port_up,
           cable_color: hop.cable_color || "",
           cable_label: hop.cable_label || "",
-          location_id: hop.patch_panel?.location_id ? String(hop.patch_panel.location_id) : "",
+          location_id: hop.patch_panel?.location_id
+            ? String(hop.patch_panel.location_id)
+            : "",
         })) || []
       );
 
@@ -229,6 +266,8 @@ const ConnectionForm = memo(function ConnectionForm({
       setNewPcMultiPort(false);
       setNewPcType("Workstation");
       setNewPcUsage("");
+      setNewPcRowInRack(""); // NEW
+      setNewPcRackId(""); // NEW
 
       setNewPpName("");
       setNewPpLocationId("");
@@ -346,10 +385,14 @@ const ConnectionForm = memo(function ConnectionForm({
       return;
     }
     const allHopsValid = hops.every(
-      (hop) => hop.location_id && hop.patch_panel_id && hop.patch_panel_port.trim()
+      (hop) =>
+        hop.location_id && hop.patch_panel_id && hop.patch_panel_port.trim()
     );
     if (!allHopsValid) {
-      showMessage("Please fill out all location, patch panel, and port details for each hop.", 3000);
+      showMessage(
+        "Please fill out all location, patch panel, and port details for each hop.",
+        3000
+      );
       return;
     }
 
@@ -416,6 +459,29 @@ const ConnectionForm = memo(function ConnectionForm({
       );
       return;
     }
+
+    // NEW: Validate rack fields if type is 'Server' for new PC creation
+    if (newPcType === "Server") {
+      if (!newPcRackId || !newPcRowInRack.trim()) {
+        showMessage(
+          "For Server type PCs, Rack and Row in Rack are required.",
+          3000
+        );
+        return;
+      }
+      const selectedRack = racks.find((r) => String(r.id) === newPcRackId);
+      if (selectedRack) {
+        const rowNum = parseInt(newPcRowInRack);
+        if (isNaN(rowNum) || rowNum < 1 || rowNum > selectedRack.total_units) {
+          showMessage(
+            `Row in Rack must be a number between 1 and ${selectedRack.total_units} for the selected rack.`,
+            5000
+          );
+          return;
+        }
+      }
+    }
+
     try {
       const result = await onAddEntity("pcs", {
         name: newPcName,
@@ -429,6 +495,8 @@ const ConnectionForm = memo(function ConnectionForm({
         multi_port: newPcMultiPort,
         type: newPcType,
         usage: newPcUsage,
+        row_in_rack: newPcType === "Server" ? newPcRowInRack : null, // NEW: Conditionally set
+        rack_id: newPcType === "Server" ? parseInt(newPcRackId) : null, // NEW: Conditionally set
       });
 
       if (result.success && result.entity) {
@@ -446,6 +514,8 @@ const ConnectionForm = memo(function ConnectionForm({
         setNewPcMultiPort(false);
         setNewPcType("Workstation");
         setNewPcUsage("");
+        setNewPcRowInRack(""); // NEW
+        setNewPcRackId(""); // NEW
         setIsNewPcExpanded(false);
       }
     } catch (error) {
@@ -522,44 +592,50 @@ const ConnectionForm = memo(function ConnectionForm({
     }
   };
 
-  const getPortStatusSummary = useCallback((entityType, entityId) => {
-    const entity = (entityType === 'switches' ? switches : patchPanels)
-      .find(e => e.id === parseInt(entityId));
-
-    if (!entity) {
-      return null;
-    }
-
-    let connectedCount = 0;
-    if (entityType === 'switches') {
-      const connectedPorts = new Set(
-        connections
-          .filter(c => c.switch_id === entity.id)
-          .map(c => c.switch_port)
+  const getPortStatusSummary = useCallback(
+    (entityType, entityId) => {
+      const entity = (entityType === "switches" ? switches : patchPanels).find(
+        (e) => e.id === parseInt(entityId)
       );
-      connectedCount = connectedPorts.size;
-    } else { // entityType === 'patch_panels'
-      const connectedPortsSet = new Set();
-      connections.forEach(connection => {
-        if (connection.hops && Array.isArray(connection.hops)) {
-          connection.hops.forEach(hop => {
-            if (hop.patch_panel && hop.patch_panel.id === entity.id) {
-              connectedPortsSet.add(hop.patch_panel_port);
-            }
-          });
-        }
-      });
-      connectedCount = connectedPortsSet.size;
-    }
 
-    const availableCount = (entity.total_ports || 0) - connectedCount;
+      if (!entity) {
+        return null;
+      }
 
-    return { connected: connectedCount, available: availableCount };
-  }, [switches, patchPanels, connections]);
+      let connectedCount = 0;
+      if (entityType === "switches") {
+        const connectedPorts = new Set(
+          connections
+            .filter((c) => c.switch_id === entity.id)
+            .map((c) => c.switch_port)
+        );
+        connectedCount = connectedPorts.size;
+      } else {
+        // entityType === 'patch_panels'
+        const connectedPortsSet = new Set();
+        connections.forEach((connection) => {
+          if (connection.hops && Array.isArray(connection.hops)) {
+            connection.hops.forEach((hop) => {
+              if (hop.patch_panel && hop.patch_panel.id === entity.id) {
+                connectedPortsSet.add(hop.patch_panel_port);
+              }
+            });
+          }
+        });
+        connectedCount = connectedPortsSet.size;
+      }
 
-  const sortedLocations = [...locations].sort((a,b) => a.name.localeCompare(b.name));
-  const sortedRacks = [...racks].sort((a,b) => a.name.localeCompare(b.name));
+      const availableCount = (entity.total_ports || 0) - connectedCount;
 
+      return { connected: connectedCount, available: availableCount };
+    },
+    [switches, patchPanels, connections]
+  );
+
+  const sortedLocations = [...locations].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+  const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-8">
@@ -708,13 +784,60 @@ const ConnectionForm = memo(function ConnectionForm({
                 </div>
                 <select
                   value={newPcType}
-                  onChange={(e) => setNewPcType(e.target.value)}
+                  onChange={(e) => {
+                    setNewPcType(e.target.value);
+                    // Clear rack/row if switching from Server to Workstation
+                    if (e.target.value === "Workstation") {
+                      setNewPcRackId("");
+                      setNewPcRowInRack("");
+                    }
+                  }}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
                   <option value="Workstation">Workstation</option>
                   <option value="Server">Server</option>
                 </select>
+
+                {/* NEW: Conditional Rack and Row fields for Server type PCs */}
+                {newPcType === "Server" && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <Columns size={20} className="text-gray-500" />
+                      <select
+                        value={newPcRackId}
+                        onChange={(e) => setNewPcRackId(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">-- Select Rack (Optional) --</option>
+                        {sortedRacks.map((rack) => (
+                          <option key={rack.id} value={rack.id}>
+                            {rack.name} ({rack.location_name}
+                            {rack.location?.door_number &&
+                              ` (Door: ${rack.location.door_number})`}
+                            )
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {racks.length === 0 && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        No racks available. Add some in the Racks tab.
+                      </p>
+                    )}
+                    <div className="flex items-center space-x-2">
+                      <Server size={20} className="text-gray-500" />
+                      <input
+                        type="text"
+                        placeholder="Row in Rack (e.g., 1U, 2U)"
+                        value={newPcRowInRack}
+                        onChange={(e) => setNewPcRowInRack(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <input
                   type="text"
                   placeholder="Operating System (Optional)"
@@ -737,17 +860,37 @@ const ConnectionForm = memo(function ConnectionForm({
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
                 <select // PC Usage dropdown
-                    value={newPcUsage}
-                    onChange={(e) => setNewPcUsage(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={newPcUsage}
+                  onChange={(e) => setNewPcUsage(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
-                    <option value="">-- Select Usage (Optional) --</option>
-                    {usageOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                    {/* Option to add custom usage - would require a separate input field to appear */}
-                    {/* <option value="other">Add Custom Usage...</option> */}
+                  <option value="">-- Select Usage (Optional) --</option>
+                  {usageOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  {/* Option to add custom usage - would require a separate input field to appear */}
+                  {/* <option value="other">Add Custom Usage...</option> */}
                 </select>
+                {newPcUsage === "other" && (
+                  <input
+                    type="text"
+                    placeholder="Enter custom usage"
+                    onBlur={(e) => {
+                      const customUsage = e.target.value.trim();
+                      if (customUsage) {
+                        if (!usageOptions.includes(customUsage)) {
+                          usageOptions.push(customUsage); // Dynamically add to available options
+                        }
+                        setNewPcUsage(customUsage);
+                      } else {
+                        setNewPcUsage(""); // Reset if input is cleared
+                      }
+                    }}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                )}
                 <textarea
                   placeholder="Description (Optional)"
                   value={newPcDesc}
@@ -771,16 +914,16 @@ const ConnectionForm = memo(function ConnectionForm({
       {currentStep === 2 && (
         <section className="p-6 bg-white rounded-lg shadow-md border border-blue-200">
           <h2 className="text-2xl font-bold text-blue-700 mb-6 text-center flex items-center justify-center">
-            <ArrowRight size={24} className="mr-2" /> Step 2: Connection
-            Details
+            <ArrowRight size={24} className="mr-2" /> Step 2: Connection Details
           </h2>
 
           <div className="mb-6 flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
             <span className="font-semibold text-gray-700">Selected PC:</span>
             {pcId ? (
               <span className="text-blue-600 font-medium">
-                {availablePcsForConnection.find((pc) => pc.id === parseInt(pcId))
-                  ?.name || "N/A"}
+                {availablePcsForConnection.find(
+                  (pc) => pc.id === parseInt(pcId)
+                )?.name || "N/A"}
               </span>
             ) : (
               <span className="text-red-500">No PC selected</span>
@@ -806,18 +949,25 @@ const ConnectionForm = memo(function ConnectionForm({
                   htmlFor="switch-location-filter"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  <MapPin size={16} className="inline-block mr-1 text-gray-500" />Filter Switches by Location:
+                  <MapPin
+                    size={16}
+                    className="inline-block mr-1 text-gray-500"
+                  />
+                  Filter Switches by Location:
                 </label>
                 <select
                   id="switch-location-filter"
                   value={selectedLocationIdForSwitch}
-                  onChange={(e) => setSelectedLocationIdForSwitch(e.target.value)}
+                  onChange={(e) =>
+                    setSelectedLocationIdForSwitch(e.target.value)
+                  }
                   className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">-- All Locations --</option>
                   {sortedLocations.map((loc) => (
                     <option key={loc.id} value={loc.id}>
-                      {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                      {loc.name}{" "}
+                      {loc.door_number && `(Door: ${loc.door_number})`}
                     </option>
                   ))}
                 </select>
@@ -842,10 +992,12 @@ const ConnectionForm = memo(function ConnectionForm({
                   onChange={async (e) => {
                     if (e.target.value === "add-new-switch") {
                       setIsNewSwitchExpanded(true);
-                      // Scroll to the new switch creation section
                       document
                         .getElementById("new-switch-creation-section")
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
                       setSwitchId(""); // Clear current selection
                     } else {
                       setSwitchId(e.target.value);
@@ -863,10 +1015,14 @@ const ConnectionForm = memo(function ConnectionForm({
                     ))
                   ) : (
                     <option value="" disabled>
-                      No switches found for selected location or no switches added.
+                      No switches found for selected location or no switches
+                      added.
                     </option>
                   )}
-                  <option value="add-new-switch" className="italic text-red-600">
+                  <option
+                    value="add-new-switch"
+                    className="italic text-red-600"
+                  >
                     -- Add New Switch --
                   </option>
                 </select>
@@ -1024,11 +1180,15 @@ const ConnectionForm = memo(function ConnectionForm({
               {hops.map((hop, index) => {
                 // Filter patch panels based on THIS hop's selected location
                 const filteredPatchPanelsForThisHop = hop.location_id
-                  ? patchPanels.filter(pp => String(pp.location_id) === hop.location_id)
+                  ? patchPanels.filter(
+                      (pp) => String(pp.location_id) === hop.location_id
+                    )
                   : patchPanels;
 
                 // Sort racks by name for dropdown
-                const sortedRacksForPp = Array.isArray(racks) ? [...racks].sort((a,b) => a.name.localeCompare(b.name)) : [];
+                const sortedRacksForPp = Array.isArray(racks)
+                  ? [...racks].sort((a, b) => a.name.localeCompare(b.name))
+                  : [];
 
                 return (
                   <div
@@ -1038,25 +1198,36 @@ const ConnectionForm = memo(function ConnectionForm({
                     className="flex flex-col mb-4 p-3 border border-gray-100 rounded-md bg-white shadow-sm"
                   >
                     {/* First line: Location, Patch Panel, Port, Port Up */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 w-full mb-3"> {/* Added mb-3 for spacing */}
-                      <div className="flex-1 min-w-[150px] max-w-xs"> {/* Location dropdown */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-3 w-full mb-3">
+                      {" "}
+                      {/* Added mb-3 for spacing */}
+                      <div className="flex-1 min-w-[150px] max-w-xs">
+                        {" "}
+                        {/* Location dropdown */}
                         <label
                           htmlFor={`hop-location-select-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
                         >
-                          <MapPin size={16} className="inline-block mr-1 text-gray-500" />Location for Hop {index + 1}:
+                          <MapPin
+                            size={16}
+                            className="inline-block mr-1 text-gray-500"
+                          />
+                          Location for Hop {index + 1}:
                         </label>
                         <select
                           id={`hop-location-select-${index}`}
                           value={hop.location_id}
-                          onChange={(e) => handleHopLocationChange(index, e.target.value)}
+                          onChange={(e) =>
+                            handleHopLocationChange(index, e.target.value)
+                          }
                           className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                           required
                         >
                           <option value="">-- Select Location --</option>
                           {sortedLocations.map((loc) => (
                             <option key={loc.id} value={loc.id}>
-                              {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                              {loc.name}{" "}
+                              {loc.door_number && `(Door: ${loc.door_number})`}
                             </option>
                           ))}
                         </select>
@@ -1066,7 +1237,9 @@ const ConnectionForm = memo(function ConnectionForm({
                           </p>
                         )}
                       </div>
-                      <div className="flex-grow min-w-[150px] max-w-xs"> {/* Patch Panel select */}
+                      <div className="flex-grow min-w-[150px] max-w-xs">
+                        {" "}
+                        {/* Patch Panel select */}
                         <label
                           htmlFor={`pp-select-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1081,7 +1254,10 @@ const ConnectionForm = memo(function ConnectionForm({
                               setIsNewPpExpanded(true);
                               document
                                 .getElementById("new-pp-creation-section")
-                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                ?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
                               handleHopPatchPanelChange(index, "");
                             } else {
                               handleHopPatchPanelChange(index, e.target.value);
@@ -1091,12 +1267,14 @@ const ConnectionForm = memo(function ConnectionForm({
                           required
                         >
                           <option value="">-- Select Patch Panel --</option>
-                          {hop.location_id && filteredPatchPanelsForThisHop.length > 0 ? (
+                          {hop.location_id &&
+                          filteredPatchPanelsForThisHop.length > 0 ? (
                             filteredPatchPanelsForThisHop.map((pp) => (
                               <option key={pp.id} value={pp.id}>
                                 {pp.name} ({pp.location_name}
                                 {pp.location?.door_number &&
-                                  ` (Door: ${pp.location.door_number})`})
+                                  ` (Door: ${pp.location.door_number})`}
+                                )
                               </option>
                             ))
                           ) : (
@@ -1104,27 +1282,38 @@ const ConnectionForm = memo(function ConnectionForm({
                               Select a location first or no patch panels found.
                             </option>
                           )}
-                          <option value="add-new-pp" className="italic text-green-600">
+                          <option
+                            value="add-new-pp"
+                            className="italic text-green-600"
+                          >
                             -- Add New Patch Panel --
                           </option>
                         </select>
                         {!hop.location_id && (
                           <p className="text-sm text-gray-500 mt-1">
-                            Select a location for this hop to see available patch panels.
+                            Select a location for this hop to see available
+                            patch panels.
                           </p>
                         )}
-                        {hop.location_id && filteredPatchPanelsForThisHop.length === 0 && (
-                          <p className="text-sm text-red-500 mt-1">
-                            No patch panels found in the selected location.
-                          </p>
-                        )}
+                        {hop.location_id &&
+                          filteredPatchPanelsForThisHop.length === 0 && (
+                            <p className="text-sm text-red-500 mt-1">
+                              No patch panels found in the selected location.
+                            </p>
+                          )}
                         {/* Port Status Summary for Selected Patch Panel */}
                         {hop.patch_panel_id &&
                           patchPanels.length > 0 &&
-                          getPortStatusSummary("patch_panels", hop.patch_panel_id) && (
+                          getPortStatusSummary(
+                            "patch_panels",
+                            hop.patch_panel_id
+                          ) && (
                             <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
                               <span className="flex items-center">
-                                <Wifi size={14} className="text-green-500 mr-1" />
+                                <Wifi
+                                  size={14}
+                                  className="text-green-500 mr-1"
+                                />
                                 Connected:{" "}
                                 {
                                   getPortStatusSummary(
@@ -1134,7 +1323,10 @@ const ConnectionForm = memo(function ConnectionForm({
                                 }
                               </span>
                               <span className="flex items-center">
-                                <CircleDot size={14} className="text-gray-500 mr-1" />
+                                <CircleDot
+                                  size={14}
+                                  className="text-gray-500 mr-1"
+                                />
                                 Available:{" "}
                                 {
                                   getPortStatusSummary(
@@ -1158,7 +1350,9 @@ const ConnectionForm = memo(function ConnectionForm({
                             </div>
                           )}
                       </div>
-                      <div className="flex-none w-16"> {/* Port input - fixed width */}
+                      <div className="flex-none w-16">
+                        {" "}
+                        {/* Port input - fixed width */}
                         <label
                           htmlFor={`pp-port-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1177,7 +1371,9 @@ const ConnectionForm = memo(function ConnectionForm({
                           required
                         />
                       </div>
-                      <div className="flex items-center"> {/* Port Up checkbox */}
+                      <div className="flex items-center">
+                        {" "}
+                        {/* Port Up checkbox */}
                         <input
                           id={`is-pp-port-up-${index}`}
                           type="checkbox"
@@ -1197,8 +1393,12 @@ const ConnectionForm = memo(function ConnectionForm({
                     </div>
 
                     {/* Second line: Cable Color, Cable Label, Remove Button */}
-                    <div className="flex flex-wrap items-end gap-x-3 gap-y-3 w-full mt-3 pt-3 border-t border-gray-100"> {/* Added mt-3 pt-3 border-t for separation */}
-                      <div className="flex-1 min-w-[120px]"> {/* Cable Color */}
+                    <div className="flex flex-wrap items-end gap-x-3 gap-y-3 w-full mt-3 pt-3 border-t border-gray-100">
+                      {" "}
+                      {/* Added mt-3 pt-3 border-t for separation */}
+                      <div className="flex-1 min-w-[120px]">
+                        {" "}
+                        {/* Cable Color */}
                         <label
                           htmlFor={`hop-cable-color-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1210,13 +1410,16 @@ const ConnectionForm = memo(function ConnectionForm({
                             id={`hop-cable-color-${index}`}
                             value={hop.cable_color}
                             onChange={(e) => {
-                                if (e.target.value === "add-new-hop-color") {
-                                    setShowAddColorInput(true);
-                                    setNewCustomColor("");
-                                } else {
-                                    handleHopCableColorChange(index, e.target.value);
-                                    setShowAddColorInput(false);
-                                }
+                              if (e.target.value === "add-new-hop-color") {
+                                setShowAddColorInput(true);
+                                setNewCustomColor("");
+                              } else {
+                                handleHopCableColorChange(
+                                  index,
+                                  e.target.value
+                                );
+                                setShowAddColorInput(false);
+                              }
                             }}
                             className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                           >
@@ -1226,30 +1429,31 @@ const ConnectionForm = memo(function ConnectionForm({
                                 {color}
                               </option>
                             ))}
-                            <option value="add-new">
-                              -- Add New Color --
-                            </option>
+                            <option value="add-new">-- Add New Color --</option>
                           </select>
                           {showAddColorInput && (
                             <input
                               type="text"
                               placeholder="Enter new color"
                               value={newCustomColor}
-                              onChange={(e) => setNewCustomColor(e.target.value)}
+                              onChange={(e) =>
+                                setNewCustomColor(e.target.value)
+                              }
                               onBlur={handleAddCustomColor}
                               onKeyPress={(e) => {
-                                  if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      handleAddCustomColor();
-                                  }
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddCustomColor();
+                                }
                               }}
                               className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                             />
                           )}
                         </div>
                       </div>
-
-                      <div className="flex-1 min-w-[120px]"> {/* Cable Label */}
+                      <div className="flex-1 min-w-[120px]">
+                        {" "}
+                        {/* Cable Label */}
                         <label
                           htmlFor={`hop-cable-label-${index}`}
                           className="block text-sm font-medium text-gray-700 mb-1"
@@ -1267,7 +1471,6 @@ const ConnectionForm = memo(function ConnectionForm({
                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
-
                       <button
                         type="button"
                         onClick={() => removeHop(index)}
@@ -1298,7 +1501,8 @@ const ConnectionForm = memo(function ConnectionForm({
                 onClick={() => setIsNewPpExpanded(!isNewPpExpanded)}
               >
                 <h3 className="text-lg font-semibold text-green-700 flex items-center">
-                  <PlusCircle size={20} className="mr-2" /> Create New Patch Panel
+                  <PlusCircle size={20} className="mr-2" /> Create New Patch
+                  Panel
                 </h3>
                 {isNewPpExpanded ? (
                   <ChevronUp size={20} />
@@ -1332,7 +1536,8 @@ const ConnectionForm = memo(function ConnectionForm({
                     <option value="">-- Select Location --</option>
                     {sortedLocations.map((loc) => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                        {loc.name}{" "}
+                        {loc.door_number && `(Door: ${loc.door_number})`}
                       </option>
                     ))}
                   </select>
@@ -1356,14 +1561,26 @@ const ConnectionForm = memo(function ConnectionForm({
                   >
                     <option value="">-- Select Rack (Optional) --</option>
                     {sortedRacks
-                      .filter(rack => !newPpLocationId || (rack.location_id !== undefined && String(rack.location_id) === newPpLocationId))
+                      .filter(
+                        (rack) =>
+                          !newPpLocationId ||
+                          (rack.location_id !== undefined &&
+                            String(rack.location_id) === newPpLocationId)
+                      )
                       .map((rack) => (
                         <option key={rack.id} value={rack.id}>
-                          {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                          {rack.name} ({rack.location_name}
+                          {rack.location?.door_number &&
+                            ` (Door: ${rack.location.door_number})`}
+                          )
                         </option>
                       ))}
                   </select>
-                  {(racks.length === 0 || (newPpLocationId && sortedRacks.filter(rack => String(rack.location_id) === newPpLocationId).length === 0)) && (
+                  {(racks.length === 0 ||
+                    (newPpLocationId &&
+                      sortedRacks.filter(
+                        (rack) => String(rack.location_id) === newPpLocationId
+                      ).length === 0)) && (
                     <p className="text-sm text-gray-500 mt-1">
                       No racks available for selected location.
                     </p>
@@ -1445,7 +1662,8 @@ const ConnectionForm = memo(function ConnectionForm({
                     <option value="">-- Select Location --</option>
                     {sortedLocations.map((loc) => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                        {loc.name}{" "}
+                        {loc.door_number && `(Door: ${loc.door_number})`}
                       </option>
                     ))}
                   </select>
@@ -1469,14 +1687,27 @@ const ConnectionForm = memo(function ConnectionForm({
                   >
                     <option value="">-- Select Rack (Optional) --</option>
                     {sortedRacks
-                      .filter(rack => !newSwitchLocationId || (rack.location_id !== undefined && String(rack.location_id) === newSwitchLocationId))
+                      .filter(
+                        (rack) =>
+                          !newSwitchLocationId ||
+                          (rack.location_id !== undefined &&
+                            String(rack.location_id) === newSwitchLocationId)
+                      )
                       .map((rack) => (
                         <option key={rack.id} value={rack.id}>
-                          {rack.name} ({rack.location_name}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`})
+                          {rack.name} ({rack.location_name}
+                          {rack.location?.door_number &&
+                            ` (Door: ${rack.location.door_number})`}
+                          )
                         </option>
                       ))}
                   </select>
-                  {(racks.length === 0 || (newSwitchLocationId && sortedRacks.filter(rack => String(rack.location_id) === newSwitchLocationId).length === 0)) && (
+                  {(racks.length === 0 ||
+                    (newSwitchLocationId &&
+                      sortedRacks.filter(
+                        (rack) =>
+                          String(rack.location_id) === newSwitchLocationId
+                      ).length === 0)) && (
                     <p className="text-sm text-gray-500 mt-1">
                       No racks available for selected location.
                     </p>
@@ -1505,16 +1736,36 @@ const ConnectionForm = memo(function ConnectionForm({
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   />
                   <select // New Switch Usage dropdown
-                      value={newSwitchUsage}
-                      onChange={(e) => setNewSwitchUsage(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    value={newSwitchUsage}
+                    onChange={(e) => setNewSwitchUsage(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   >
-                      <option value="">-- Select Usage (Optional) --</option>
-                      {usageOptions.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                      {/* <option value="other">Add Custom Usage...</option> */}
+                    <option value="">-- Select Usage (Optional) --</option>
+                    {usageOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    {/* <option value="other">Add Custom Usage...</option> */}
                   </select>
+                  {newSwitchUsage === "other" && (
+                    <input
+                      type="text"
+                      placeholder="Enter custom usage"
+                      onBlur={(e) => {
+                        const customUsage = e.target.value.trim();
+                        if (customUsage) {
+                          if (!usageOptions.includes(customUsage)) {
+                            usageOptions.push(customUsage);
+                          }
+                          setNewSwitchUsage(customUsage);
+                        } else {
+                          setNewSwitchUsage("");
+                        }
+                      }}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  )}
                   <textarea
                     placeholder="Description (Optional)"
                     value={newSwitchDesc}

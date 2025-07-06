@@ -119,6 +119,12 @@ class PC(db.Model):
     multi_port = db.Column(db.Boolean, nullable=False, default=False)
     type = db.Column(db.String(50), nullable=False, default='Workstation')
     usage = db.Column(db.String(100), nullable=True)
+    # NEW: Fields for linking to Rack for 'Server' type PCs
+    row_in_rack = db.Column(db.String(50), nullable=True)
+    rack_name = db.Column(db.String(100), nullable=True) # Denormalized for easier access
+    rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
+    rack = db.relationship('Rack', backref='pcs_in_rack', lazy=True)
+
 
     def to_dict(self):
         return {
@@ -133,7 +139,11 @@ class PC(db.Model):
             'description': self.description,
             'multi_port': self.multi_port,
             'type': self.type,
-            'usage': self.usage
+            'usage': self.usage,
+            'row_in_rack': self.row_in_rack, # NEW
+            'rack_id': self.rack_id, # NEW
+            'rack_name': self.rack.name if self.rack else None, # NEW
+            'rack': self.rack.to_dict() if self.rack else None, # NEW
         }
 # --- Debugging Start ---
 print("--- app.py: PC model defined ---")
@@ -368,6 +378,19 @@ def validate_rack_unit_occupancy(rack_id, row_in_rack, device_type, exclude_devi
     if conflicting_pp:
         return True, f"Patch Panel '{conflicting_pp.name}'"
 
+    # NEW: Check PCs (of type 'Server')
+    pcs_in_row = PC.query.filter_by(
+        rack_id=rack_id,
+        row_in_rack=row_in_rack,
+        type='Server' # Only servers occupy rack space
+    )
+    if device_type == 'pc' and exclude_device_id:
+        pcs_in_row = pcs_in_row.filter(PC.id != exclude_device_id)
+    
+    conflicting_pc = pcs_in_row.first()
+    if conflicting_pc:
+        return True, f"PC '{conflicting_pc.name}' (Server)"
+
     return False, None
 
 def allowed_file(filename):
@@ -519,6 +542,25 @@ def handle_pcs():
         data = request.json
         if not data or not data.get('name'):
             return jsonify({'error': 'PC name is required'}), 400
+
+        pc_type = data.get('type', 'Workstation')
+        rack_id = data.get('rack_id')
+        row_in_rack = data.get('row_in_rack')
+
+        if pc_type == 'Server' and rack_id and row_in_rack:
+            is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                rack_id=rack_id,
+                row_in_rack=row_in_rack,
+                device_type='pc'
+            )
+            if is_occupied:
+                return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
+        
+        # If PC type is not 'Server', ensure rack_id and row_in_rack are null
+        if pc_type != 'Server':
+            rack_id = None
+            row_in_rack = None
+
         new_pc = PC(
             name=data['name'],
             ip_address=data.get('ip_address'),
@@ -529,18 +571,21 @@ def handle_pcs():
             office=data.get('office'),
             description=data.get('description'),
             multi_port=data.get('multi_port', False),
-            type=data.get('type', 'Workstation'),
-            usage=data.get('usage')
+            type=pc_type,
+            usage=data.get('usage'),
+            row_in_rack=row_in_rack, # NEW
+            rack_id=rack_id, # NEW
         )
         try:
             db.session.add(new_pc)
             db.session.commit()
+            db.session.refresh(new_pc) # Refresh to load relationship data (e.g., rack.name)
             return jsonify(new_pc.to_dict()), 201
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
     else:
-        pcs = PC.query.all()
+        pcs = PC.query.options(joinedload(PC.rack)).all() # Eager load rack for PC
         return jsonify([pc.to_dict() for pc in pcs])
 
 @app.route('/pcs/<int:pc_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -548,13 +593,36 @@ def handle_pc_by_id(pc_id):
     # --- Debugging Start ---
     print(f"--- app.py: Registering /pcs/{pc_id} endpoint ---")
     # --- Debugging End ---
-    pc = PC.query.get_or_404(pc_id)
+    pc = PC.query.options(joinedload(PC.rack)).get_or_404(pc_id) # Eager load rack for PC
     if request.method == 'GET':
         return jsonify(pc.to_dict())
     elif request.method == 'PUT':
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided for update'}), 400
+        
+        pc_type = data.get('type', pc.type) # Get new type or keep old
+        rack_id = data.get('rack_id', pc.rack_id)
+        row_in_rack = data.get('row_in_rack', pc.row_in_rack)
+
+        # Validate rack occupancy only if type is 'Server' and rack/row are provided/changed
+        if pc_type == 'Server' and rack_id and row_in_rack:
+            # Only validate if rack_id or row_in_rack has actually changed
+            if str(rack_id) != str(pc.rack_id) or str(row_in_rack) != str(pc.row_in_rack):
+                is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                    rack_id=rack_id,
+                    row_in_rack=row_in_rack,
+                    device_type='pc',
+                    exclude_device_id=pc_id
+                )
+                if is_occupied:
+                    return jsonify({'error': f"Rack unit '{row_in_rack}' in Rack ID '{rack_id}' is already occupied by {conflicting_device}."}), 409
+        
+        # If PC type changes from 'Server' to 'Workstation', clear rack details
+        if pc_type != 'Server':
+            rack_id = None
+            row_in_rack = None
+        
         pc.name = data.get('name', pc.name)
         pc.ip_address = data.get('ip_address', pc.ip_address)
         pc.username = data.get('username', pc.username)
@@ -564,10 +632,14 @@ def handle_pc_by_id(pc_id):
         pc.office = data.get('office', pc.office)
         pc.description = data.get('description', pc.description)
         pc.multi_port = data.get('multi_port', pc.multi_port)
-        pc.type = data.get('type', pc.type)
+        pc.type = pc_type # NEW
         pc.usage = data.get('usage', pc.usage)
+        pc.row_in_rack = row_in_rack # NEW
+        pc.rack_id = rack_id # NEW
+
         try:
             db.session.commit()
+            db.session.refresh(pc) # Refresh to load relationship data (e.g., rack.name)
             return jsonify(pc.to_dict())
         except Exception as e:
             db.session.rollback()
@@ -860,7 +932,7 @@ def handle_connections():
             return jsonify({'error': str(e)}), 500
     else: # GET
         connections = Connection.query.options(
-            joinedload(Connection.pc),
+            joinedload(Connection.pc).joinedload(PC.rack), # Eager load PC's rack
             joinedload(Connection.switch).joinedload(Switch.location),
             joinedload(Connection.switch).joinedload(Switch.rack),
             joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location),
@@ -874,7 +946,7 @@ def handle_connection_by_id(conn_id):
     print(f"--- app.py: Registering /connections/{conn_id} endpoint ---")
     # --- Debugging End ---
     connection = Connection.query.options(
-        joinedload(Connection.pc),
+        joinedload(Connection.pc).joinedload(PC.rack), # Eager load PC's rack
         joinedload(Connection.switch).joinedload(Switch.location),
         joinedload(Connection.switch).joinedload(Switch.rack),
         joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location),
@@ -1102,9 +1174,10 @@ def export_data(entity_type):
             data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in racks]
             filename = 'racks.csv'
         elif entity_type == 'pcs':
-            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage']
-            pcs = PC.query.all()
-            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage] for pc in pcs]
+            # UPDATED: Added new fields for PC export
+            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage', 'row_in_rack', 'rack_id', 'rack_name']
+            pcs = PC.query.options(joinedload(PC.rack)).all()
+            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.rack_id, pc.rack.name if pc.rack else ''] for pc in pcs]
             filename = 'pcs.csv'
         elif entity_type == 'patch_panels':
             headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'rack_id', 'rack_name', 'total_ports', 'description']
@@ -1231,7 +1304,9 @@ def import_data(entity_type):
             'office': 'office', 'description': 'description',
             'multi_port': lambda x: x.lower() == 'true',
             'type': 'type',
-            'usage': 'usage'
+            'usage': 'usage',
+            'row_in_rack': 'row_in_rack', # NEW
+            'rack_name': lambda x: Rack.query.filter_by(name=x).first().id if Rack.query.filter_by(name=x).first() else None, # NEW
         },
         'patch_panels': {
             'name': 'name',
@@ -1335,9 +1410,51 @@ def import_data(entity_type):
                     error_count += 1
                     continue
 
+                pc_type = row_dict.get('type', 'Workstation') # Default to Workstation
+                rack_id = None
+                row_in_rack = row_dict.get('row_in_rack')
+                rack_name = row_dict.get('rack_name')
+
+                if pc_type == 'Server' and rack_name:
+                    rack = Rack.query.filter_by(name=rack_name).first()
+                    if not rack:
+                        errors.append(f"Row {i+2}: Rack '{rack_name}' not found for PC '{name}'. Rack link skipped.")
+                    else:
+                        rack_id = rack.id
+                        # Validate rack occupancy for new server PCs during import
+                        if rack_id and row_in_rack:
+                            is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                                rack_id=rack_id,
+                                row_in_rack=row_in_rack,
+                                device_type='pc'
+                            )
+                            if is_occupied:
+                                errors.append(f"Row {i+2}: Rack unit '{row_in_rack}' in Rack '{rack_name}' is already occupied by {conflicting_device}. PC '{name}' skipped.")
+                                error_count += 1
+                                continue # Skip this PC if rack unit is occupied
+                
+                # Ensure rack_id and row_in_rack are null if not a Server
+                if pc_type != 'Server':
+                    rack_id = None
+                    row_in_rack = None
+
                 existing_pc = PC.query.filter_by(name=name).first()
                 if existing_pc:
                     # If PC exists, update it. This allows re-importing updated PC data.
+                    # Before updating, check if the update would cause a rack conflict
+                    if pc_type == 'Server' and rack_id and row_in_rack:
+                        if (str(rack_id) != str(existing_pc.rack_id) or str(row_in_rack) != str(existing_pc.row_in_rack)):
+                            is_occupied, conflicting_device = validate_rack_unit_occupancy(
+                                rack_id=rack_id,
+                                row_in_rack=row_in_rack,
+                                device_type='pc',
+                                exclude_device_id=existing_pc.id
+                            )
+                            if is_occupied:
+                                errors.append(f"Row {i+2}: Update for PC '{name}' would conflict with {conflicting_device} in Rack '{rack_name}' unit '{row_in_rack}'. Update skipped.")
+                                error_count += 1
+                                continue # Skip update if it causes a conflict
+
                     existing_pc.ip_address = row_dict.get('ip_address', existing_pc.ip_address)
                     existing_pc.username = row_dict.get('username', existing_pc.username)
                     existing_pc.in_domain = row_dict.get('in_domain', str(existing_pc.in_domain)).lower() == 'true'
@@ -1346,16 +1463,28 @@ def import_data(entity_type):
                     existing_pc.office = row_dict.get('office', existing_pc.office)
                     existing_pc.description = row_dict.get('description', existing_pc.description)
                     existing_pc.multi_port = row_dict.get('multi_port', str(existing_pc.multi_port)).lower() == 'true'
-                    existing_pc.type = row_dict.get('type', existing_pc.type)
-                    existing_pc.usage = row_dict.get('usage', existing_pc.usage)
+                    existing_pc.type = pc_type # NEW
+                    existing_pc.usage = row_dict.get('usage', existing_pc.usage) # NEW
+                    existing_pc.row_in_rack = row_in_rack # NEW
+                    existing_pc.rack_id = rack_id # NEW
                     success_count += 1
                     continue
 
-                new_item_data = {}
-                for csv_header, model_attr in field_maps['pcs'].items():
-                    val = row_dict.get(csv_header)
-                    if val is not None:
-                        new_item_data[model_attr if isinstance(model_attr, str) else csv_header] = model_attr(val) if callable(model_attr) else val
+                new_item_data = {
+                    'name': name,
+                    'ip_address': row_dict.get('ip_address'),
+                    'username': row_dict.get('username'),
+                    'in_domain': row_dict.get('in_domain', 'False').lower() == 'true',
+                    'operating_system': row_dict.get('operating_system'),
+                    'model': row_dict.get('model'),
+                    'office': row_dict.get('office'),
+                    'description': row_dict.get('description'),
+                    'multi_port': row_dict.get('multi_port', 'False').lower() == 'true',
+                    'type': pc_type, # NEW
+                    'usage': row_dict.get('usage'), # NEW
+                    'row_in_rack': row_in_rack, # NEW
+                    'rack_id': rack_id, # NEW
+                }
                 
                 new_pc = PC(**new_item_data)
                 db.session.add(new_pc)

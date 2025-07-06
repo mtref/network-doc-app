@@ -1,14 +1,14 @@
 // frontend/src/components/RackViewModal.js
 // This modal displays a larger, more detailed view of a single rack,
 // including its visual unit representation and key information.
+// UPDATED: Imports RackVisualizer from its new dedicated file and passes pcs data.
 
-import React from 'react';
-import { XCircle, Columns, MapPin, Info } from 'lucide-react';
-import { RackVisualizer } from './RackList';
+import React from "react";
+import { XCircle, Columns, MapPin, Info } from "lucide-react";
+import { RackVisualizer } from "./RackVisualizer"; // NEW: Import RackVisualizer from its own file
 
-
-
-function RackViewModal({ isOpen, onClose, rack, switches, patchPanels }) {
+function RackViewModal({ isOpen, onClose, rack, switches, patchPanels, pcs }) {
+  // Added pcs prop
   if (!isOpen || !rack) return null;
 
   return (
@@ -32,42 +32,47 @@ function RackViewModal({ isOpen, onClose, rack, switches, patchPanels }) {
         <div className="p-6 flex-grow overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">General Information:</h3>
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">
+                General Information:
+              </h3>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
                 <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
-                {rack.location_name || "N/A"}{rack.location?.door_number && ` (Door: ${rack.location.door_number})`}
+                {rack.location_name || "N/A"}
+                {rack.location?.door_number &&
+                  ` (Door: ${rack.location.door_number})`}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Columns size={16} className="text-gray-500 mr-2" /> Total Units: {rack.total_units}U
+                <Columns size={16} className="text-gray-500 mr-2" /> Total
+                Units: {rack.total_units}U
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Orientation: {rack.orientation || "N/A"}
+                <Info size={16} className="text-gray-500 mr-2" /> Orientation:{" "}
+                {rack.orientation || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">
-                <Info size={16} className="text-gray-500 mr-2 flex-shrink-0 mt-0.5" />{" "}
+                <Info
+                  size={16}
+                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                />{" "}
                 Description: {rack.description || "No description"}
               </p>
             </div>
-            
+
             {/* The larger RackVisualizer */}
             <div className="border border-gray-300 rounded-md p-2 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Rack Layout:</h3>
-              {/* Pass necessary props to a potentially larger RackVisualizer instance */}
-              {/* Note: The RackVisualizer component is defined within RackList.js for now.
-                 For true reusability in a separate file like this, you'd export it from RackList.js
-                 or define it directly here if it's solely for this modal.
-                 For simplicity in this example, we'll assume it's imported correctly.
-                 If RackVisualizer is NOT exported from RackList.js, you'd need to copy its code here
-                 or refactor RackList.js to export it.
-              */}
-              <RackVisualizer // This requires RackVisualizer to be imported correctly.
+              <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">
+                Rack Layout:
+              </h3>
+              <RackVisualizer
                 rack={rack}
-                switches={switches}
-                patchPanels={patchPanels}
+                switches={Array.isArray(switches) ? switches : []}
+                patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
+                pcs={Array.isArray(pcs) ? pcs : []}
                 // onShowPortStatus might not be needed in this read-only modal context,
                 // or you might want to pass it through if you want clickable units in the modal.
                 // For now, removing to avoid prop drilling if not strictly necessary.
                 // If you want units clickable in the modal, you need to pass it from App.js to this modal.
+                isModalView={true} // Explicitly set to true for modal view
               />
             </div>
           </div>

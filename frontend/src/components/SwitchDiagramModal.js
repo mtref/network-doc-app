@@ -3,6 +3,7 @@
 // using Konva, with enhanced visual styling for nodes and edges.
 // New features: Node tooltips on hover, animated "down" connections, and UI controls for zoom/pan.
 // Node visuals are now Lucide icons (Laptop, Server, Split) instead of simple rectangles.
+// UPDATED: Displaying rack and row for server PCs in tooltips and using correct icons.
 
 import React, { useCallback, useState, useEffect, useRef } from "react";
 import {
@@ -94,9 +95,9 @@ const NodeTooltip = ({ x, y, text, visible }) => {
   if (!visible || !text) return null;
 
   // Split text into lines to calculate accurate dimensions
-  const lines = text.split('\n');
-  const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), '');
-  
+  const lines = text.split("\n");
+  const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), "");
+
   // Approximate width based on average character width (adjust as needed)
   const approximateTextWidth = longestLine.length * 5.5 + 20; // 5.5px per char + padding
   const textHeight = lines.length * 12 + 10; // 12px per line + padding
@@ -136,13 +137,17 @@ const SwitchNodeKonva = ({
   }`;
   const tooltipText = `Name: ${node.label}\nIP: ${
     node.data.ip_address || "N/A"
-  }\nLocation: ${node.data.location_name || "N/A"}${node.data.location?.door_number ? ` (Door: ${node.data.location.door_number})` : ''}\nRack: ${
-    node.data.rack_name || "N/A"
-  } (Row: ${node.data.row_in_rack || "N/A"})\nModel: ${
-    node.data.model || "N/A"
-  }\nTotal Ports: ${node.data.total_ports}\nSource Port: ${
-    node.data.source_port || "N/A"
-  }\nUsage: ${node.data.usage || "N/A"}\nDescription: ${node.data.description || "N/A"}`;
+  }\nLocation: ${node.data.location_name || "N/A"}${
+    node.data.location?.door_number
+      ? ` (Door: ${node.data.location.door_number})`
+      : ""
+  }\nRack: ${node.data.rack_name || "N/A"} (Row: ${
+    node.data.row_in_rack || "N/A"
+  })\nModel: ${node.data.model || "N/A"}\nTotal Ports: ${
+    node.data.total_ports
+  }\nSource Port: ${node.data.source_port || "N/A"}\nUsage: ${
+    node.data.usage || "N/A"
+  }\nDescription: ${node.data.description || "N/A"}`;
 
   return (
     <Group
@@ -210,10 +215,11 @@ const PcNodeKonva = ({
   const rectRef = useRef();
 
   // New fields: username, in_domain, operating_system, model (replaces ports_name), office, multi_port, type, usage
+  // UPDATED: Include rack and row in rack for Server type PCs
   const labelText = `${node.label}\n(${node.data.office || "N/A"})\n${
     node.data.operating_system || "N/A"
   }`;
-  const tooltipText = `Name: ${node.label}\nIP: ${
+  let tooltipText = `Name: ${node.label}\nIP: ${
     node.data.ip_address || "N/A"
   }\nUsername: ${node.data.username || "N/A"}\nIn Domain: ${
     node.data.in_domain ? "Yes" : "No"
@@ -221,7 +227,15 @@ const PcNodeKonva = ({
     node.data.model || "N/A"
   }\nOffice: ${node.data.office || "N/A"}\nMulti-Port: ${
     node.data.multi_port ? "Yes" : "No"
-  }\nType: ${node.data.type || "N/A"}\nUsage: ${node.data.usage || "N/A"}\nDescription: ${node.data.description || "N/A"}`;
+  }\nType: ${node.data.type || "N/A"}\nUsage: ${node.data.usage || "N/A"}`;
+
+  // NEW: Add rack and row details to tooltip if it's a Server PC
+  if (node.data.type === "Server") {
+    tooltipText += `\nRack: ${node.data.rack_name || "N/A"} (Row: ${
+      node.data.row_in_rack || "N/A"
+    })`;
+  }
+  tooltipText += `\nDescription: ${node.data.description || "N/A"}`;
 
   return (
     <Group
@@ -320,11 +334,15 @@ const PatchPanelNodeKonva = ({
   }`;
   const tooltipText = `Name: ${node.label}\nLocation: ${
     node.data.location_name || "N/A"
-  }${node.data.location?.door_number ? ` (Door: ${node.data.location.door_number})` : ''}\nRack: ${
-    node.data.rack_name || "N/A"
-  } (Row: ${node.data.row_in_rack || "N/A"})\nTotal Ports: ${
-    node.data.total_ports
-  }\nDescription: ${node.data.description || "N/A"}`;
+  }${
+    node.data.location?.door_number
+      ? ` (Door: ${node.data.location.door_number})`
+      : ""
+  }\nRack: ${node.data.rack_name || "N/A"} (Row: ${
+    node.data.row_in_rack || "N/A"
+  })\nTotal Ports: ${node.data.total_ports}\nDescription: ${
+    node.data.description || "N/A"
+  }`;
 
   return (
     <Group
@@ -1258,15 +1276,20 @@ function SwitchDiagramModal({
                         iconToUse = switchIconImage;
                       } else if (node.type === "pc") {
                         // Choose PC icon based on type
-                        iconToUse = node.data.type === "Server" ? serverIconImage : workstationIconImage;
+                        iconToUse =
+                          node.data.type === "Server"
+                            ? serverIconImage
+                            : workstationIconImage;
                       } else if (node.type === "patchPanel") {
                         iconToUse = ppIconImage;
                       }
-                      
-                      const NodeComponent = 
-                        node.type === "switch" ? SwitchNodeKonva :
-                        node.type === "pc" ? PcNodeKonva :
-                        PatchPanelNodeKonva;
+
+                      const NodeComponent =
+                        node.type === "switch"
+                          ? SwitchNodeKonva
+                          : node.type === "pc"
+                          ? PcNodeKonva
+                          : PatchPanelNodeKonva;
 
                       return (
                         <NodeComponent

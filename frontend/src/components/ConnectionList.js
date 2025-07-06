@@ -4,6 +4,7 @@
 // with actions for editing and deleting.
 // The expand/collapse feature has been reintroduced with a more organized expanded view.
 // Now includes search and pagination.
+// UPDATED: Displaying rack and row for server PCs in expanded view.
 
 import React, { useState, useEffect } from "react";
 // Import icons from lucide-react for a better UI and consistent design
@@ -16,7 +17,7 @@ import {
   Wifi,
   User,
   Monitor,
-  Columns,
+  Columns, // Icon for Rack
   Link,
   Info,
   MapPin,
@@ -32,7 +33,8 @@ import {
 import SearchBar from "./SearchBar"; // Import the SearchBar component
 
 // ConnectionCard component (remains unchanged as it displays individual connection details)
-function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added onPrint prop
+function ConnectionCard({ connection, onDelete, onEdit, onPrint }) {
+  // Added onPrint prop
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = () => {
@@ -64,16 +66,25 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
           {/* Dynamically render compact view of cable color/label for direct connection to switch */}
           {connection.cable_color && (
             <>
-              <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
+              <ArrowRight
+                size={12}
+                className="text-gray-400 mx-1 flex-shrink-0"
+              />
               <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
-                <Palette size={16} className="text-purple-500 mr-1 flex-shrink-0" />
+                <Palette
+                  size={16}
+                  className="text-purple-500 mr-1 flex-shrink-0"
+                />
                 <span className="font-medium">{connection.cable_color}</span>
               </div>
             </>
           )}
           {connection.cable_label && (
             <>
-              <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
+              <ArrowRight
+                size={12}
+                className="text-gray-400 mx-1 flex-shrink-0"
+              />
               <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
                 <Tag size={16} className="text-orange-500 mr-1 flex-shrink-0" />
                 <span className="font-medium">{connection.cable_label}</span>
@@ -273,14 +284,13 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
                   : "No"
                 : "N/A"}
             </p>
-            <p className="flex items-center"> {/* New field: PC Type */}
+            <p className="flex items-center">
               <Info size={16} className="text-gray-500 mr-2" />{" "}
               <span className="font-medium">Type:</span>{" "}
               {connection.pc?.type || "N/A"}
             </p>
-            <p className="flex items-center"> {/* New field: PC Usage */}
-              <Info size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Usage:</span>{" "}
+            <p className="flex items-center">
+              <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
               {connection.pc?.usage || "N/A"}
             </p>
             <p className="flex items-center">
@@ -295,6 +305,19 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
               <Building2 size={16} className="text-gray-500 mr-2" /> Office:{" "}
               {connection.pc?.office || "N/A"}
             </p>
+            {/* NEW: Display Rack and Row for Server type PCs */}
+            {connection.pc?.type === "Server" && (
+              <>
+                <p className="flex items-center">
+                  <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
+                  {connection.pc?.rack_name || "N/A"}
+                </p>
+                <p className="flex items-center">
+                  <Server size={16} className="text-gray-500 mr-2" /> Row in
+                  Rack: {connection.pc?.row_in_rack || "N/A"}
+                </p>
+              </>
+            )}
             <p className="flex items-start col-span-full">
               <Info
                 size={16}
@@ -307,18 +330,20 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
 
           {/* Connection Cable Details (for direct Switch connection) */}
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <h4 className="font-semibold text-blue-700 mb-2">Connection Cable Details:</h4>
+            <h4 className="font-semibold text-blue-700 mb-2">
+              Connection Cable Details:
+            </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
-                <p className="flex items-center">
-                    <Palette size={16} className="text-purple-500 mr-2" />{" "}
-                    <span className="font-medium">Color:</span>{" "}
-                    {connection.cable_color || "N/A"}
-                </p>
-                <p className="flex items-center">
-                    <Tag size={16} className="text-orange-500 mr-2" />{" "}
-                    <span className="font-medium">Label:</span>{" "}
-                    {connection.cable_label || "N/A"}
-                </p>
+              <p className="flex items-center">
+                <Palette size={16} className="text-purple-500 mr-2" />{" "}
+                <span className="font-medium">Color:</span>{" "}
+                {connection.cable_color || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Tag size={16} className="text-orange-500 mr-2" />{" "}
+                <span className="font-medium">Label:</span>{" "}
+                {connection.cable_label || "N/A"}
+              </p>
             </div>
           </div>
 
@@ -342,7 +367,10 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
                   <span className="font-medium">Location:</span>{" "}
                   {hop.patch_panel?.location_name || "N/A"}
                   {hop.patch_panel?.location?.door_number && ( // Display door number
-                    <span className="ml-1"> (Door: {hop.patch_panel.location.door_number})</span>
+                    <span className="ml-1">
+                      {" "}
+                      (Door: {hop.patch_panel.location.door_number})
+                    </span>
                   )}
                 </p>
                 <p className="flex items-center">
@@ -366,15 +394,19 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
                   {hop.patch_panel_port || "N/A"} - Status:{" "}
                   {hop.is_port_up ? "Up" : "Down"}
                 </p>
-                <p className="flex items-center"> {/* New field: Cable Color for hop */}
-                    <Palette size={16} className="text-purple-500 mr-2" />{" "}
-                    <span className="font-medium">Cable Color:</span>{" "}
-                    {hop.cable_color || "N/A"}
+                <p className="flex items-center">
+                  {" "}
+                  {/* New field: Cable Color for hop */}
+                  <Palette size={16} className="text-purple-500 mr-2" />{" "}
+                  <span className="font-medium">Cable Color:</span>{" "}
+                  {hop.cable_color || "N/A"}
                 </p>
-                <p className="flex items-center"> {/* New field: Cable Label for hop */}
-                    <Tag size={16} className="text-orange-500 mr-2" />{" "}
-                    <span className="font-medium">Cable Label:</span>{" "}
-                    {hop.cable_label || "N/A"}
+                <p className="flex items-center">
+                  {" "}
+                  {/* New field: Cable Label for hop */}
+                  <Tag size={16} className="text-orange-500 mr-2" />{" "}
+                  <span className="font-medium">Cable Label:</span>{" "}
+                  {hop.cable_label || "N/A"}
                 </p>
                 <p className="flex items-start col-span-full">
                   <Info
@@ -407,32 +439,31 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
                 <span className="font-medium">Location:</span>{" "}
                 {connection.switch?.location_name || "N/A"}
                 {connection.switch?.location?.door_number && ( // Display door number
-                    <span className="ml-1"> (Door: {connection.switch.location.door_number})</span>
+                  <span className="ml-1">
+                    {" "}
+                    (Door: {connection.switch.location.door_number})
+                  </span>
                 )}
               </p>
               <p className="flex items-center">
                 <Columns size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Row:</span>{" "}
-                {connection.switch?.row_in_rack || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Server size={16} className="text-gray-500 mr-2" />{" "}
                 <span className="font-medium">Rack:</span>{" "}
                 {connection.switch?.rack_name || "N/A"}
               </p>
               <p className="flex items-center">
-                <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Total Ports:</span>{" "}
-                {connection.switch?.total_ports || "N/A"}
+                <Info size={16} className="text-gray-500 mr-2" /> Row in Rack:{" "}
+                {connection.switch?.row_in_rack || "N/A"}
               </p>
               <p className="flex items-center">
-                <Link size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Source Port:</span>{" "}
+                <HardDrive size={16} className="text-gray-500 mr-2" /> Total
+                Ports: {connection.switch?.total_ports || "N/A"}
+              </p>
+              <p className="flex items-center">
+                <Link size={16} className="text-gray-500 mr-2" /> Source Port:{" "}
                 {connection.switch?.source_port || "N/A"}
               </p>
               <p className="flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Model:</span>{" "}
+                <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
                 {connection.switch?.model || "N/A"}
               </p>
               <p className="flex items-center">
@@ -444,8 +475,7 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
                   size={16}
                   className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
                 />{" "}
-                <span className="font-medium">Description:</span>{" "}
-                {connection.switch?.description || "No description"}
+                Description: {connection.switch?.description || "N/A"}
               </p>
               <p className="flex items-center col-span-full">
                 <Link size={16} className="text-gray-500 mr-2" />{" "}
@@ -461,7 +491,8 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) { // Added on
   );
 }
 
-function ConnectionList({ connections, onDelete, onEdit, onPrint }) { // Pass onPrint here
+function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
+  // Pass onPrint here
   const [searchTerm, setSearchTerm] = useState(""); // State for search term
   const [filteredConnections, setFilteredConnections] = useState([]); // State for filtered connections
 
@@ -503,12 +534,23 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) { // Pass on
           .includes(lowerCaseSearchTerm) ||
         (connection.pc?.usage || "") // New: search by usage
           .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        // NEW: Search by PC rack and row
+        (connection.pc?.rack_name || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.pc?.row_in_rack || "")
+          .toLowerCase()
           .includes(lowerCaseSearchTerm);
 
       // Check Connection Cable details
       const connectionCableMatches =
-        (connection.cable_color || "").toLowerCase().includes(lowerCaseSearchTerm) ||
-        (connection.cable_label || "").toLowerCase().includes(lowerCaseSearchTerm);
+        (connection.cable_color || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm) ||
+        (connection.cable_label || "")
+          .toLowerCase()
+          .includes(lowerCaseSearchTerm);
 
       // Check Patch Panel hop details
       const hopMatches = connection.hops.some(
@@ -633,7 +675,7 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) { // Pass on
               connection={connection}
               onDelete={onDelete}
               onEdit={onEdit}
-              onPrint={onPrint} 
+              onPrint={onPrint}
             />
           ))}
         </div>
