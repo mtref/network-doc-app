@@ -15,13 +15,14 @@ import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import RackList from "./components/RackList";
 import RackViewModal from "./components/RackViewModal";
+import PcDetailsModal from "./components/PcDetailsModal";
 import { Printer } from "lucide-react";
 
 // Base URL for the backend API.
 const API_BASE_URL =
   process.env.NODE_ENV === "production" ? "/api" : "http://localhost:5004";
 
-// Robust deep comparison helper function - Keep this as it's useful for preventing unnecessary state updates
+// Robust deep comparison helper function
 const deepEqual = (a, b) => {
   if (a === b) return true;
 
@@ -83,10 +84,14 @@ function App() {
   const [showRackViewModal, setShowRackViewModal] = useState(false);
   const [selectedRackForView, setSelectedRackForView] = useState(null);
 
+  // State for PC Details Modal
+  const [showPcDetailsModal, setShowPcDetailsModal] = useState(false);
+  const [selectedPcForDetails, setSelectedPcForDetails] = useState(null);
+
   // State for editing a connection in the ConnectionForm
   const [editingConnection, setEditingConnection] = useState(null);
 
-  // State to store CSS content for injecting into print window (still used by PortStatusModal, if desired)
+  // State to store CSS content for injecting into print window
   const [cssContent, setCssContent] = useState("");
 
   // States for PDF templates and app settings
@@ -104,6 +109,18 @@ function App() {
     }, duration);
   }, []);
 
+  // Handler for viewing PC details
+  const handleViewPcDetails = useCallback((pc) => {
+    setSelectedPcForDetails(pc);
+    setShowPcDetailsModal(true);
+  }, []);
+
+  // Handler for closing PC details modal
+  const handleClosePcDetailsModal = useCallback(() => {
+    setShowPcDetailsModal(false);
+    setSelectedPcForDetails(null);
+  }, []);
+
   // Centralized data fetching function
   const fetchData = useCallback(
     async (endpoint, setter) => {
@@ -117,11 +134,6 @@ function App() {
         }
         const data = await response.json();
         setter(data);
-        // --- NEW CONSOLE LOG ADDED HERE ---
-        if (endpoint === "pcs") {
-          console.log("App.js: Fetched PCs and set state:", data);
-        }
-        // --- END NEW CONSOLE LOG ---
       } catch (error) {
         console.error(`Failed to fetch ${endpoint}:`, error);
         showMessage(`Error fetching ${endpoint}: ${error.message}`, 5000);
@@ -155,7 +167,7 @@ function App() {
     };
     fetchAllInitialData();
 
-    // Fetch CSS for printing (still useful for PortStatusModal if you want to print it)
+    // Fetch CSS for printing
     fetch("/static/css/main.css")
       .then((res) => res.text())
       .then((css) => setCssContent(css))
@@ -410,27 +422,38 @@ function App() {
 
   const handleShowPortStatus = useCallback(
     async (entityType, entityId) => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/${entityType}/${entityId}/ports`
-        );
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
+      // Only attempt to fetch ports for switches and patch panels
+      if (entityType === "switches" || entityType === "patch_panels") {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/${entityType}/${entityId}/ports`
           );
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+              errorData.error || `HTTP error! status: ${response.status}`
+            );
+          }
+          const data = await response.json();
+          setPortStatusData(data);
+          setModalEntityType(entityType);
+          setModalEntityId(entityId);
+          setShowPortStatusModal(true);
+        } catch (error) {
+          console.error(`Failed to fetch ${entityType} port status:`, error);
+          showMessage(`Error fetching port status: ${error.message}`, 5000);
         }
-        const data = await response.json();
-        setPortStatusData(data);
-        setModalEntityType(entityType);
-        setModalEntityId(entityId);
-        setShowPortStatusModal(true);
-      } catch (error) {
-        console.error(`Failed to fetch ${entityType} port status:`, error);
-        showMessage(`Error fetching port status: ${error.message}`, 5000);
+      } else {
+        // For PCs, we want to show PC details, not port status
+        const pc = pcs.find((p) => p.id === entityId);
+        if (pc) {
+          handleViewPcDetails(pc);
+        } else {
+          showMessage("PC details not found.", 3000);
+        }
       }
     },
-    [showMessage]
+    [showMessage, pcs, handleViewPcDetails]
   );
 
   const handleClosePortStatusModal = useCallback(() => {
@@ -441,27 +464,23 @@ function App() {
   }, []);
 
   const handleViewSwitchDiagram = useCallback((_switch) => {
-    console.log("handleViewSwitchDiagram called for switch:", _switch);
     setSelectedSwitchForDiagram(_switch);
     setShowSwitchDiagramModal(true);
   }, []);
 
   const handleCloseSwitchDiagramModal = useCallback(() => {
-    console.log("handleCloseSwitchDiagramModal called");
     setShowSwitchDiagramModal(false);
     setSelectedSwitchForDiagram(null);
   }, []);
 
   // Handler for viewing full Rack details
   const handleViewRackDetails = useCallback((rack) => {
-    console.log("handleViewRackDetails called for rack:", rack);
     setSelectedRackForView(rack);
     setShowRackViewModal(true);
   }, []);
 
   // Handler for closing Rack View Modal
   const handleCloseRackViewModal = useCallback(() => {
-    console.log("handleCloseRackViewModal called");
     setShowRackViewModal(false);
     setSelectedRackForView(null);
   }, []);
@@ -541,7 +560,17 @@ function App() {
           switches={switches}
           patchPanels={patchPanels}
           pcs={pcs}
-          onShowPortStatus={handleShowPortStatus}
+          onShowPortStatus={handleShowPortStatus} // Pass to RackViewModal
+          onViewPcDetails={handleViewPcDetails} // Pass to RackViewModal
+        />
+      )}
+
+      {/* PC Details Modal */}
+      {showPcDetailsModal && selectedPcForDetails && (
+        <PcDetailsModal
+          isOpen={showPcDetailsModal}
+          onClose={handleClosePcDetailsModal}
+          pc={selectedPcForDetails}
         />
       )}
 
@@ -899,7 +928,7 @@ function App() {
               defaultPdfId={defaultPdfId}
               setDefaultPdfId={setDefaultPdfId}
               setSelectedPrintTemplateId={setSelectedPrintTemplateId}
-              fetchPdfTemplates={fetchData} // Pass the general fetchData for PDF templates
+              fetchPdfTemplates={fetchData}
             />
           )}
         </main>

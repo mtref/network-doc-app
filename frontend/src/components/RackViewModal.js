@@ -7,8 +7,17 @@ import React from "react";
 import { XCircle, Columns, MapPin, Info } from "lucide-react";
 import { RackVisualizer } from "./RackVisualizer"; // NEW: Import RackVisualizer from its own file
 
-function RackViewModal({ isOpen, onClose, rack, switches, patchPanels, pcs }) {
-  // Added pcs prop
+function RackViewModal({
+  isOpen,
+  onClose,
+  rack,
+  switches,
+  patchPanels,
+  pcs,
+  onShowPortStatus,
+  onViewPcDetails,
+}) {
+  // Added pcs, onShowPortStatus, and onViewPcDetails props
   if (!isOpen || !rack) return null;
 
   return (
@@ -68,10 +77,8 @@ function RackViewModal({ isOpen, onClose, rack, switches, patchPanels, pcs }) {
                 switches={Array.isArray(switches) ? switches : []}
                 patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
                 pcs={Array.isArray(pcs) ? pcs : []}
-                // onShowPortStatus might not be needed in this read-only modal context,
-                // or you might want to pass it through if you want clickable units in the modal.
-                // For now, removing to avoid prop drilling if not strictly necessary.
-                // If you want units clickable in the modal, you need to pass it from App.js to this modal.
+                onShowPortStatus={onShowPortStatus} // Now correctly passed
+                onViewPcDetails={onViewPcDetails} // Now correctly passed
                 isModalView={true} // Explicitly set to true for modal view
               />
             </div>
