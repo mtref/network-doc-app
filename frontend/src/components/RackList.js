@@ -1,26 +1,25 @@
 // frontend/src/components/RackList.js
 // This component displays a searchable list of Racks in a card format,
 // including filter options by Location, and now a visual representation of each rack.
-// UPDATED: Imports RackVisualizer from its new dedicated file.
 
-import React, { useState, useEffect, useCallback, useRef } from "react"; // Import useRef
-import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import SearchBar from "./SearchBar";
 import {
-  Columns, // Icon for Rack
-  MapPin, // Icon for Location
-  Info, // Icon for Description
-  PlusCircle, // Icon for Add button
-  ChevronDown, // Icon for Collapse
-  ChevronUp, // Icon for Expand
-  Filter, // Icon for Filter
-  Server, // Icon for Switch
-  Split, // Icon for Patch Panel
-  HardDrive, // Generic device icon for unknown type
-  ArrowDownNarrowWide, // Icon for top-down orientation
-  ArrowUpWideNarrow, // Icon for bottom-up orientation
-  Maximize, // Icon for View Rack button
+  Columns,
+  MapPin,
+  Info,
+  PlusCircle,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Server,
+  Split,
+  HardDrive,
+  ArrowDownNarrowWide,
+  ArrowUpWideNarrow,
+  Maximize,
 } from "lucide-react";
-import { RackVisualizer } from "./RackVisualizer"; // NEW: Import RackVisualizer from its own file
+import { RackVisualizer } from "./RackVisualizer";
 
 function RackList({
   racks,
@@ -30,28 +29,27 @@ function RackList({
   onDeleteEntity,
   switches,
   patchPanels,
-  pcs, // Added pcs prop
+  pcs,
   onShowPortStatus,
   onViewRackDetails,
+  showMessage, // Destructure showMessage prop
+  onViewPcDetails, // NEW: Destructure onViewPcDetails prop
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRacks, setFilteredRacks] = useState([]);
-  const [editingRack, setEditingRack] = useState(null); // State for editing a Rack
+  const [editingRack, setEditingRack] = useState(null);
   const [rackFormName, setRackFormName] = useState("");
   const [rackFormLocationId, setRackFormLocationId] = useState("");
   const [rackFormDescription, setRackFormDescription] = useState("");
-  const [rackFormTotalUnits, setRackFormTotalUnits] = useState(42); // NEW: State for total_units
-  const [rackFormOrientation, setRackFormOrientation] = useState("bottom-up"); // NEW: State for orientation
+  const [rackFormTotalUnits, setRackFormTotalUnits] = useState(42);
+  const [rackFormOrientation, setRackFormOrientation] = useState("bottom-up");
 
   const [isAddRackFormExpanded, setIsAddRackFormExpanded] = useState(false);
 
-  // State for filter options
   const [selectedLocationFilter, setSelectedLocationFilter] = useState("all");
 
-  // State to hold available unique location options for filters
   const [availableLocationOptions, setAvailableLocationOptions] = useState([]);
 
-  // Effect to extract unique filter options whenever 'racks' or 'locations' data changes
   useEffect(() => {
     const uniqueLocations = [
       ...new Set(
@@ -64,30 +62,26 @@ function RackList({
     setAvailableLocationOptions(uniqueLocations);
   }, [racks, locations]);
 
-  // Filter Racks based on search term and filter selections
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const currentRacks = Array.isArray(racks) ? racks : []; // Defensive check
-    const currentLocations = Array.isArray(locations) ? locations : []; // Defensive check
+    const currentRacks = Array.isArray(racks) ? racks : [];
+    const currentLocations = Array.isArray(locations) ? locations : [];
 
     const filtered = currentRacks.filter((rack) => {
-      // Safely get location door number for search
       const rackLocationDoorNumber = rack.location?.door_number || "";
 
-      // Text search filter
       const matchesSearch =
         (rack.name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (rack.location_name || "")
           .toLowerCase()
           .includes(lowerCaseSearchTerm) ||
-        rackLocationDoorNumber.toLowerCase().includes(lowerCaseSearchTerm) || // Search by door number
+        rackLocationDoorNumber.toLowerCase().includes(lowerCaseSearchTerm) ||
         (rack.description || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         (typeof rack.total_units === "number" &&
-          String(rack.total_units).includes(lowerCaseSearchTerm)) || // Search by total_units
+          String(rack.total_units).includes(lowerCaseSearchTerm)) ||
         (typeof rack.orientation === "string" &&
-          rack.orientation.toLowerCase().includes(lowerCaseSearchTerm)); // NEW: Search by orientation
+          rack.orientation.toLowerCase().includes(lowerCaseSearchTerm));
 
-      // Location filter
       const matchesLocation =
         selectedLocationFilter === "all" ||
         rack.location_name +
@@ -101,31 +95,29 @@ function RackList({
     setFilteredRacks(filtered);
   }, [racks, searchTerm, selectedLocationFilter, locations]);
 
-  // Handle edit initiation
   const handleEdit = useCallback((rack) => {
     setEditingRack(rack);
     setRackFormName(rack.name);
     setRackFormLocationId(rack.location_id || "");
     setRackFormDescription(rack.description || "");
-    setRackFormTotalUnits(rack.total_units || 42); // NEW: Set total_units for editing
-    setRackFormOrientation(rack.orientation || "bottom-up"); // NEW: Set orientation for editing
-    setIsAddRackFormExpanded(true); // Expand form when editing
+    setRackFormTotalUnits(rack.total_units || 42);
+    setRackFormOrientation(rack.orientation || "bottom-up");
+    setIsAddRackFormExpanded(true);
   }, []);
 
-  // Handle form submission for Add/Update Rack
   const handleRackFormSubmit = async (e) => {
     e.preventDefault();
     if (!rackFormName.trim() || !rackFormLocationId) {
-      alert("Rack Name and Location are required.");
+      showMessage("Rack Name and Location are required.", 3000);
       return;
     }
-    // Basic validation for total_units
+
     if (
       isNaN(parseInt(rackFormTotalUnits)) ||
       parseInt(rackFormTotalUnits) < 1 ||
       parseInt(rackFormTotalUnits) > 50
     ) {
-      alert("Total Units must be a number between 1 and 50.");
+      showMessage("Total Units must be a number between 1 and 50.", 3000);
       return;
     }
 
@@ -133,22 +125,34 @@ function RackList({
       name: rackFormName,
       location_id: parseInt(rackFormLocationId),
       description: rackFormDescription,
-      total_units: parseInt(rackFormTotalUnits), // NEW: Include total_units in data
-      orientation: rackFormOrientation, // NEW: Include orientation in data
+      total_units: parseInt(rackFormTotalUnits),
+      orientation: rackFormOrientation,
     };
 
+    let success = false;
+    let errorMessage = "";
+
     if (editingRack) {
-      await onUpdateEntity("racks", editingRack.id, rackData);
+      const result = await onUpdateEntity("racks", editingRack.id, rackData);
+      success = result.success;
+      errorMessage = result.error;
     } else {
-      await onAddEntity("racks", rackData);
+      const result = await onAddEntity("racks", rackData);
+      success = result.success;
+      errorMessage = result.error;
     }
-    setEditingRack(null); // Clear editing state
-    setRackFormName(""); // Clear form fields
-    setRackFormLocationId("");
-    setRackFormDescription("");
-    setRackFormTotalUnits(42); // NEW: Reset total_units
-    setRackFormOrientation("bottom-up"); // NEW: Reset orientation
-    setIsAddRackFormExpanded(false); // Collapse form after submission
+
+    if (success) {
+      setEditingRack(null);
+      setRackFormName("");
+      setRackFormLocationId("");
+      setRackFormDescription("");
+      setRackFormTotalUnits(42);
+      setRackFormOrientation("bottom-up");
+      setIsAddRackFormExpanded(false);
+    } else {
+      showMessage(`Operation failed: ${errorMessage}`, 5000);
+    }
   };
 
   const sortedLocations = [...locations].sort((a, b) =>
@@ -262,7 +266,7 @@ function RackList({
                 required
               />
             </div>
-            {/* NEW: Orientation Selection with Icon */}
+            {/* Orientation Selection with Icon */}
             <div className="flex items-center space-x-2">
               {rackFormOrientation === "top-down" ? (
                 <ArrowDownNarrowWide size={20} className="text-gray-500" />
@@ -313,8 +317,8 @@ function RackList({
                     setRackFormName("");
                     setRackFormLocationId("");
                     setRackFormDescription("");
-                    setRackFormTotalUnits(42); // Reset total_units
-                    setRackFormOrientation("bottom-up"); // Reset orientation
+                    setRackFormTotalUnits(42);
+                    setRackFormOrientation("bottom-up");
                     setIsAddRackFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -358,14 +362,15 @@ function RackList({
                 Description: {rack.description || "No description"}
               </p>
 
-              {/* NEW: Rack Visualizer Component */}
+              {/* Rack Visualizer Component */}
               <RackVisualizer
                 rack={rack}
-                switches={Array.isArray(switches) ? switches : []} // Ensure switches is an array
-                patchPanels={Array.isArray(patchPanels) ? patchPanels : []} // Ensure patchPanels is an array
-                pcs={Array.isArray(pcs) ? pcs : []} // NEW: Pass pcs to RackVisualizer
+                switches={Array.isArray(switches) ? switches : []}
+                patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
+                pcs={Array.isArray(pcs) ? pcs : []}
                 onShowPortStatus={onShowPortStatus}
-                isModalView={false} // Explicitly set to false for list view
+                onViewPcDetails={onViewPcDetails} // Pass onViewPcDetails here
+                isModalView={false}
               />
 
               <div className="flex justify-end space-x-2 mt-4">
@@ -381,7 +386,7 @@ function RackList({
                 >
                   Delete
                 </button>
-                {/* NEW: View Rack Details Button */}
+                {/* View Rack Details Button */}
                 <button
                   onClick={() => onViewRackDetails(rack)}
                   className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"

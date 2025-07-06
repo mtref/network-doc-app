@@ -501,15 +501,47 @@ def handle_rack_by_id(rack_id):
         if not data or not data.get('name') or not data.get('location_id'):
             return jsonify({'error': 'Rack name and location_id are required'}), 400
         
+        # NEW VALIDATION LOGIC FOR DECREASING TOTAL_UNITS
         if 'total_units' in data:
-            total_units = data.get('total_units')
+            new_total_units = data.get('total_units')
             try:
-                total_units = int(total_units)
-                if not (1 <= total_units <= 50):
+                new_total_units = int(new_total_units)
+                if not (1 <= new_total_units <= 50):
                     return jsonify({'error': 'Total units must be an integer between 1 and 50.'}), 400
             except (ValueError, TypeError):
                 return jsonify({'error': 'Total units must be a valid integer.'}), 400
-            rack.total_units = total_units
+            
+            # If reducing total_units, check for occupied units that would be removed
+            if new_total_units < rack.total_units:
+                # Check Switches in this rack
+                conflicting_switches = Switch.query.filter(
+                    Switch.rack_id == rack_id,
+                    Switch.row_in_rack.isnot(None),
+                    db.cast(Switch.row_in_rack, db.Integer) > new_total_units
+                ).all()
+                if conflicting_switches:
+                    return jsonify({'error': f"Cannot decrease total units to {new_total_units}U. Switch '{conflicting_switches[0].name}' is assigned to row {conflicting_switches[0].row_in_rack}."}), 409
+
+                # Check Patch Panels in this rack
+                conflicting_pps = PatchPanel.query.filter(
+                    PatchPanel.rack_id == rack_id,
+                    PatchPanel.row_in_rack.isnot(None),
+                    db.cast(PatchPanel.row_in_rack, db.Integer) > new_total_units
+                ).all()
+                if conflicting_pps:
+                    return jsonify({'error': f"Cannot decrease total units to {new_total_units}U. Patch Panel '{conflicting_pps[0].name}' is assigned to row {conflicting_pps[0].row_in_rack}."}), 409
+
+                # Check Server PCs in this rack
+                conflicting_pcs = PC.query.filter(
+                    PC.rack_id == rack_id,
+                    PC.type == 'Server',
+                    PC.row_in_rack.isnot(None),
+                    db.cast(PC.row_in_rack, db.Integer) > new_total_units
+                ).all()
+                if conflicting_pcs:
+                    return jsonify({'error': f"Cannot decrease total units to {new_total_units}U. Server PC '{conflicting_pcs[0].name}' is assigned to row {conflicting_pcs[0].row_in_rack}."}), 409
+            
+            rack.total_units = new_total_units
         
         rack.name = data.get('name', rack.name)
         rack.location_id = data.get('location_id', rack.location_id)
@@ -633,7 +665,7 @@ def handle_pc_by_id(pc_id):
         pc.description = data.get('description', pc.description)
         pc.multi_port = data.get('multi_port', pc.multi_port)
         pc.type = pc_type # NEW
-        pc.usage = data.get('usage', pc.usage)
+        pc.usage = data.get('usage', pc.usage) # NEW
         pc.row_in_rack = row_in_rack # NEW
         pc.rack_id = rack_id # NEW
 
@@ -1203,7 +1235,7 @@ def export_data(entity_type):
                 ])
 
             all_connections = Connection.query.options(
-                joinedload(Connection.pc),
+                joinedload(Connection.pc).joinedload(PC.rack), # Eager load PC's rack
                 joinedload(Connection.switch).joinedload(Switch.location),
                 joinedload(Connection.switch).joinedload(Switch.rack),
                 joinedload(Connection.hops).joinedload(ConnectionHop.patch_panel).joinedload(PatchPanel.location),
