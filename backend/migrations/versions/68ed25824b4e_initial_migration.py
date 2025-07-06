@@ -1,8 +1,8 @@
-"""Initial schema setup with all models and fields
+"""Initial migration
 
-Revision ID: 77757f0d01b1
+Revision ID: 68ed25824b4e
 Revises: 
-Create Date: 2025-07-06 15:28:35.626731
+Create Date: 2025-07-06 21:52:53.233265
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '77757f0d01b1'
+revision = '68ed25824b4e'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -55,7 +55,6 @@ def upgrade():
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('location_id', sa.Integer(), nullable=True),
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
-    sa.Column('rack_name', sa.String(length=100), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=255), nullable=True),
@@ -78,7 +77,6 @@ def upgrade():
     sa.Column('type', sa.String(length=50), nullable=False),
     sa.Column('usage', sa.String(length=100), nullable=True),
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
-    sa.Column('rack_name', sa.String(length=100), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['rack_id'], ['racks.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -90,7 +88,6 @@ def upgrade():
     sa.Column('ip_address', sa.String(length=100), nullable=True),
     sa.Column('location_id', sa.Integer(), nullable=True),
     sa.Column('row_in_rack', sa.String(length=50), nullable=True),
-    sa.Column('rack_name', sa.String(length=100), nullable=True),
     sa.Column('rack_id', sa.Integer(), nullable=True),
     sa.Column('total_ports', sa.Integer(), nullable=False),
     sa.Column('source_port', sa.String(length=100), nullable=True),
