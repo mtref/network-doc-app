@@ -17,6 +17,8 @@ from .services import (
     PdfTemplateService,
     AppSettingsService
 )
+# UPDATED: Import all necessary models for direct querying in routes
+from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
 from .utils import MAX_HOPS # Import MAX_HOPS for CSV export/import headers
 from werkzeug.utils import secure_filename # For secure filenames
 
@@ -524,7 +526,7 @@ def register_routes(app):
 
                         rack_data = {
                             'name': name,
-                            'location_id': location.id,
+                            'location_id': location.id, 
                             'description': row_dict.get('description'),
                             'total_units': int(row_dict.get('total_units', 42)),
                             'orientation': row_dict.get('orientation', 'bottom-up'),
@@ -538,8 +540,8 @@ def register_routes(app):
 
                         pc_type = row_dict.get('type', 'Workstation')
                         rack_id = None
-                        row_in_rack = None # Initialize to None
-                        units_occupied = 1 # Initialize to 1
+                        row_in_rack = None 
+                        units_occupied = 1 
                         rack_name = row_dict.get('rack_name')
 
                         if pc_type == 'Server' and rack_name:
@@ -548,7 +550,6 @@ def register_routes(app):
                                 errors.append(f"Row {i+2}: Rack '{rack_name}' not found for PC '{name}'. Rack link skipped.")
                             else:
                                 rack_id = rack.id
-                                # Ensure row_in_rack and units_occupied are correctly parsed
                                 try:
                                     row_in_rack = int(row_dict.get('row_in_rack')) if row_dict.get('row_in_rack') else None
                                     units_occupied = int(row_dict.get('units_occupied', 1))
@@ -557,7 +558,6 @@ def register_routes(app):
                                 except (ValueError, TypeError):
                                     raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for Server PCs.")
 
-                                # UPDATED: Pass units_occupied to validation
                                 is_occupied, conflicting_device = validate_rack_unit_occupancy(
                                     db.session,
                                     rack_id=rack_id,
@@ -568,15 +568,13 @@ def register_routes(app):
                                 if is_occupied:
                                     raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. PC '{name}' skipped.")
                         
-                        # Ensure rack_id, row_in_rack, and units_occupied are null/default if not a Server
                         if pc_type != 'Server':
                             rack_id = None
                             row_in_rack = None
-                            units_occupied = 1 # Default to 1 unit for non-servers
+                            units_occupied = 1 
 
-                        existing_pc = db.session.query(PC).filter_by(name=name).first() # Assuming name is unique
+                        existing_pc = db.session.query(PC).filter_by(name=name).first() 
                         if existing_pc:
-                            # Update existing PC
                             update_data = {
                                 'ip_address': row_dict.get('ip_address', existing_pc.ip_address),
                                 'username': row_dict.get('username', existing_pc.username),
@@ -590,11 +588,10 @@ def register_routes(app):
                                 'usage': row_dict.get('usage', existing_pc.usage),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
-                                'units_occupied': units_occupied, # NEW: Import units_occupied
+                                'units_occupied': units_occupied, 
                             }
                             PCService.update_pc(existing_pc, update_data)
                         else:
-                            # Create new PC
                             create_data = {
                                 'name': name,
                                 'ip_address': row_dict.get('ip_address'),
@@ -609,7 +606,7 @@ def register_routes(app):
                                 'usage': row_dict.get('usage'),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
-                                'units_occupied': units_occupied, # NEW: Import units_occupied
+                                'units_occupied': units_occupied, 
                             }
                             PCService.create_pc(create_data)
 
@@ -642,7 +639,6 @@ def register_routes(app):
                                 except (ValueError, TypeError):
                                     raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Patch Panel.")
 
-                                # UPDATED: Pass units_occupied to validation
                                 is_occupied, conflicting_device = validate_rack_unit_occupancy(
                                     db.session,
                                     rack_id=rack_id,
@@ -653,7 +649,7 @@ def register_routes(app):
                                 if is_occupied:
                                     raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. Patch Panel '{name}' skipped.")
 
-                        existing_pp = db.session.query(PatchPanel).filter_by(name=name).first() # Assuming name is unique
+                        existing_pp = db.session.query(PatchPanel).filter_by(name=name).first() 
                         if existing_pp:
                             raise ValueError(f"Patch Panel '{name}' already exists. Skipped.")
                         
@@ -662,7 +658,7 @@ def register_routes(app):
                             'location_id': location.id,
                             'rack_id': rack_id,
                             'row_in_rack': row_in_rack,
-                            'units_occupied': units_occupied, # NEW: Import units_occupied
+                            'units_occupied': units_occupied, 
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'description': row_dict.get('description')
                         }
@@ -697,7 +693,6 @@ def register_routes(app):
                                 except (ValueError, TypeError):
                                     raise ValueError("Invalid 'row_in_rack' or 'units_occupied'. Must be positive integers for rack-mounted Switch.")
 
-                                # UPDATED: Pass units_occupied to validation
                                 is_occupied, conflicting_device = validate_rack_unit_occupancy(
                                     db.session,
                                     rack_id=rack_id,
@@ -708,7 +703,7 @@ def register_routes(app):
                                 if is_occupied:
                                     raise ValueError(f"Rack unit(s) is already occupied by {conflicting_device}. Switch '{name}' skipped.")
 
-                        existing_switch = db.session.query(Switch).filter_by(name=name).first() # Assuming name is unique
+                        existing_switch = db.session.query(Switch).filter_by(name=name).first() 
                         if existing_switch:
                             raise ValueError(f"Switch '{name}' already exists. Skipped.")
                         
@@ -718,7 +713,7 @@ def register_routes(app):
                             'location_id': location.id,
                             'rack_id': rack_id,
                             'row_in_rack': row_in_rack,
-                            'units_occupied': units_occupied, # NEW: Import units_occupied
+                            'units_occupied': units_occupied, 
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'source_port': row_dict.get('source_port'),
                             'model': row_dict.get('model'),
@@ -797,11 +792,11 @@ def register_routes(app):
                     else:
                         raise ValueError('Invalid entity type for import.')
                     
-                    db.session.commit() # Commit the nested transaction for this row
+                    db.session.commit() 
                     success_count += 1
 
                 except ValueError as e:
-                    db.session.rollback() # Rollback the nested transaction for this row
+                    db.session.rollback() 
                     errors.append(f"Row {i+2}: {str(e)}")
                     error_count += 1
                 except IntegrityError as e:
@@ -814,7 +809,6 @@ def register_routes(app):
                     error_count += 1
 
         except Exception as e:
-            # This outer catch is for errors before row processing or general issues
             db.session.rollback()
             app.logger.error(f"Error during CSV import for {entity_type}: {str(e)}")
             return jsonify({'error': f'Failed to import data: {str(e)}', 'details': errors}), 500
