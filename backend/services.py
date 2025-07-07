@@ -666,8 +666,10 @@ class ConnectionService:
             is_switch_port_up=data['is_switch_port_up'],
             cable_color=data.get('cable_color'),
             cable_label=data.get('cable_label'),
-            # ADDED: Handle wall_point_label on creation
-            wall_point_label=data.get('wall_point_label')
+            wall_point_label=data.get('wall_point_label'),
+            # ADDED: Handle new wall point cable fields on creation
+            wall_point_cable_color=data.get('wall_point_cable_color'),
+            wall_point_cable_label=data.get('wall_point_cable_label')
         )
         db.session.add(new_connection)
         db.session.flush()
@@ -732,8 +734,10 @@ class ConnectionService:
         connection.is_switch_port_up = data.get('is_switch_port_up', connection.is_switch_port_up)
         connection.cable_color = data.get('cable_color', connection.cable_color)
         connection.cable_label = data.get('cable_label', connection.cable_label)
-        # ADDED: Handle wall_point_label on update
         connection.wall_point_label = data.get('wall_point_label', connection.wall_point_label)
+        # ADDED: Handle new wall point cable fields on update
+        connection.wall_point_cable_color = data.get('wall_point_cable_color', connection.wall_point_cable_color)
+        connection.wall_point_cable_label = data.get('wall_point_cable_label', connection.wall_point_cable_label)
 
         if 'hops' in data:
             for hop in connection.hops:

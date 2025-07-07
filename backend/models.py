@@ -157,10 +157,16 @@ class Connection(db.Model):
     switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
     switch_port = db.Column(db.String(50), nullable=False)
     is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
+    
+    # Cable from Switch Port to the last Patch Panel (or directly to Wall Point if no hops)
     cable_color = db.Column(db.String(50), nullable=True)
     cable_label = db.Column(db.String(100), nullable=True)
-    # ADDED: New field for Wall Point Label
+    
+    # Cable from PC to the Wall Point
     wall_point_label = db.Column(db.String(100), nullable=True)
+    # ADDED: New fields for Wall Point cable
+    wall_point_cable_color = db.Column(db.String(50), nullable=True)
+    wall_point_cable_label = db.Column(db.String(100), nullable=True)
 
     pc = db.relationship('PC', backref='connections_as_pc', lazy=True)
     switch = db.relationship('Switch', backref='connections_as_switch', lazy=True)
@@ -179,8 +185,10 @@ class Connection(db.Model):
             'is_switch_port_up': self.is_switch_port_up,
             'cable_color': self.cable_color,
             'cable_label': self.cable_label,
-            # ADDED: Include wall_point_label in the dictionary
-            'wall_point_label': self.wall_point_label
+            'wall_point_label': self.wall_point_label,
+            # ADDED: Include new fields in the dictionary
+            'wall_point_cable_color': self.wall_point_cable_color,
+            'wall_point_cable_label': self.wall_point_cable_label
         }
 
 class ConnectionHop(db.Model):

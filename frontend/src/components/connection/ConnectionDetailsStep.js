@@ -30,6 +30,8 @@ export const ConnectionDetailsStep = ({
     cableColor,
     cableLabel,
     wallPointLabel,
+    wallPointCableColor,
+    wallPointCableLabel, // New state for wall point cable
     availablePcsForConnection,
     selectedLocationIdForSwitch,
     filteredSwitchesByLocation,
@@ -52,6 +54,8 @@ export const ConnectionDetailsStep = ({
     setCableColor,
     setCableLabel,
     setWallPointLabel,
+    setWallPointCableColor,
+    setWallPointCableLabel, // New setters
     setShowAddColorInput,
     setNewCustomColor,
     setIsNewPpExpanded,
@@ -93,25 +97,69 @@ export const ConnectionDetailsStep = ({
         </button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="col-span-full">
-            <label
-              htmlFor="wall-point-label"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              <Tag size={16} className="inline-block mr-1 text-gray-500" />
-              Wall Point Label (Optional):
-            </label>
-            <input
-              id="wall-point-label"
-              type="text"
-              placeholder="e.g., W101-A, Office-1-Port-3"
-              value={wallPointLabel}
-              onChange={(e) => setWallPointLabel(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
+        {/* --- Wall Point Details Section --- */}
+        <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
+          <h4 className="text-lg font-semibold text-gray-700 col-span-full flex items-center mb-3">
+            <Tag size={20} className="mr-2" /> Wall Point Details
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-1">
+              <label
+                htmlFor="wall-point-label"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Wall Point Label:
+              </label>
+              <input
+                id="wall-point-label"
+                type="text"
+                placeholder="e.g., W101-A"
+                value={wallPointLabel}
+                onChange={(e) => setWallPointLabel(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <label
+                htmlFor="wall-point-cable-color"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Cable Color (PC to Wall):
+              </label>
+              <select
+                id="wall-point-cable-color"
+                value={wallPointCableColor}
+                onChange={(e) => setWallPointCableColor(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              >
+                <option value="">-- Optional --</option>
+                {cableColorOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="lg:col-span-1">
+              <label
+                htmlFor="wall-point-cable-label"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Cable Label (PC to Wall):
+              </label>
+              <input
+                id="wall-point-cable-label"
+                type="text"
+                placeholder="Optional"
+                value={wallPointCableLabel}
+                onChange={(e) => setWallPointCableLabel(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              />
+            </div>
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label
               htmlFor="switch-location-filter"
@@ -217,7 +265,8 @@ export const ConnectionDetailsStep = ({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full border-t pt-4 mt-4">
             <h4 className="text-lg font-semibold text-blue-700 col-span-full mb-2">
-              <Cable size={20} className="mr-2" /> Connection Cable Details
+              <Cable size={20} className="mr-2" /> Final Cable Details (to
+              Switch)
             </h4>
             <div>
               <label
@@ -346,50 +395,6 @@ export const ConnectionDetailsStep = ({
                         -- Add New --
                       </option>
                     </select>
-                    {/* *** ADDED BACK: Port Status Summary for each selected Patch Panel *** */}
-                    {hop.patch_panel_id &&
-                      getPortStatusSummary(
-                        "patch_panels",
-                        hop.patch_panel_id
-                      ) && (
-                        <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
-                          <span className="flex items-center">
-                            <Wifi size={14} className="text-green-500 mr-1" />
-                            Connected:{" "}
-                            {
-                              getPortStatusSummary(
-                                "patch_panels",
-                                hop.patch_panel_id
-                              ).connected
-                            }
-                          </span>
-                          <span className="flex items-center">
-                            <CircleDot
-                              size={14}
-                              className="text-gray-500 mr-1"
-                            />
-                            Available:{" "}
-                            {
-                              getPortStatusSummary(
-                                "patch_panels",
-                                hop.patch_panel_id
-                              ).available
-                            }
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onShowPortStatus(
-                                "patch_panels",
-                                hop.patch_panel_id
-                              )
-                            }
-                            className="text-blue-500 hover:underline ml-auto"
-                          >
-                            View Details
-                          </button>
-                        </div>
-                      )}
                   </div>
                   <div className="flex-none w-16">
                     <label className="block text-sm mb-1">Port:</label>

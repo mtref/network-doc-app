@@ -2,6 +2,7 @@
 // This component displays a list of network connections.
 // REFACTORED: The connection card now has a new single-line collapsed view showing the full path,
 // and a detailed, multi-section expanded view. The entire card is clickable to toggle the view.
+// UPDATED: The expanded view sections are now clickable to open their respective detail modals.
 
 import React, { useState, useEffect } from "react";
 import {
@@ -18,13 +19,12 @@ import {
   MapPin,
   Router as IpIcon,
   HardDrive,
-  Columns,
   Info,
 } from "lucide-react";
 import SearchBar from "./SearchBar";
 
 // A small helper component for displaying details in the expanded view
-const DetailItem = ({ icon, label, value, children }) => (
+const DetailItem = ({ icon, label, value }) => (
   <div className="flex items-start text-sm">
     <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-500">
       {icon}
@@ -32,17 +32,27 @@ const DetailItem = ({ icon, label, value, children }) => (
     <div className="ml-2">
       <span className="font-semibold text-gray-800">{label}:</span>
       <span className="ml-1 text-gray-700">{value}</span>
-      {children}
     </div>
   </div>
 );
 
 // The main card component for a single connection
-function ConnectionCard({ connection, onDelete, onEdit }) {
+function ConnectionCard({
+  connection,
+  onDelete,
+  onEdit,
+  onViewPcDetails,
+  onShowPortStatus,
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleActionClick = (e, action) => {
     e.stopPropagation(); // Prevent the card from expanding when clicking a button
+    action();
+  };
+
+  const handleDetailClick = (e, action) => {
+    e.stopPropagation(); // Prevent the card from expanding when clicking a detail box
     action();
   };
 
@@ -54,12 +64,12 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
     );
 
   return (
-    <div
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 cursor-pointer"
-      onClick={() => setIsExpanded(!isExpanded)}
-    >
-      {/* --- 1. Collapsed View --- */}
-      <div className="p-4 flex items-center justify-between">
+    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200">
+      {/* --- Collapsed View (Clickable to expand/collapse) --- */}
+      <div
+        className="p-4 flex items-center justify-between cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex items-center space-x-2 overflow-hidden min-w-0">
           {pcIcon}
           <span
@@ -126,11 +136,16 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
         </div>
       </div>
 
-      {/* --- 2. Expanded View --- */}
+      {/* --- Expanded View --- */}
       {isExpanded && (
         <div className="bg-gray-50 p-4 border-t border-gray-200 space-y-4">
-          {/* PC -> First Hop/Switch Segment */}
-          <div className="p-3 rounded-md border border-indigo-200 bg-indigo-50">
+          {/* PC Details (Clickable) */}
+          <div
+            className="p-3 rounded-md border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:shadow-inner cursor-pointer"
+            onClick={(e) =>
+              handleDetailClick(e, () => onViewPcDetails(connection.pc))
+            }
+          >
             <h5 className="font-bold text-indigo-800 flex items-center mb-2">
               {pcIcon}
               <span className="ml-2">Start: {connection.pc?.name}</span>
@@ -148,18 +163,18 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
               />
               <DetailItem
                 icon={<Palette size={14} />}
-                label="Cable Color"
-                value={connection.cable_color || "N/A"}
+                label="Wall Cable Color"
+                value={connection.wall_point_cable_color || "N/A"}
               />
               <DetailItem
                 icon={<Tag size={14} />}
-                label="Cable Label"
-                value={connection.cable_label || "N/A"}
+                label="Wall Cable Label"
+                value={connection.wall_point_cable_label || "N/A"}
               />
             </div>
           </div>
 
-          {/* Hops Segment */}
+          {/* Hops Details (Clickable) */}
           {connection.hops && connection.hops.length > 0 && (
             <div className="p-3 rounded-md border border-green-200 bg-green-50">
               <h5 className="font-bold text-green-800 flex items-center mb-2">
@@ -170,7 +185,12 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 {connection.hops.map((hop, index) => (
                   <div
                     key={hop.id || index}
-                    className="pl-4 border-l-2 border-green-300"
+                    className="pl-4 border-l-2 border-green-300 hover:bg-green-100 rounded-r-md cursor-pointer"
+                    onClick={(e) =>
+                      handleDetailClick(e, () =>
+                        onShowPortStatus("patch_panels", hop.patch_panel.id)
+                      )
+                    }
                   >
                     <DetailItem
                       icon={<Split size={14} />}
@@ -205,8 +225,15 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
             </div>
           )}
 
-          {/* Switch Segment */}
-          <div className="p-3 rounded-md border border-red-200 bg-red-50">
+          {/* Switch Details (Clickable) */}
+          <div
+            className="p-3 rounded-md border border-red-200 bg-red-50 hover:bg-red-100 hover:shadow-inner cursor-pointer"
+            onClick={(e) =>
+              handleDetailClick(e, () =>
+                onShowPortStatus("switches", connection.switch.id)
+              )
+            }
+          >
             <h5 className="font-bold text-red-800 flex items-center mb-2">
               <Server size={20} className="mr-2" />
               End: {connection.switch?.name}
@@ -234,6 +261,16 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
                 label="Model"
                 value={connection.switch?.model || "N/A"}
               />
+              <DetailItem
+                icon={<Palette size={14} />}
+                label="Final Cable Color"
+                value={connection.cable_color || "N/A"}
+              />
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Final Cable Label"
+                value={connection.cable_label || "N/A"}
+              />
             </div>
           </div>
         </div>
@@ -242,7 +279,13 @@ function ConnectionCard({ connection, onDelete, onEdit }) {
   );
 }
 
-function ConnectionList({ connections, onDelete, onEdit }) {
+function ConnectionList({
+  connections,
+  onDelete,
+  onEdit,
+  onViewPcDetails,
+  onShowPortStatus,
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredConnections, setFilteredConnections] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -256,6 +299,9 @@ function ConnectionList({ connections, onDelete, onEdit }) {
       const switchName = (connection.switch?.name || "").toLowerCase();
       const switchPort = (connection.switch_port || "").toLowerCase();
       const wallPoint = (connection.wall_point_label || "").toLowerCase();
+      const wallPointCable = (
+        connection.wall_point_cable_label || ""
+      ).toLowerCase();
       const hopsText = (connection.hops || [])
         .map(
           (hop) =>
@@ -270,6 +316,7 @@ function ConnectionList({ connections, onDelete, onEdit }) {
         switchName.includes(lowerCaseSearchTerm) ||
         switchPort.includes(lowerCaseSearchTerm) ||
         wallPoint.includes(lowerCaseSearchTerm) ||
+        wallPointCable.includes(lowerCaseSearchTerm) ||
         hopsText.includes(lowerCaseSearchTerm)
       );
     });
@@ -297,6 +344,8 @@ function ConnectionList({ connections, onDelete, onEdit }) {
             connection={connection}
             onDelete={() => onDelete(connection.id)}
             onEdit={() => onEdit(connection)}
+            onViewPcDetails={onViewPcDetails}
+            onShowPortStatus={onShowPortStatus}
           />
         ))
       ) : (

@@ -33,10 +33,16 @@ export const useConnectionFormState = ({
   const [isSwitchPortUp, setIsSwitchPortUp] = useState(true);
   const [switchId, setSwitchId] = useState("");
   const [hops, setHops] = useState([]);
+
+  // Cable from Switch to last hop
   const [cableColor, setCableColor] = useState("");
   const [cableLabel, setCableLabel] = useState("");
-  // ADDED: State for the new wall point label field
+
+  // Cable from PC to Wall Point
   const [wallPointLabel, setWallPointLabel] = useState("");
+  // ADDED: State for the new wall point cable fields
+  const [wallPointCableColor, setWallPointCableColor] = useState("");
+  const [wallPointCableLabel, setWallPointCableLabel] = useState("");
 
   const [availablePcsForConnection, setAvailablePcsForConnection] = useState(
     []
@@ -158,8 +164,10 @@ export const useConnectionFormState = ({
       setIsSwitchPortUp(editingConnection.is_switch_port_up ?? true);
       setCableColor(editingConnection.cable_color || "");
       setCableLabel(editingConnection.cable_label || "");
-      // ADDED: Set wall point label when editing
       setWallPointLabel(editingConnection.wall_point_label || "");
+      // ADDED: Set new wall point cable fields when editing
+      setWallPointCableColor(editingConnection.wall_point_cable_color || "");
+      setWallPointCableLabel(editingConnection.wall_point_cable_label || "");
       setHops(
         editingConnection.hops.map((hop) => ({
           patch_panel_id: String(hop.patch_panel?.id || ""),
@@ -193,8 +201,10 @@ export const useConnectionFormState = ({
       setIsSwitchPortUp(true);
       setCableColor("");
       setCableLabel("");
-      // ADDED: Reset wall point label
       setWallPointLabel("");
+      // ADDED: Reset new wall point cable fields
+      setWallPointCableColor("");
+      setWallPointCableLabel("");
       setHops([]);
 
       setNewPcName("");
@@ -313,8 +323,10 @@ export const useConnectionFormState = ({
       is_switch_port_up: isSwitchPortUp,
       cable_color: cableColor,
       cable_label: cableLabel,
-      // ADDED: Include wall point label in the submitted data
       wall_point_label: wallPointLabel,
+      // ADDED: Include new wall point cable fields in submitted data
+      wall_point_cable_color: wallPointCableColor,
+      wall_point_cable_label: wallPointCableLabel,
       hops: hops.map((hop) => ({
         ...hop,
         patch_panel_id: parseInt(hop.patch_panel_id),
@@ -375,6 +387,8 @@ export const useConnectionFormState = ({
       cableColor,
       cableLabel,
       wallPointLabel,
+      wallPointCableColor,
+      wallPointCableLabel,
       availablePcsForConnection,
       selectedLocationIdForSwitch,
       filteredSwitchesByLocation,
@@ -433,6 +447,8 @@ export const useConnectionFormState = ({
       setCableColor,
       setCableLabel,
       setWallPointLabel,
+      setWallPointCableColor,
+      setWallPointCableLabel,
       setSelectedLocationIdForSwitch,
       setShowAddColorInput,
       setNewCustomColor,

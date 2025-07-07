@@ -2,8 +2,7 @@
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
 // REFACTORED: The "Manage Locations" tab now uses a unified, collapsible form.
-// FIXED: The handleEditConnection function now passes the complete connection object to the form,
-// ensuring all dropdowns are correctly populated during an edit.
+// UPDATED: Passing modal handlers down to the ConnectionList component.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -233,8 +232,6 @@ function App() {
     [fetchData, showMessage]
   );
 
-  // *** BUG FIX: Simplified this handler to pass the original, complete connection object.
-  // This ensures the form hook has all the nested data it needs.
   const handleEditConnection = useCallback((connection) => {
     setEditingConnection(connection);
   }, []);
@@ -645,7 +642,9 @@ function App() {
                   connections={connections}
                   onDelete={handleDeleteConnection}
                   onEdit={handleEditConnection}
-                  onPrint={handlePrintForm}
+                  // ADDED: Pass the modal handlers to the connection list
+                  onViewPcDetails={handleViewPcDetails}
+                  onShowPortStatus={handleShowPortStatus}
                 />
               </section>
             </>
