@@ -3,6 +3,7 @@
 // now including filter options by Location, Rack, Model, and Usage.
 // Added a "View Diagram" button to each switch card.
 // UPDATED: Added units_occupied for Switches.
+// FIXED: Correctly casts location_id and rack_id to strings when editing.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar";
@@ -61,7 +62,7 @@ function SwitchList({
   const [availableUsageOptions, setAvailableUsageOptions] = useState([]);
 
   const ipRegex =
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
 
   const usageOptions = [
     "Production",
@@ -181,10 +182,11 @@ function SwitchList({
     setEditingSwitch(_switch);
     setSwitchFormName(_switch.name);
     setSwitchFormIp(_switch.ip_address || "");
-    setSwitchFormLocationId(_switch.location_id || "");
+    // *** BUG FIX: Cast IDs to strings to match dropdown value types ***
+    setSwitchFormLocationId(String(_switch.location_id || ""));
+    setSwitchFormRackId(String(_switch.rack_id || ""));
     setSwitchFormRowInRack(_switch.row_in_rack || "");
-    setSwitchFormRackId(_switch.rack_id || "");
-    setSwitchFormUnitsOccupied(_switch.units_occupied || 1); // NEW: Set units occupied for editing
+    setSwitchFormUnitsOccupied(_switch.units_occupied || 1);
     setSwitchFormTotalPorts(_switch.total_ports || 1);
     setSwitchFormSourcePort(_switch.source_port || "");
     setSwitchFormModel(_switch.model || "");
@@ -249,7 +251,7 @@ function SwitchList({
       location_id: parseInt(switchFormLocationId),
       row_in_rack: switchFormRackId ? parseInt(switchFormRowInRack) : null,
       rack_id: switchFormRackId ? parseInt(switchFormRackId) : null,
-      units_occupied: switchFormRackId ? parseInt(switchFormUnitsOccupied) : 1, // NEW: Conditionally set and parse
+      units_occupied: switchFormRackId ? parseInt(switchFormUnitsOccupied) : 1,
       total_ports: parseInt(switchFormTotalPorts),
       source_port: switchFormSourcePort,
       model: switchFormModel,
@@ -270,7 +272,7 @@ function SwitchList({
     setSwitchFormLocationId("");
     setSwitchFormRowInRack("");
     setSwitchFormRackId("");
-    setSwitchFormUnitsOccupied(1); // NEW: Reset units occupied
+    setSwitchFormUnitsOccupied(1);
     setSwitchFormTotalPorts(1);
     setSwitchFormSourcePort("");
     setSwitchFormModel("");
