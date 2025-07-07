@@ -8,11 +8,13 @@ class SystemLog(db.Model):
     __tablename__ = 'system_logs'
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    action_type = db.Column(db.String(50), nullable=False) # e.g., 'CREATE', 'UPDATE', 'DELETE'
+    action_type = db.Column(db.String(50), nullable=False) # e.g., 'CREATE', 'UPDATE', 'DELETE', 'REVERT'
     entity_type = db.Column(db.String(50), nullable=False) # e.g., 'PC', 'Switch', 'Connection'
     entity_id = db.Column(db.Integer, nullable=True)
     entity_name = db.Column(db.String(255), nullable=True)
-    details = db.Column(db.JSON, nullable=True) # To store what changed for UPDATE actions
+    details = db.Column(db.JSON, nullable=True) # Stores changes for UPDATE, or full object for DELETE/CREATE
+    is_reverted = db.Column(db.Boolean, default=False, nullable=False) # Tracks if this action has been undone
+    action_by = db.Column(db.String(100), nullable=True, default='system') # Placeholder for user tracking
 
     def to_dict(self):
         """Converts a SystemLog object to a dictionary."""
@@ -23,7 +25,9 @@ class SystemLog(db.Model):
             'entity_type': self.entity_type,
             'entity_id': self.entity_id,
             'entity_name': self.entity_name,
-            'details': self.details
+            'details': self.details,
+            'is_reverted': self.is_reverted,
+            'action_by': self.action_by
         }
 
 

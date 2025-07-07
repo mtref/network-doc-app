@@ -29,16 +29,15 @@ def register_routes(app):
     This function is called from the main app.py to set up the routes.
     """
 
-    # --- NEW: System Log Endpoint ---
+    # --- System Log Endpoints ---
     @app.route('/logs', methods=['GET'])
     def get_system_logs():
         try:
             page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 25, type=int) # Default to 25 logs per page
+            per_page = request.args.get('per_page', 25, type=int)
             entity_type = request.args.get('entity_type', None, type=str)
             action_type = request.args.get('action_type', None, type=str)
 
-            # Use the service to get paginated logs
             paginated_logs = SystemLogService.get_all_logs(
                 page=page,
                 per_page=per_page,
@@ -58,6 +57,19 @@ def register_routes(app):
             app.logger.error(f"Error fetching system logs: {str(e)}")
             return jsonify({'error': 'Failed to fetch system logs'}), 500
 
+    @app.route('/logs/<int:log_id>/revert', methods=['POST'])
+    def revert_log(log_id):
+        try:
+            message = SystemLogService.revert_log_action(log_id)
+            return jsonify({'message': message}), 200
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error reverting log {log_id}: {str(e)}")
+            return jsonify({'error': f'An unexpected error occurred while reverting the action.'}), 500
+
 
     # Location Endpoints
     @app.route('/locations', methods=['GET', 'POST'])
@@ -67,8 +79,7 @@ def register_routes(app):
             if not data or not data.get('name'):
                 return jsonify({'error': 'Location name is required'}), 400
             try:
-                # The service already handles the 'description' field from the data dict
-                new_location = LocationService.create_location(data)
+                new_location = LocationService.create(data)
                 return jsonify(new_location.to_dict()), 201
             except IntegrityError:
                 db.session.rollback()
@@ -82,7 +93,7 @@ def register_routes(app):
 
     @app.route('/locations/<int:location_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_location_by_id(location_id):
-        location = LocationService.get_location_by_id(location_id)
+        location = LocationService.get_by_id(location_id)
         if not location:
             return jsonify({'error': 'Location not found'}), 404
 
@@ -93,8 +104,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                # The service already handles the 'description' field from the data dict
-                updated_location = LocationService.update_location(location, data)
+                updated_location = LocationService.update(location, data)
                 return jsonify(updated_location.to_dict())
             except IntegrityError:
                 db.session.rollback()
@@ -104,7 +114,7 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                LocationService.delete_location(location)
+                LocationService.delete(location)
                 return jsonify({'message': 'Location deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
@@ -118,11 +128,10 @@ def register_routes(app):
             if not data or not data.get('name') or not data.get('location_id'):
                 return jsonify({'error': 'Rack name and location_id are required'}), 400
             try:
-                new_rack = RackService.create_rack(data)
+                new_rack = RackService.create(data)
                 return jsonify(new_rack.to_dict()), 201
             except IntegrityError as e:
                 db.session.rollback()
-                # Check for UniqueConstraint violation (name, location_id)
                 if "UNIQUE constraint failed: racks.name, racks.location_id" in str(e):
                     return jsonify({'error': f"A rack with the name '{data['name']}' already exists in this location."}), 409
                 return jsonify({'error': str(e)}), 500
@@ -138,7 +147,7 @@ def register_routes(app):
 
     @app.route('/racks/<int:rack_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_rack_by_id(rack_id):
-        rack = RackService.get_rack_by_id(rack_id)
+        rack = RackService.get_by_id(rack_id)
         if not rack:
             return jsonify({'error': 'Rack not found'}), 404
 
@@ -149,7 +158,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                updated_rack = RackService.update_rack(rack, data)
+                updated_rack = RackService.update(rack, data)
                 return jsonify(updated_rack.to_dict())
             except IntegrityError as e:
                 db.session.rollback()
@@ -158,13 +167,13 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
             except ValueError as e:
                 db.session.rollback()
-                return jsonify({'error': str(e)}), 409 # Use 409 Conflict for data integrity errors
+                return jsonify({'error': str(e)}), 409
             except Exception as e:
                 db.session.rollback()
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                RackService.delete_rack(rack)
+                RackService.delete(rack)
                 return jsonify({'message': 'Rack deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
@@ -178,7 +187,7 @@ def register_routes(app):
             if not data or not data.get('name'):
                 return jsonify({'error': 'PC name is required'}), 400
             try:
-                new_pc = PCService.create_pc(data)
+                new_pc = PCService.create(data)
                 return jsonify(new_pc.to_dict()), 201
             except IntegrityError:
                 db.session.rollback()
@@ -195,7 +204,7 @@ def register_routes(app):
 
     @app.route('/pcs/<int:pc_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_pc_by_id(pc_id):
-        pc = PCService.get_pc_by_id(pc_id)
+        pc = PCService.get_by_id(pc_id)
         if not pc:
             return jsonify({'error': 'PC not found'}), 404
 
@@ -206,7 +215,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                updated_pc = PCService.update_pc(pc, data)
+                updated_pc = PCService.update(pc, data)
                 return jsonify(updated_pc.to_dict())
             except IntegrityError:
                 db.session.rollback()
@@ -219,7 +228,7 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                PCService.delete_pc(pc)
+                PCService.delete(pc)
                 return jsonify({'message': 'PC deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
@@ -238,7 +247,7 @@ def register_routes(app):
             if not data or not data.get('name'):
                 return jsonify({'error': 'Patch Panel name is required'}), 400
             try:
-                new_pp = PatchPanelService.create_patch_panel(data)
+                new_pp = PatchPanelService.create(data)
                 return jsonify(new_pp.to_dict()), 201
             except IntegrityError:
                 db.session.rollback()
@@ -255,7 +264,7 @@ def register_routes(app):
 
     @app.route('/patch_panels/<int:pp_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_patch_panel_by_id(pp_id):
-        pp = PatchPanelService.get_patch_panel_by_id(pp_id)
+        pp = PatchPanelService.get_by_id(pp_id)
         if not pp:
             return jsonify({'error': 'Patch Panel not found'}), 404
 
@@ -266,7 +275,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                updated_pp = PatchPanelService.update_patch_panel(pp, data)
+                updated_pp = PatchPanelService.update(pp, data)
                 return jsonify(updated_pp.to_dict())
             except IntegrityError:
                 db.session.rollback()
@@ -279,7 +288,7 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                PatchPanelService.delete_patch_panel(pp)
+                PatchPanelService.delete(pp)
                 return jsonify({'message': 'Patch Panel deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
@@ -300,7 +309,7 @@ def register_routes(app):
             if not data or not data.get('name'):
                 return jsonify({'error': 'Switch name is required'}), 400
             try:
-                new_switch = SwitchService.create_switch(data)
+                new_switch = SwitchService.create(data)
                 return jsonify(new_switch.to_dict()), 201
             except IntegrityError:
                 db.session.rollback()
@@ -317,7 +326,7 @@ def register_routes(app):
 
     @app.route('/switches/<int:switch_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_switch_by_id(switch_id):
-        _switch = SwitchService.get_switch_by_id(switch_id)
+        _switch = SwitchService.get_by_id(switch_id)
         if not _switch:
             return jsonify({'error': 'Switch not found'}), 404
 
@@ -328,7 +337,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                updated_switch = SwitchService.update_switch(_switch, data)
+                updated_switch = SwitchService.update(_switch, data)
                 return jsonify(updated_switch.to_dict())
             except IntegrityError:
                 db.session.rollback()
@@ -341,7 +350,7 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                SwitchService.delete_switch(_switch)
+                SwitchService.delete(_switch)
                 return jsonify({'message': 'Switch deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
@@ -363,7 +372,7 @@ def register_routes(app):
             if not all(field in data for field in required_fields):
                 return jsonify({'error': 'Missing required fields for connection'}), 400
             try:
-                new_connection = ConnectionService.create_connection(data)
+                new_connection = ConnectionService.create(data)
                 return jsonify(new_connection.to_dict()), 201
             except ValueError as e:
                 db.session.rollback()
@@ -377,7 +386,7 @@ def register_routes(app):
 
     @app.route('/connections/<int:conn_id>', methods=['GET', 'PUT', 'DELETE'])
     def handle_connection_by_id(conn_id):
-        connection = ConnectionService.get_connection_by_id(conn_id)
+        connection = ConnectionService.get_by_id(conn_id)
         if not connection:
             return jsonify({'error': 'Connection not found'}), 404
 
@@ -388,7 +397,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
-                updated_connection = ConnectionService.update_connection(connection, data)
+                updated_connection = ConnectionService.update(connection, data)
                 return jsonify(updated_connection.to_dict())
             except ValueError as e:
                 db.session.rollback()
@@ -398,7 +407,7 @@ def register_routes(app):
                 return jsonify({'error': str(e)}), 500
         else: # DELETE
             try:
-                ConnectionService.delete_connection(connection)
+                ConnectionService.delete(connection)
                 return jsonify({'message': 'Connection deleted successfully'}), 200
             except Exception as e:
                 db.session.rollback()
