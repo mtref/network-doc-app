@@ -2,7 +2,7 @@
 // This component displays a list of network connections.
 // REFACTORED: The connection card now has a new single-line collapsed view showing the full path,
 // and a detailed, multi-section expanded view. The entire card is clickable to toggle the view.
-// UPDATED: The expanded view sections are now clickable to open their respective detail modals.
+// UPDATED: The expanded view now includes more details for the PC and Switch sections.
 
 import React, { useState, useEffect } from "react";
 import {
@@ -20,6 +20,10 @@ import {
   Router as IpIcon,
   HardDrive,
   Info,
+  User,
+  Building2,
+  Columns,
+  Activity,
 } from "lucide-react";
 import SearchBar from "./SearchBar";
 
@@ -157,6 +161,16 @@ function ConnectionCard({
                 value={connection.pc?.ip_address || "N/A"}
               />
               <DetailItem
+                icon={<User size={14} />}
+                label="Username"
+                value={connection.pc?.username || "N/A"}
+              />
+              <DetailItem
+                icon={<Building2 size={14} />}
+                label="Office"
+                value={connection.pc?.office || "N/A"}
+              />
+              <DetailItem
                 icon={<Tag size={14} />}
                 label="Wall Point"
                 value={connection.wall_point_label || "N/A"}
@@ -248,6 +262,16 @@ function ConnectionCard({
                 icon={<MapPin size={14} />}
                 label="Location"
                 value={connection.switch?.location_name || "N/A"}
+              />
+              <DetailItem
+                icon={<Columns size={14} />}
+                label="Rack"
+                value={connection.switch?.rack_name || "N/A"}
+              />
+              <DetailItem
+                icon={<Activity size={14} />}
+                label="Usage"
+                value={connection.switch?.usage || "N/A"}
               />
               <DetailItem
                 icon={<HardDrive size={14} />}
