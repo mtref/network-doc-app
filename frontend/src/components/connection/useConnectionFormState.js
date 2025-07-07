@@ -35,6 +35,8 @@ export const useConnectionFormState = ({
   const [hops, setHops] = useState([]);
   const [cableColor, setCableColor] = useState("");
   const [cableLabel, setCableLabel] = useState("");
+  // ADDED: State for the new wall point label field
+  const [wallPointLabel, setWallPointLabel] = useState("");
 
   const [availablePcsForConnection, setAvailablePcsForConnection] = useState(
     []
@@ -131,7 +133,6 @@ export const useConnectionFormState = ({
     fetchAvailablePcs();
   }, [fetchAvailablePcs]);
 
-  // Effect to filter switches based on the selected location
   useEffect(() => {
     if (selectedLocationIdForSwitch) {
       const filtered = switches.filter(
@@ -141,13 +142,11 @@ export const useConnectionFormState = ({
     } else {
       setFilteredSwitchesByLocation(switches);
     }
-    // Only reset the switch if we are NOT currently editing a connection.
     if (!editingConnection) {
       setSwitchId("");
     }
   }, [selectedLocationIdForSwitch, switches, editingConnection]);
 
-  // Effect to handle entering and exiting edit mode
   useEffect(() => {
     if (editingConnection) {
       setPcId(String(editingConnection.pc_id || ""));
@@ -159,6 +158,8 @@ export const useConnectionFormState = ({
       setIsSwitchPortUp(editingConnection.is_switch_port_up ?? true);
       setCableColor(editingConnection.cable_color || "");
       setCableLabel(editingConnection.cable_label || "");
+      // ADDED: Set wall point label when editing
+      setWallPointLabel(editingConnection.wall_point_label || "");
       setHops(
         editingConnection.hops.map((hop) => ({
           patch_panel_id: String(hop.patch_panel?.id || ""),
@@ -183,7 +184,7 @@ export const useConnectionFormState = ({
       });
       setCurrentStep(2);
     } else {
-      // Reset all form states when not editing
+      // Reset all form states
       setCurrentStep(1);
       setPcId("");
       setSwitchId("");
@@ -192,9 +193,10 @@ export const useConnectionFormState = ({
       setIsSwitchPortUp(true);
       setCableColor("");
       setCableLabel("");
+      // ADDED: Reset wall point label
+      setWallPointLabel("");
       setHops([]);
 
-      // Reset new entity forms
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
@@ -311,6 +313,8 @@ export const useConnectionFormState = ({
       is_switch_port_up: isSwitchPortUp,
       cable_color: cableColor,
       cable_label: cableLabel,
+      // ADDED: Include wall point label in the submitted data
+      wall_point_label: wallPointLabel,
       hops: hops.map((hop) => ({
         ...hop,
         patch_panel_id: parseInt(hop.patch_panel_id),
@@ -370,6 +374,7 @@ export const useConnectionFormState = ({
       hops,
       cableColor,
       cableLabel,
+      wallPointLabel,
       availablePcsForConnection,
       selectedLocationIdForSwitch,
       filteredSwitchesByLocation,
@@ -427,6 +432,7 @@ export const useConnectionFormState = ({
       setHops,
       setCableColor,
       setCableLabel,
+      setWallPointLabel,
       setSelectedLocationIdForSwitch,
       setShowAddColorInput,
       setNewCustomColor,

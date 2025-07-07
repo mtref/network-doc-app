@@ -4,10 +4,9 @@
 // with actions for editing and deleting.
 // The expand/collapse feature has been reintroduced with a more organized expanded view.
 // Now includes search and pagination.
-// UPDATED: Displaying rack and row for server PCs in expanded view.
+// UPDATED: Displays the new "Wall Point Label" field in the expanded view.
 
 import React, { useState, useEffect } from "react";
-// Import icons from lucide-react for a better UI and consistent design
 import {
   Laptop,
   Split,
@@ -17,7 +16,7 @@ import {
   Wifi,
   User,
   Monitor,
-  Columns, // Icon for Rack
+  Columns,
   Link,
   Info,
   MapPin,
@@ -26,15 +25,14 @@ import {
   HardDrive,
   Router,
   Building2,
-  Tag, // New icon for cable label
-  Palette, // New icon for cable color
-  Printer, // Import Printer icon
+  Tag,
+  Palette,
+  Printer,
 } from "lucide-react";
-import SearchBar from "./SearchBar"; // Import the SearchBar component
+import SearchBar from "./SearchBar";
 
-// ConnectionCard component (remains unchanged as it displays individual connection details)
+// ConnectionCard component displays individual connection details
 function ConnectionCard({ connection, onDelete, onEdit, onPrint }) {
-  // Added onPrint prop
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = () => {
@@ -42,658 +40,241 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) {
   };
 
   return (
-    <div
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4 cursor-pointer"
-      onClick={toggleExpand}
-    >
-      {/* Top row: Summary Path and Actions */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-        {/* Left side: Summary Connection Path - flex-grow allows it to take available space */}
-        <div className="flex-grow flex items-center flex-wrap sm:flex-nowrap overflow-hidden pr-2">
-          <span className="font-semibold text-blue-600 mr-2 text-sm flex-shrink-0">
-            #{connection.id}
+    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4">
+      {/* Collapsed View */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2 overflow-hidden">
+          <Laptop size={20} className="text-indigo-500 flex-shrink-0" />
+          <span className="font-semibold text-gray-800 truncate">
+            {connection.pc?.name || "N/A"}
           </span>
-
-          {/* PC Info (Always visible in compact format) */}
-          <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
-            <Laptop size={16} className="text-indigo-500 mr-1 flex-shrink-0" />
-            <span className="font-medium">
-              {connection.pc?.name || "N/A"} (
-              {connection.pc?.ip_address || "No IP"})
-            </span>
-          </div>
-
-          {/* Dynamically render compact view of cable color/label for direct connection to switch */}
-          {connection.cable_color && (
+          <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
+          {connection.hops && connection.hops.length > 0 && (
             <>
-              <ArrowRight
-                size={12}
-                className="text-gray-400 mx-1 flex-shrink-0"
-              />
-              <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
-                <Palette
-                  size={16}
-                  className="text-purple-500 mr-1 flex-shrink-0"
-                />
-                <span className="font-medium">{connection.cable_color}</span>
-              </div>
+              {connection.hops.map((hop, index) => (
+                <React.Fragment key={hop.id || index}>
+                  <Split size={20} className="text-green-500 flex-shrink-0" />
+                  <span className="text-gray-700 truncate">
+                    {hop.patch_panel?.name || "N/A"}
+                  </span>
+                  <ArrowRight
+                    size={18}
+                    className="text-gray-400 flex-shrink-0"
+                  />
+                </React.Fragment>
+              ))}
             </>
           )}
-          {connection.cable_label && (
-            <>
-              <ArrowRight
-                size={12}
-                className="text-gray-400 mx-1 flex-shrink-0"
-              />
-              <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
-                <Tag size={16} className="text-orange-500 mr-1 flex-shrink-0" />
-                <span className="font-medium">{connection.cable_label}</span>
-              </div>
-            </>
-          )}
-
-          {/* Dynamically render compact view of patch panel hops */}
-          {connection.hops.map((hop, index) => (
-            <React.Fragment key={index}>
-              <ArrowRight
-                size={12}
-                className="text-gray-400 mx-1 flex-shrink-0"
-              />
-              <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis mb-1 sm:mb-0">
-                <Split
-                  size={16}
-                  className="text-green-500 mr-1 flex-shrink-0"
-                />
-                <span className="font-medium">
-                  {hop.patch_panel?.name || "N/A"} (Port: {hop.patch_panel_port}
-                  )
-                  {hop.patch_panel?.location_name && (
-                    <span className="ml-1">
-                      ({hop.patch_panel.location_name})
-                    </span>
-                  )}
-                  {hop.cable_color && (
-                    <span className="ml-1 flex items-center">
-                      <Palette size={12} className="text-purple-500 mr-0.5" />
-                      {hop.cable_color}
-                    </span>
-                  )}
-                  {hop.cable_label && (
-                    <span className="ml-1 flex items-center">
-                      <Tag size={12} className="text-orange-500 mr-0.5" />
-                      {hop.cable_label}
-                    </span>
-                  )}
-                  {hop.is_port_up ? (
-                    <Wifi
-                      size={14}
-                      className="inline-block ml-1 text-green-500"
-                      title="Port Up"
-                    />
-                  ) : (
-                    <WifiOff
-                      size={14}
-                      className="inline-block ml-1 text-red-500"
-                      title="Port Down"
-                    />
-                  )}
-                </span>
-              </div>
-            </React.Fragment>
-          ))}
-
-          {/* Switch Info */}
-          <ArrowRight size={12} className="text-gray-400 mx-1 flex-shrink-0" />
-          <div className="flex items-center text-sm text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
-            <Server size={16} className="text-red-500 mr-1 flex-shrink-0" />
-            <span className="font-medium">
-              {connection.switch?.name || "N/A"} (Port: {connection.switch_port}
-              )
-              {connection.switch?.location_name && (
-                <span className="ml-1">
-                  ({connection.switch.location_name})
-                </span>
-              )}
-              {connection.is_switch_port_up ? (
-                <Wifi
-                  size={14}
-                  className="inline-block ml-1 text-green-500"
-                  title="Port Up"
-                />
-              ) : (
-                <WifiOff
-                  size={14}
-                  className="inline-block ml-1 text-red-500"
-                  title="Port Down"
-                />
-              )}
-            </span>
-          </div>
+          <Server size={20} className="text-red-500 flex-shrink-0" />
+          <span className="font-semibold text-gray-800 truncate">
+            {connection.switch?.name || "N/A"}
+          </span>
+          <span className="text-sm text-gray-600 truncate">
+            (Port: {connection.switch_port})
+          </span>
         </div>
-
-        {/* Right side: Actions and Expand Button */}
-        <div className="flex-shrink-0 flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4 w-full sm:w-auto justify-end">
+        <div className="flex items-center space-x-2">
+          {connection.is_switch_port_up ? (
+            <Wifi size={18} className="text-green-500" title="Port is Up" />
+          ) : (
+            <WifiOff size={18} className="text-red-500" title="Port is Down" />
+          )}
           <button
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent card from expanding/collapsing
-              onPrint(connection); // Pass the specific connection data to print
-            }}
-            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
-            title="Print Connection Data"
+            onClick={onEdit}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            <Printer size={16} />
+            Edit
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(connection);
-            }}
-            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-            title="Edit Connection"
+            onClick={onDelete}
+            className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-              ></path>
-            </svg>
+            Delete
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(connection.id);
-            }}
-            className="p-2 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 transition-colors duration-200"
-            title="Delete Connection"
+            onClick={toggleExpand}
+            className="p-1 text-gray-600 hover:text-gray-900"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              ></path>
-            </svg>
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleExpand();
-            }}
-            className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 text-gray-600"
-            title={isExpanded ? "Collapse Details" : "Expand Details"}
-          >
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </button>
         </div>
       </div>
 
-      {/* Expanded Details Section (Conditional Rendering with collapsible-content) */}
-      <div
-        className={`collapsible-content ${isExpanded ? "expanded" : ""} ${
-          isExpanded ? "py-4 px-4" : "py-0 px-4"
-        }`}
-      >
-        <div className="space-y-4">
+      {/* Expanded View */}
+      {isExpanded && (
+        <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* PC Details */}
-          <h4 className="font-semibold text-indigo-700 mb-2">PC Details:</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-            <p className="flex items-center">
-              <Laptop size={16} className="text-indigo-500 mr-2" />{" "}
+          <div className="bg-indigo-50 p-3 rounded-md">
+            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
+              <Laptop size={18} className="mr-2 text-indigo-500" /> PC Details
+            </h5>
+            <p className="text-sm">
               <span className="font-medium">Name:</span>{" "}
               {connection.pc?.name || "N/A"}
             </p>
-            <p className="flex items-center">
-              <Router size={16} className="text-gray-500 mr-2" />{" "}
+            <p className="text-sm">
               <span className="font-medium">IP:</span>{" "}
               {connection.pc?.ip_address || "N/A"}
             </p>
-            <p className="flex items-center">
-              <User size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Username:</span>{" "}
-              {connection.pc?.username || "N/A"}
+            {/* ADDED: Display Wall Point Label */}
+            <p className="text-sm mt-1 flex items-start">
+              <Tag
+                size={14}
+                className="mr-1 mt-0.5 text-gray-500 flex-shrink-0"
+              />
+              <span className="font-medium">Wall Point:</span>&nbsp;
+              {connection.wall_point_label || "N/A"}
             </p>
-            <p className="flex items-center">
-              {connection.pc?.in_domain !== undefined ? (
-                connection.pc.in_domain ? (
-                  <Wifi size={16} className="text-green-500 mr-2" />
-                ) : (
-                  <WifiOff size={16} className="text-red-500 mr-2" />
-                )
-              ) : (
-                <Info size={16} className="text-gray-500 mr-2" />
-              )}
-              <span className="font-medium">In Domain:</span>{" "}
-              {connection.pc?.in_domain !== undefined
-                ? connection.pc.in_domain
-                  ? "Yes"
-                  : "No"
-                : "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Info size={16} className="text-gray-500 mr-2" />{" "}
-              <span className="font-medium">Type:</span>{" "}
-              {connection.pc?.type || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
-              {connection.pc?.usage || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Monitor size={16} className="text-gray-500 mr-2" /> OS:{" "}
-              {connection.pc?.operating_system || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <HardDrive size={16} className="text-gray-500 mr-2" /> Model:{" "}
-              {connection.pc?.model || "N/A"}
-            </p>
-            <p className="flex items-center">
-              <Building2 size={16} className="text-gray-500 mr-2" /> Office:{" "}
-              {connection.pc?.office || "N/A"}
-            </p>
-            {/* NEW: Display Rack and Row for Server type PCs */}
             {connection.pc?.type === "Server" && (
               <>
-                <p className="flex items-center">
-                  <Columns size={16} className="text-gray-500 mr-2" /> Rack:{" "}
-                  {connection.pc?.rack_name || "N/A"}
+                <p className="text-sm mt-1">
+                  <span className="font-medium">Rack:</span>{" "}
+                  {connection.pc.rack_name || "N/A"}
                 </p>
-                <p className="flex items-center">
-                  <Server size={16} className="text-gray-500 mr-2" /> Row in
-                  Rack: {connection.pc?.row_in_rack || "N/A"}
+                <p className="text-sm">
+                  <span className="font-medium">Row:</span>{" "}
+                  {connection.pc.row_in_rack || "N/A"}
                 </p>
               </>
             )}
-            <p className="flex items-start col-span-full">
-              <Info
-                size={16}
-                className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-              />{" "}
-              <span className="font-medium">Description:</span>{" "}
-              {connection.pc?.description || "No description"}
-            </p>
           </div>
 
-          {/* Connection Cable Details (for direct Switch connection) */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <h4 className="font-semibold text-blue-700 mb-2">
-              Connection Cable Details:
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
-              <p className="flex items-center">
-                <Palette size={16} className="text-purple-500 mr-2" />{" "}
-                <span className="font-medium">Color:</span>{" "}
-                {connection.cable_color || "N/A"}
+          {/* Hops Details */}
+          <div className="bg-green-50 p-3 rounded-md md:col-span-2">
+            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
+              <Split size={18} className="mr-2 text-green-500" /> Connection
+              Path
+            </h5>
+            {connection.hops && connection.hops.length > 0 ? (
+              <div className="space-y-3">
+                {connection.hops.map((hop, index) => (
+                  <div
+                    key={hop.id || index}
+                    className="border-b border-green-200 pb-2 last:border-b-0"
+                  >
+                    <p className="text-sm font-medium">
+                      Hop {index + 1}: {hop.patch_panel?.name || "N/A"}
+                    </p>
+                    <p className="text-xs text-gray-600 ml-4">
+                      Port: {hop.patch_panel_port || "N/A"} (
+                      {hop.is_port_up ? "Up" : "Down"})
+                    </p>
+                    <p className="text-xs text-gray-600 ml-4">
+                      Cable Label: {hop.cable_label || "N/A"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">
+                No patch panel hops in this connection.
               </p>
-              <p className="flex items-center">
-                <Tag size={16} className="text-orange-500 mr-2" />{" "}
-                <span className="font-medium">Label:</span>{" "}
+            )}
+          </div>
+
+          {/* Switch Details */}
+          <div className="bg-red-50 p-3 rounded-md md:col-span-3">
+            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
+              <Server size={18} className="mr-2 text-red-500" /> Switch Details
+            </h5>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <p>
+                <span className="font-medium">Name:</span>{" "}
+                {connection.switch?.name || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">IP:</span>{" "}
+                {connection.switch?.ip_address || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">Port:</span>{" "}
+                {connection.switch_port || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">Status:</span>{" "}
+                {connection.is_switch_port_up ? "Up" : "Down"}
+              </p>
+              <p className="col-span-full">
+                <span className="font-medium">Cable Label:</span>{" "}
                 {connection.cable_label || "N/A"}
               </p>
             </div>
           </div>
-
-          {/* Patch Panel Hops Details */}
-          {connection.hops.map((hop, index) => (
-            <div
-              key={`detail-hop-${index}`}
-              className="mt-4 pt-4 border-t border-gray-100"
-            >
-              <h4 className="font-semibold text-green-700 mb-2">
-                Patch Panel {index + 1} Details:
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                <p className="flex items-center">
-                  <Split size={16} className="text-green-500 mr-2" />{" "}
-                  <span className="font-medium">Name:</span>{" "}
-                  {hop.patch_panel?.name || "N/A"}
-                </p>
-                <p className="flex items-center">
-                  <MapPin size={16} className="text-gray-500 mr-2" />{" "}
-                  <span className="font-medium">Location:</span>{" "}
-                  {hop.patch_panel?.location_name || "N/A"}
-                  {hop.patch_panel?.location?.door_number && ( // Display door number
-                    <span className="ml-1">
-                      {" "}
-                      (Door: {hop.patch_panel.location.door_number})
-                    </span>
-                  )}
-                </p>
-                <p className="flex items-center">
-                  <Server size={16} className="text-gray-500 mr-2" />{" "}
-                  <span className="font-medium">Row:</span>{" "}
-                  {hop.patch_panel?.row_in_rack || "N/A"}
-                </p>
-                <p className="flex items-center">
-                  <Columns size={16} className="text-gray-500 mr-2" />{" "}
-                  <span className="font-medium">Rack:</span>{" "}
-                  {hop.patch_panel?.rack_name || "N/A"}
-                </p>
-                <p className="flex items-center">
-                  <HardDrive size={16} className="text-gray-500 mr-2" />{" "}
-                  <span className="font-medium">Total Ports:</span>{" "}
-                  {hop.patch_panel?.total_ports || "N/A"}
-                </p>
-                <p className="flex items-center">
-                  <Link size={16} className="text-gray-500 mr-2" />{" "}
-                  <span className="font-medium">Port:</span>{" "}
-                  {hop.patch_panel_port || "N/A"} - Status:{" "}
-                  {hop.is_port_up ? "Up" : "Down"}
-                </p>
-                <p className="flex items-center">
-                  {" "}
-                  {/* New field: Cable Color for hop */}
-                  <Palette size={16} className="text-purple-500 mr-2" />{" "}
-                  <span className="font-medium">Cable Color:</span>{" "}
-                  {hop.cable_color || "N/A"}
-                </p>
-                <p className="flex items-center">
-                  {" "}
-                  {/* New field: Cable Label for hop */}
-                  <Tag size={16} className="text-orange-500 mr-2" />{" "}
-                  <span className="font-medium">Cable Label:</span>{" "}
-                  {hop.cable_label || "N/A"}
-                </p>
-                <p className="flex items-start col-span-full">
-                  <Info
-                    size={16}
-                    className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-                  />{" "}
-                  <span className="font-medium">Description:</span>{" "}
-                  {hop.patch_panel?.description || "No description"}
-                </p>
-              </div>
-            </div>
-          ))}
-
-          {/* Switch Details */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <h4 className="font-semibold text-red-700 mb-2">Switch Details:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-              <p className="flex items-center">
-                <Server size={16} className="text-red-500 mr-2" />{" "}
-                <span className="font-medium">Name:</span>{" "}
-                {connection.switch?.name || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Router size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">IP:</span>{" "}
-                {connection.switch?.ip_address || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <MapPin size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Location:</span>{" "}
-                {connection.switch?.location_name || "N/A"}
-                {connection.switch?.location?.door_number && ( // Display door number
-                  <span className="ml-1">
-                    {" "}
-                    (Door: {connection.switch.location.door_number})
-                  </span>
-                )}
-              </p>
-              <p className="flex items-center">
-                <Columns size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Rack:</span>{" "}
-                {connection.switch?.rack_name || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Row in Rack:{" "}
-                {connection.switch?.row_in_rack || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <HardDrive size={16} className="text-gray-500 mr-2" /> Total
-                Ports: {connection.switch?.total_ports || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Link size={16} className="text-gray-500 mr-2" /> Source Port:{" "}
-                {connection.switch?.source_port || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
-                {connection.switch?.model || "N/A"}
-              </p>
-              <p className="flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
-                {connection.switch?.usage || "N/A"}
-              </p>
-              <p className="flex items-start col-span-full">
-                <Info
-                  size={16}
-                  className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-                />{" "}
-                Description: {connection.switch?.description || "N/A"}
-              </p>
-              <p className="flex items-center col-span-full">
-                <Link size={16} className="text-gray-500 mr-2" />{" "}
-                <span className="font-medium">Port:</span>{" "}
-                {connection.switch_port || "N/A"} - Status:{" "}
-                {connection.is_switch_port_up ? "Up" : "Down"}
-              </p>
-            </div>
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
-  // Pass onPrint here
-  const [searchTerm, setSearchTerm] = useState(""); // State for search term
-  const [filteredConnections, setFilteredConnections] = useState([]); // State for filtered connections
-
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredConnections, setFilteredConnections] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10); // Default to 10 items per page
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Effect to filter connections based on search term
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
     const filtered = connections.filter((connection) => {
-      // Check PC details
-      const pcMatches =
-        (connection.pc?.name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.ip_address || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.username || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.operating_system || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.model || "") // Updated from ports_name
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.office || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.description || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.multi_port ? "multi-port" : "single-port").includes(
-          lowerCaseSearchTerm
-        ) ||
-        (connection.pc?.type || "") // New: search by type
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.usage || "") // New: search by usage
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        // NEW: Search by PC rack and row
-        (connection.pc?.rack_name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.pc?.row_in_rack || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm);
+      const pcName = (connection.pc?.name || "").toLowerCase();
+      const switchName = (connection.switch?.name || "").toLowerCase();
+      const switchPort = (connection.switch_port || "").toLowerCase();
+      const wallPoint = (connection.wall_point_label || "").toLowerCase();
+      const hopsText = (connection.hops || [])
+        .map(
+          (hop) =>
+            `${hop.patch_panel?.name || ""} ${hop.patch_panel_port || ""}`
+        )
+        .join(" ")
+        .toLowerCase();
 
-      // Check Connection Cable details
-      const connectionCableMatches =
-        (connection.cable_color || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.cable_label || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm);
-
-      // Check Patch Panel hop details
-      const hopMatches = connection.hops.some(
-        (hop) =>
-          (hop.patch_panel?.name || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel_port || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel?.location_name || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel?.location?.door_number || "") // New: search by location door number
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel?.rack_name || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel?.row_in_rack || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.patch_panel?.description || "")
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.cable_color || "") // New: search by hop cable color
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm) ||
-          (hop.cable_label || "") // New: search by hop cable label
-            .toLowerCase()
-            .includes(lowerCaseSearchTerm)
+      return (
+        pcName.includes(lowerCaseSearchTerm) ||
+        switchName.includes(lowerCaseSearchTerm) ||
+        switchPort.includes(lowerCaseSearchTerm) ||
+        wallPoint.includes(lowerCaseSearchTerm) ||
+        hopsText.includes(lowerCaseSearchTerm)
       );
-
-      // Check Switch details
-      const switchMatches =
-        (connection.switch?.name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.ip_address || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch_port || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.location_name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.location?.door_number || "") // New: search by location door number
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.rack_name || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.model || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.source_port || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.description || "")
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm) ||
-        (connection.switch?.usage || "") // New: search by usage
-          .toLowerCase()
-          .includes(lowerCaseSearchTerm);
-
-      return pcMatches || connectionCableMatches || hopMatches || switchMatches;
     });
     setFilteredConnections(filtered);
-    setCurrentPage(1); // Reset to first page on new search/filter
+    setCurrentPage(1);
   }, [connections, searchTerm]);
 
-  // Calculate the connections to display for the current page from filteredConnections
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentConnections = filteredConnections.slice(
+  const currentItems = filteredConnections.slice(
     indexOfFirstItem,
     indexOfLastItem
   );
-
-  // Calculate total pages based on filteredConnections
   const totalPages = Math.ceil(filteredConnections.length / itemsPerPage);
 
-  // Handle page change
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-  // Adjust current page if itemsPerPage changes or filteredConnections list shrinks
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    } else if (totalPages === 0 && connections.length > 0) {
-      // If no filtered connections but there are total connections, means search yielded nothing
-      // Or if all connections are deleted
-      setCurrentPage(1); // Still reset to 1
-    } else if (totalPages === 0 && connections.length === 0) {
-      // No connections at all
-      setCurrentPage(1);
-    }
-  }, [
-    filteredConnections.length,
-    itemsPerPage,
-    totalPages,
-    currentPage,
-    connections.length,
-  ]);
-
   return (
-    <div className="space-y-6">
-      {/* Search Bar for Connections */}
-      <SearchBar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        placeholder="Search connections (PC, Patch Panel, Switch details, cable color/label...)"
-      />
-
-      {/* Display current connections */}
-      {currentConnections.length > 0 ? (
-        <div className="space-y-3">
-          {currentConnections.map((connection) => (
-            <ConnectionCard
-              key={connection.id}
-              connection={connection}
-              onDelete={onDelete}
-              onEdit={onEdit}
-              onPrint={onPrint}
-            />
-          ))}
-        </div>
+    <div className="space-y-4">
+      <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      {currentItems.length > 0 ? (
+        currentItems.map((connection) => (
+          <ConnectionCard
+            key={connection.id}
+            connection={connection}
+            onDelete={() => onDelete(connection.id)}
+            onEdit={() => onEdit(connection)}
+            onPrint={() => onPrint(connection)}
+          />
+        ))
       ) : (
         <p className="text-center text-gray-500 text-lg mt-8">
           {searchTerm
-            ? "No connections match your search criteria."
-            : "No connections found. Start by adding one in the form above."}
+            ? "No connections match your search."
+            : "No connections found."}
         </p>
       )}
-
-      {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2 mt-6">
+        <div className="flex justify-center items-center space-x-2 mt-8">
           <button
             onClick={() => paginate(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
           >
             Previous
           </button>
@@ -705,7 +286,7 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
                 className={`px-4 py-2 rounded-md ${
                   currentPage === pageNumber
                     ? "bg-blue-600 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    : "bg-gray-200"
                 }`}
               >
                 {pageNumber}
@@ -715,19 +296,17 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
           <button
             onClick={() => paginate(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
           >
             Next
           </button>
-
-          {/* Items per page selector (Optional) */}
           <select
             value={itemsPerPage}
             onChange={(e) => {
               setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1); // Reset to page 1 when items per page changes
+              setCurrentPage(1);
             }}
-            className="ml-4 p-2 border border-gray-300 rounded-md text-sm"
+            className="ml-4 p-2 border rounded-md text-sm"
           >
             <option value={5}>5 per page</option>
             <option value={10}>10 per page</option>

@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: 718bf21096b2
+Revision ID: c7d4982fdfa2
 Revises: 
-Create Date: 2025-07-07 13:02:36.814809
+Create Date: 2025-07-07 14:49:08.456591
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '718bf21096b2'
+revision = 'c7d4982fdfa2'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -111,6 +111,7 @@ def upgrade():
     sa.Column('is_switch_port_up', sa.Boolean(), nullable=False),
     sa.Column('cable_color', sa.String(length=50), nullable=True),
     sa.Column('cable_label', sa.String(length=100), nullable=True),
+    sa.Column('wall_point_label', sa.String(length=100), nullable=True),
     sa.ForeignKeyConstraint(['pc_id'], ['pcs.id'], ),
     sa.ForeignKeyConstraint(['switch_id'], ['switches.id'], ),
     sa.PrimaryKeyConstraint('id')
