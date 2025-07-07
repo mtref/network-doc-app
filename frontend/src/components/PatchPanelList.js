@@ -2,6 +2,7 @@
 // This component displays a searchable list of Patch Panels in a card format,
 // now including filter options by Location and Rack.
 // UPDATED: Added units_occupied for Patch Panels.
+// FIXED: Correctly casts location_id and rack_id to strings when editing.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
@@ -125,10 +126,11 @@ function PatchPanelList({
   const handleEdit = (pp) => {
     setEditingPatchPanel(pp);
     setPpFormName(pp.name);
-    setPpFormLocationId(pp.location_id || "");
+    // *** BUG FIX: Cast IDs to strings to match dropdown value types ***
+    setPpFormLocationId(String(pp.location_id || ""));
+    setPpFormRackId(String(pp.rack_id || ""));
     setPpFormRowInRack(pp.row_in_rack || "");
-    setPpFormRackId(pp.rack_id || ""); // Set rack ID for editing
-    setPpFormUnitsOccupied(pp.units_occupied || 1); // NEW: Set units occupied for editing
+    setPpFormUnitsOccupied(pp.units_occupied || 1);
     setPpFormTotalPorts(pp.total_ports || 1);
     setPpFormDesc(pp.description || "");
     setIsAddPpFormExpanded(true); // Expand form when editing
@@ -268,9 +270,8 @@ function PatchPanelList({
         </div>
       </div>
 
-      {/* Add/Edit Patch Panel Form (Collapsible) - Outer container now has width and centering */}
+      {/* Add/Edit Patch Panel Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
-        {/* Header (no mx-auto or w-x/y here, it's w-full of its parent) */}
         <div
           className="flex justify-center items-center p-3 cursor-pointer bg-green-50 hover:bg-green-100 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddPpFormExpanded(!isAddPpFormExpanded)}
@@ -290,7 +291,6 @@ function PatchPanelList({
             isAddPpFormExpanded ? "expanded" : ""
           }`}
         >
-          {/* Form container with matching width, centering, and a more visible border */}
           <form
             onSubmit={handlePpFormSubmit}
             className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50"

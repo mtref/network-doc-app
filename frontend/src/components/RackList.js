@@ -3,6 +3,7 @@
 // including filter options by Location, and now a visual representation of each rack.
 // Now includes pagination.
 // UPDATED: Passing units_occupied to RackVisualizer and handling it in form.
+// FIXED: Correctly casts location_id to a string when editing a rack.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import SearchBar from "./SearchBar";
@@ -104,7 +105,8 @@ function RackList({
   const handleEdit = useCallback((rack) => {
     setEditingRack(rack);
     setRackFormName(rack.name);
-    setRackFormLocationId(rack.location_id || "");
+    // *** BUG FIX: Cast location_id to a string to match dropdown value type ***
+    setRackFormLocationId(String(rack.location_id || ""));
     setRackFormDescription(rack.description || "");
     setRackFormTotalUnits(rack.total_units || 42);
     setRackFormOrientation(rack.orientation || "bottom-up");
@@ -164,7 +166,6 @@ function RackList({
   const sortedLocations = [...locations].sort((a, b) =>
     a.name.localeCompare(b.name)
   );
-  const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -208,9 +209,8 @@ function RackList({
         </div>
       </div>
 
-      {/* Add/Edit Rack Form (Collapsible) - Outer container now has width and centering */}
+      {/* Add/Edit Rack Form (Collapsible) */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
-        {/* Header (no mx-auto or w-x/y here, it's w-full of its parent) */}
         <div
           className="flex justify-center items-center p-3 cursor-pointer bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddRackFormExpanded(!isAddRackFormExpanded)}
@@ -230,7 +230,6 @@ function RackList({
             isAddRackFormExpanded ? "expanded" : ""
           }`}
         >
-          {/* Form container with matching width, centering, and a more visible border */}
           <form
             onSubmit={handleRackFormSubmit}
             className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50"
@@ -280,7 +279,6 @@ function RackList({
                 required
               />
             </div>
-            {/* Orientation Selection with Icon */}
             <div className="flex items-center space-x-2">
               {rackFormOrientation === "top-down" ? (
                 <ArrowDownNarrowWide size={20} className="text-gray-500" />
@@ -355,68 +353,62 @@ function RackList({
       {filteredRacks.length > 0 ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {currentItems.map(
-              (
-                rack // Use currentItems for pagination
-              ) => (
-                <div
-                  key={rack.id}
-                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200 p-5"
-                >
-                  <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
-                    <Columns size={20} className="text-blue-500 mr-2" />{" "}
-                    {rack.name}
-                  </h4>
-                  <p className="text-sm text-gray-700 mb-1 flex items-center">
-                    <MapPin size={16} className="text-gray-500 mr-2" />{" "}
-                    Location: {rack.location_name || "N/A"}
-                    {rack.location?.door_number &&
-                      ` (Door: ${rack.location.door_number})`}
-                  </p>
-                  <p className="text-sm text-gray-700 mb-1 flex items-center">
-                    <Info
-                      size={16}
-                      className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-                    />{" "}
-                    Description: {rack.description || "No description"}
-                  </p>
+            {currentItems.map((rack) => (
+              <div
+                key={rack.id}
+                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200 p-5"
+              >
+                <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
+                  <Columns size={20} className="text-blue-500 mr-2" />{" "}
+                  {rack.name}
+                </h4>
+                <p className="text-sm text-gray-700 mb-1 flex items-center">
+                  <MapPin size={16} className="text-gray-500 mr-2" /> Location:{" "}
+                  {rack.location_name || "N/A"}
+                  {rack.location?.door_number &&
+                    ` (Door: ${rack.location.door_number})`}
+                </p>
+                <p className="text-sm text-gray-700 mb-1 flex items-center">
+                  <Info
+                    size={16}
+                    className="text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+                  />{" "}
+                  Description: {rack.description || "No description"}
+                </p>
 
-                  {/* Rack Visualizer Component */}
-                  <RackVisualizer
-                    rack={rack}
-                    switches={Array.isArray(switches) ? switches : []}
-                    patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
-                    pcs={Array.isArray(pcs) ? pcs : []}
-                    onShowPortStatus={onShowPortStatus}
-                    onViewPcDetails={onViewPcDetails}
-                    isModalView={false}
-                  />
+                <RackVisualizer
+                  rack={rack}
+                  switches={Array.isArray(switches) ? switches : []}
+                  patchPanels={Array.isArray(patchPanels) ? patchPanels : []}
+                  pcs={Array.isArray(pcs) ? pcs : []}
+                  onShowPortStatus={onShowPortStatus}
+                  onViewPcDetails={onViewPcDetails}
+                  isModalView={false}
+                />
 
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <button
-                      onClick={() => handleEdit(rack)}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => onDeleteEntity("racks", rack.id)}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                    >
-                      Delete
-                    </button>
-                    {/* View Rack Details Button */}
-                    <button
-                      onClick={() => onViewRackDetails(rack)}
-                      className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
-                      title="View Rack Details"
-                    >
-                      <Maximize size={16} className="mr-1" /> View Rack
-                    </button>
-                  </div>
+                <div className="flex justify-end space-x-2 mt-4">
+                  <button
+                    onClick={() => handleEdit(rack)}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => onDeleteEntity("racks", rack.id)}
+                    className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => onViewRackDetails(rack)}
+                    className="px-3 py-1 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center"
+                    title="View Rack Details"
+                  >
+                    <Maximize size={16} className="mr-1" /> View Rack
+                  </button>
                 </div>
-              )
-            )}
+              </div>
+            ))}
           </div>
 
           {/* Pagination Controls */}
@@ -451,12 +443,11 @@ function RackList({
               Next
             </button>
 
-            {/* Items per page selector */}
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1); // Reset to page 1 when items per page changes
+                setCurrentPage(1);
               }}
               className="ml-4 p-2 border border-gray-300 rounded-md text-sm"
             >
