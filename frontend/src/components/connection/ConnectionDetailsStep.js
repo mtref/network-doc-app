@@ -31,7 +31,7 @@ export const ConnectionDetailsStep = ({
     cableLabel,
     wallPointLabel,
     wallPointCableColor,
-    wallPointCableLabel, // New state for wall point cable
+    wallPointCableLabel,
     availablePcsForConnection,
     selectedLocationIdForSwitch,
     filteredSwitchesByLocation,
@@ -55,7 +55,7 @@ export const ConnectionDetailsStep = ({
     setCableLabel,
     setWallPointLabel,
     setWallPointCableColor,
-    setWallPointCableLabel, // New setters
+    setWallPointCableLabel,
     setShowAddColorInput,
     setNewCustomColor,
     setIsNewPpExpanded,
@@ -97,7 +97,6 @@ export const ConnectionDetailsStep = ({
         </button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* --- Wall Point Details Section --- */}
         <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
           <h4 className="text-lg font-semibold text-gray-700 col-span-full flex items-center mb-3">
             <Tag size={20} className="mr-2" /> Wall Point Details
@@ -395,6 +394,50 @@ export const ConnectionDetailsStep = ({
                         -- Add New --
                       </option>
                     </select>
+                    {/* *** ADDED BACK: Port Status Summary for each selected Patch Panel *** */}
+                    {hop.patch_panel_id &&
+                      getPortStatusSummary(
+                        "patch_panels",
+                        hop.patch_panel_id
+                      ) && (
+                        <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
+                          <span className="flex items-center">
+                            <Wifi size={14} className="text-green-500 mr-1" />
+                            Connected:{" "}
+                            {
+                              getPortStatusSummary(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              ).connected
+                            }
+                          </span>
+                          <span className="flex items-center">
+                            <CircleDot
+                              size={14}
+                              className="text-gray-500 mr-1"
+                            />
+                            Available:{" "}
+                            {
+                              getPortStatusSummary(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              ).available
+                            }
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onShowPortStatus(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              )
+                            }
+                            className="text-blue-500 hover:underline ml-auto"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      )}
                   </div>
                   <div className="flex-none w-16">
                     <label className="block text-sm mb-1">Port:</label>
