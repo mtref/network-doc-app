@@ -1,6 +1,6 @@
 // frontend/src/components/SystemLogViewer.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Filter, XCircle, ArrowRight, Eye, RotateCcw, Check, BadgeCheck } from 'lucide-react';
+import { RefreshCw, Filter, XCircle, Eye, RotateCcw, BadgeCheck } from 'lucide-react';
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5004';
 
@@ -150,11 +150,8 @@ function SystemLogViewer({ showMessage }) {
   };
 
   return (
-    <section className="p-5 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+    <div>
       <LogDetailsModal isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} details={selectedLogDetails} />
-      <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center">
-        System Activity Log
-      </h3>
       
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-4 p-4 bg-white rounded-md border">
@@ -248,7 +245,7 @@ function SystemLogViewer({ showMessage }) {
           <button onClick={() => handlePageChange(pagination.pages)} disabled={!pagination.has_next} className="px-3 py-1 border rounded-md disabled:opacity-50">Last</button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
