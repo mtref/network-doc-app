@@ -30,7 +30,9 @@ class LocationService:
         """Creates a new location."""
         new_location = Location(
             name=data['name'],
-            door_number=data.get('door_number')
+            door_number=data.get('door_number'),
+            # ADDED: Handle the new description field on creation
+            description=data.get('description')
         )
         db.session.add(new_location)
         db.session.commit()
@@ -41,6 +43,8 @@ class LocationService:
         """Updates an existing location."""
         location.name = data.get('name', location.name)
         location.door_number = data.get('door_number', location.door_number)
+        # ADDED: Handle the new description field on update
+        location.description = data.get('description', location.description)
         db.session.commit()
         return location
 

@@ -2,9 +2,7 @@
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
 // Optimized data fetching to prevent excessive re-renders.
-// UPDATED: Ensuring locations and racks are fetched and passed to relevant components.
-// UPDATED: Handling units_occupied for PCs, Patch Panels, and Switches.
-// FIXED: Corrected import path for PatchPanelList.
+// UPDATED: Added a description field to the Location management tab.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -12,13 +10,13 @@ import ConnectionForm from "./components/ConnectionForm";
 import PortStatusModal from "./components/PortStatusModal";
 import PcList from "./components/PcList";
 import SwitchList from "./components/SwitchList";
-import PatchPanelList from "./components/PatchPanelList"; // Corrected path: removed extra 'components/'
+import PatchPanelList from "./components/PatchPanelList";
 import SwitchDiagramModal from "./components/SwitchDiagramModal";
 import SettingsPage from "./components/SettingsPage";
 import RackList from "./components/RackList";
 import RackViewModal from "./components/RackViewModal";
 import PcDetailsModal from "./components/PcDetailsModal";
-import { Printer } from "lucide-react";
+import { Printer, Info } from "lucide-react"; // Added Info icon
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -817,79 +815,116 @@ function App() {
                     e.preventDefault();
                     const name = e.target.locationName.value;
                     const door_number = e.target.doorNumber.value;
+                    // ADDED: Get description from form
+                    const description = e.target.locationDescription.value;
                     if (name.trim()) {
-                      await handleAddEntity("locations", { name, door_number });
-                      e.target.locationName.value = "";
-                      e.target.doorNumber.value = "";
+                      // ADDED: Pass description to the handler
+                      await handleAddEntity("locations", {
+                        name,
+                        door_number,
+                        description,
+                      });
+                      e.target.reset(); // Reset all form fields
                     }
                   }}
-                  className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2"
+                  className="space-y-4"
                 >
-                  <input
-                    type="text"
-                    name="locationName"
-                    placeholder="Location Name (e.g., Data Center)"
-                    className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="doorNumber"
-                    placeholder="Door Number (Optional)"
-                    className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <input
+                      type="text"
+                      name="locationName"
+                      placeholder="Location Name (e.g., Data Center)"
+                      className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                    <input
+                      type="text"
+                      name="doorNumber"
+                      placeholder="Door Number (Optional)"
+                      className="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {/* ADDED: Description textarea */}
+                  <textarea
+                    name="locationDescription"
+                    placeholder="Description (Optional)"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    rows="3"
+                  ></textarea>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
+                    className="w-full sm:w-auto px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200"
                   >
                     Add Location
                   </button>
                 </form>
               </div>
 
-              <div className="space-y-3">
+              <div className="mt-8 space-y-4">
                 {locations.length > 0 ? (
                   locations.map((location) => (
                     <div
                       key={location.id}
-                      className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex justify-between items-center"
+                      className="bg-white rounded-lg shadow-sm border border-gray-100 p-4"
                     >
-                      <span className="text-lg font-medium text-gray-800">
-                        {location.name}
-                        {location.door_number
-                          ? ` (Door: ${location.door_number})`
-                          : ""}
-                      </span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => {
-                            const newName = prompt(
-                              "Enter new name for location:",
-                              location.name
-                            );
-                            const newDoorNumber = prompt(
-                              "Enter new door number for location:",
-                              location.door_number || ""
-                            );
-                            if (newName !== null && newName.trim()) {
-                              handleUpdateEntity("locations", location.id, {
-                                name: newName,
-                                door_number: newDoorNumber,
-                              });
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800">
+                            {location.name}
+                            {location.door_number
+                              ? ` (Door: ${location.door_number})`
+                              : ""}
+                          </h4>
+                          {/* ADDED: Display description */}
+                          <p className="text-sm text-gray-600 mt-1 flex items-start">
+                            <Info
+                              size={16}
+                              className="text-gray-400 mr-2 flex-shrink-0 mt-0.5"
+                            />
+                            {location.description || "No description provided."}
+                          </p>
+                        </div>
+                        <div className="flex space-x-2 flex-shrink-0 ml-4">
+                          <button
+                            onClick={() => {
+                              const newName = prompt(
+                                "Enter new name for location:",
+                                location.name
+                              );
+                              if (newName === null) return; // User cancelled
+                              const newDoorNumber = prompt(
+                                "Enter new door number for location:",
+                                location.door_number || ""
+                              );
+                              if (newDoorNumber === null) return;
+                              // ADDED: Prompt for description
+                              const newDescription = prompt(
+                                "Enter new description for location:",
+                                location.description || ""
+                              );
+                              if (newDescription === null) return;
+
+                              if (newName.trim()) {
+                                handleUpdateEntity("locations", location.id, {
+                                  name: newName,
+                                  door_number: newDoorNumber,
+                                  description: newDescription,
+                                });
+                              }
+                            }}
+                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleDeleteEntity("locations", location.id)
                             }
-                          }}
-                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleDeleteEntity("locations", location.id)
-                          }
-                          className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                        >
-                          Delete
-                        </button>
+                            className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))

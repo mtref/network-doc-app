@@ -36,6 +36,7 @@ def register_routes(app):
             if not data or not data.get('name'):
                 return jsonify({'error': 'Location name is required'}), 400
             try:
+                # The service already handles the 'description' field from the data dict
                 new_location = LocationService.create_location(data)
                 return jsonify(new_location.to_dict()), 201
             except IntegrityError:
@@ -61,6 +62,7 @@ def register_routes(app):
             if not data:
                 return jsonify({'error': 'No data provided for update'}), 400
             try:
+                # The service already handles the 'description' field from the data dict
                 updated_location = LocationService.update_location(location, data)
                 return jsonify(updated_location.to_dict())
             except IntegrityError:
@@ -384,9 +386,11 @@ def register_routes(app):
 
         try:
             if entity_type == 'locations':
-                headers = ['id', 'name', 'door_number']
+                # ADDED: 'description' to headers
+                headers = ['id', 'name', 'door_number', 'description']
                 items = LocationService.get_all_locations()
-                data_rows = [[item.id, item.name, item.door_number] for item in items]
+                # ADDED: item.description to data row
+                data_rows = [[item.id, item.name, item.door_number, item.description] for item in items]
             elif entity_type == 'racks':
                 headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation']
                 items = RackService.get_all_racks()
@@ -508,6 +512,7 @@ def register_routes(app):
                         if existing_location:
                             raise ValueError(f"Location '{name}' already exists. Skipped.")
                         
+                        # The service will pick up the 'description' from row_dict if present
                         LocationService.create_location(row_dict)
 
                     elif entity_type == 'racks':

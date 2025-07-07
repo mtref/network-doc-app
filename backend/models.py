@@ -8,13 +8,17 @@ class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     door_number = db.Column(db.String(50), nullable=True)
+    # ADDED: Description field for Location
+    description = db.Column(db.String(255), nullable=True)
 
     def to_dict(self):
         """Converts a Location object to a dictionary."""
         return {
             'id': self.id,
             'name': self.name,
-            'door_number': self.door_number
+            'door_number': self.door_number,
+            # ADDED: Include description in the dictionary representation
+            'description': self.description
         }
 
 class Rack(db.Model):
