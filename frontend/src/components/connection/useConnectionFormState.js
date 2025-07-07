@@ -131,6 +131,7 @@ export const useConnectionFormState = ({
     fetchAvailablePcs();
   }, [fetchAvailablePcs]);
 
+  // Effect to filter switches based on the selected location
   useEffect(() => {
     if (selectedLocationIdForSwitch) {
       const filtered = switches.filter(
@@ -140,13 +141,17 @@ export const useConnectionFormState = ({
     } else {
       setFilteredSwitchesByLocation(switches);
     }
-    setSwitchId("");
-  }, [selectedLocationIdForSwitch, switches]);
+    // Only reset the switch if we are NOT currently editing a connection.
+    if (!editingConnection) {
+      setSwitchId("");
+    }
+  }, [selectedLocationIdForSwitch, switches, editingConnection]);
 
+  // Effect to handle entering and exiting edit mode
   useEffect(() => {
     if (editingConnection) {
-      setPcId(editingConnection.pc_id || "");
-      setSwitchId(editingConnection.switch_id || "");
+      setPcId(String(editingConnection.pc_id || ""));
+      setSwitchId(String(editingConnection.switch_id || ""));
       setSelectedLocationIdForSwitch(
         String(editingConnection.switch?.location_id || "")
       );
@@ -156,14 +161,15 @@ export const useConnectionFormState = ({
       setCableLabel(editingConnection.cable_label || "");
       setHops(
         editingConnection.hops.map((hop) => ({
-          patch_panel_id: hop.patch_panel?.id || "",
+          patch_panel_id: String(hop.patch_panel?.id || ""),
           patch_panel_port: hop.patch_panel_port || "",
-          is_port_up: hop.is_port_up,
+          is_port_up: hop.is_port_up ?? true,
           cable_color: hop.cable_color || "",
           cable_label: hop.cable_label || "",
           location_id: String(hop.patch_panel?.location_id || ""),
         })) || []
       );
+
       setAvailablePcsForConnection((prev) => {
         if (
           editingConnection.pc &&
@@ -177,7 +183,8 @@ export const useConnectionFormState = ({
       });
       setCurrentStep(2);
     } else {
-      // Reset all form states
+      // Reset all form states when not editing
+      setCurrentStep(1);
       setPcId("");
       setSwitchId("");
       setSelectedLocationIdForSwitch("");
@@ -186,8 +193,7 @@ export const useConnectionFormState = ({
       setCableColor("");
       setCableLabel("");
       setHops([]);
-      setEditingConnection(null);
-      setCurrentStep(1);
+
       // Reset new entity forms
       setNewPcName("");
       setNewPcIp("");
@@ -221,6 +227,7 @@ export const useConnectionFormState = ({
       setNewSwitchDesc("");
       setNewSwitchUsage("");
       setNewSwitchUnitsOccupied(1);
+
       fetchAvailablePcs();
     }
   }, [editingConnection, fetchAvailablePcs, setEditingConnection]);
@@ -285,6 +292,7 @@ export const useConnectionFormState = ({
       return;
     }
     if (
+      hops.length > 0 &&
       !hops.every(
         (hop) =>
           hop.location_id && hop.patch_panel_id && hop.patch_panel_port.trim()
@@ -312,7 +320,7 @@ export const useConnectionFormState = ({
       ? await onUpdateConnection(editingConnection.id, connectionData)
       : await onAddConnection(connectionData);
     if (result.success) {
-      handleCancelEdit(); // Reset form completely
+      handleCancelEdit();
     }
   };
 
@@ -408,7 +416,7 @@ export const useConnectionFormState = ({
       usageOptions,
       locations,
       racks,
-      patchPanels, // *** BUG FIX: Added missing patchPanels to the returned state object ***
+      patchPanels,
     },
     setters: {
       setCurrentStep,

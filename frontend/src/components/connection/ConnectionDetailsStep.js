@@ -69,6 +69,7 @@ export const ConnectionDetailsStep = ({
   const sortedLocations = [...locations].sort((a, b) =>
     a.name.localeCompare(b.name)
   );
+  const currentPatchPanels = Array.isArray(patchPanels) ? patchPanels : [];
 
   return (
     <section className="p-6 bg-white rounded-lg shadow-md border border-blue-200">
@@ -78,7 +79,7 @@ export const ConnectionDetailsStep = ({
       <div className="mb-6 flex items-center justify-between p-3 bg-gray-50 rounded-md border">
         <span className="font-semibold text-gray-700">Selected PC:</span>
         <span className="text-blue-600 font-medium">
-          {availablePcsForConnection.find((pc) => pc.id === parseInt(pcId))
+          {availablePcsForConnection.find((pc) => String(pc.id) === pcId)
             ?.name || "N/A"}
         </span>
         <button
@@ -107,7 +108,7 @@ export const ConnectionDetailsStep = ({
             >
               <option value="">-- All Locations --</option>
               {sortedLocations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
+                <option key={loc.id} value={String(loc.id)}>
                   {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
                 </option>
               ))}
@@ -133,7 +134,7 @@ export const ConnectionDetailsStep = ({
             >
               <option value="">-- Select a Switch --</option>
               {filteredSwitchesByLocation.map((_switch) => (
-                <option key={_switch.id} value={_switch.id}>
+                <option key={_switch.id} value={String(_switch.id)}>
                   {_switch.name} ({_switch.ip_address})
                 </option>
               ))}
@@ -262,147 +263,150 @@ export const ConnectionDetailsStep = ({
           <h4 className="text-lg font-semibold mb-3">
             <Split size={20} className="mr-2" /> Patch Panel Hops
           </h4>
-          {hops.map((hop, index) => (
-            <div
-              key={index}
-              className="flex flex-col mb-4 p-3 border rounded-md bg-white"
-            >
-              <div className="flex flex-wrap items-center gap-3 w-full mb-3">
-                <div className="flex-1 min-w-[150px]">
-                  <label className="block text-sm mb-1">
-                    <MapPin size={16} className="inline mr-1" /> Location (Hop{" "}
-                    {index + 1}):
-                  </label>
-                  <select
-                    value={hop.location_id}
-                    onChange={(e) =>
-                      handlers.handleHopChange(
-                        index,
-                        "location_id",
-                        e.target.value
-                      )
-                    }
-                    className="w-full p-2 border rounded-md text-sm"
-                    required
-                  >
-                    <option value="">-- Select --</option>
-                    {sortedLocations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-grow min-w-[150px]">
-                  <label className="block text-sm mb-1">Patch Panel:</label>
-                  <select
-                    value={hop.patch_panel_id}
-                    onChange={(e) =>
-                      e.target.value === "add-new-pp"
-                        ? setIsNewPpExpanded(true)
-                        : handlers.handleHopChange(
-                            index,
-                            "patch_panel_id",
-                            e.target.value
-                          )
-                    }
-                    className="w-full p-2 border rounded-md text-sm"
-                    required
-                  >
-                    <option value="">-- Select --</option>
-                    {patchPanels
-                      .filter(
-                        (pp) => String(pp.location_id) === hop.location_id
-                      )
-                      .map((pp) => (
-                        <option key={pp.id} value={pp.id}>
+          {hops.map((hop, index) => {
+            const filteredPatchPanelsForThisHop = hop.location_id
+              ? currentPatchPanels.filter(
+                  (pp) => String(pp.location_id) === hop.location_id
+                )
+              : currentPatchPanels;
+            return (
+              <div
+                key={index}
+                className="flex flex-col mb-4 p-3 border rounded-md bg-white"
+              >
+                <div className="flex flex-wrap items-center gap-3 w-full mb-3">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="block text-sm mb-1">
+                      <MapPin size={16} className="inline mr-1" /> Location (Hop{" "}
+                      {index + 1}):
+                    </label>
+                    <select
+                      value={hop.location_id}
+                      onChange={(e) =>
+                        handlers.handleHopChange(
+                          index,
+                          "location_id",
+                          e.target.value
+                        )
+                      }
+                      className="w-full p-2 border rounded-md text-sm"
+                      required
+                    >
+                      <option value="">-- Select --</option>
+                      {sortedLocations.map((loc) => (
+                        <option key={loc.id} value={String(loc.id)}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-grow min-w-[150px]">
+                    <label className="block text-sm mb-1">Patch Panel:</label>
+                    <select
+                      value={hop.patch_panel_id}
+                      onChange={(e) =>
+                        e.target.value === "add-new-pp"
+                          ? setIsNewPpExpanded(true)
+                          : handlers.handleHopChange(
+                              index,
+                              "patch_panel_id",
+                              e.target.value
+                            )
+                      }
+                      className="w-full p-2 border rounded-md text-sm"
+                      required
+                    >
+                      <option value="">-- Select --</option>
+                      {filteredPatchPanelsForThisHop.map((pp) => (
+                        <option key={pp.id} value={String(pp.id)}>
                           {pp.name}
                         </option>
                       ))}
-                    <option value="add-new-pp" className="italic">
-                      -- Add New --
-                    </option>
-                  </select>
-                </div>
-                <div className="flex-none w-16">
-                  <label className="block text-sm mb-1">Port:</label>
-                  <input
-                    type="text"
-                    value={hop.patch_panel_port}
-                    onChange={(e) =>
-                      handlers.handleHopChange(
-                        index,
-                        "patch_panel_port",
-                        e.target.value
-                      )
-                    }
-                    className="w-16 p-2 border rounded-md text-sm"
-                    required
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={hop.is_port_up}
-                    onChange={(e) =>
-                      handlers.handleHopChange(
-                        index,
-                        "is_port_up",
-                        e.target.checked
-                      )
-                    }
-                    className="h-4 w-4"
-                  />
-                  <label className="ml-2 text-sm">Up</label>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-end gap-3 w-full mt-3 pt-3 border-t">
-                <div className="flex-1 min-w-[120px]">
-                  <label className="block text-sm mb-1">Cable Color:</label>
-                  <select
-                    value={hop.cable_color}
-                    onChange={(e) =>
-                      handlers.handleHopChange(
-                        index,
-                        "cable_color",
-                        e.target.value
-                      )
-                    }
-                    className="w-full p-2 border rounded-md text-sm"
-                  >
-                    <option value="">-- Optional --</option>
-                    {cableColorOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                      <option value="add-new-pp" className="italic">
+                        -- Add New --
                       </option>
-                    ))}
-                  </select>
+                    </select>
+                  </div>
+                  <div className="flex-none w-16">
+                    <label className="block text-sm mb-1">Port:</label>
+                    <input
+                      type="text"
+                      value={hop.patch_panel_port}
+                      onChange={(e) =>
+                        handlers.handleHopChange(
+                          index,
+                          "patch_panel_port",
+                          e.target.value
+                        )
+                      }
+                      className="w-16 p-2 border rounded-md text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={hop.is_port_up}
+                      onChange={(e) =>
+                        handlers.handleHopChange(
+                          index,
+                          "is_port_up",
+                          e.target.checked
+                        )
+                      }
+                      className="h-4 w-4"
+                    />
+                    <label className="ml-2 text-sm">Up</label>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-[120px]">
-                  <label className="block text-sm mb-1">Cable Label:</label>
-                  <input
-                    type="text"
-                    value={hop.cable_label}
-                    onChange={(e) =>
-                      handlers.handleHopChange(
-                        index,
-                        "cable_label",
-                        e.target.value
-                      )
-                    }
-                    className="w-full p-2 border rounded-md"
-                  />
+                <div className="flex flex-wrap items-end gap-3 w-full mt-3 pt-3 border-t">
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-sm mb-1">Cable Color:</label>
+                    <select
+                      value={hop.cable_color}
+                      onChange={(e) =>
+                        handlers.handleHopChange(
+                          index,
+                          "cable_color",
+                          e.target.value
+                        )
+                      }
+                      className="w-full p-2 border rounded-md text-sm"
+                    >
+                      <option value="">-- Optional --</option>
+                      {cableColorOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-sm mb-1">Cable Label:</label>
+                    <input
+                      type="text"
+                      value={hop.cable_label}
+                      onChange={(e) =>
+                        handlers.handleHopChange(
+                          index,
+                          "cable_label",
+                          e.target.value
+                        )
+                      }
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handlers.removeHop(index)}
+                    className="p-2 bg-red-500 text-white rounded-md text-sm"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handlers.removeHop(index)}
-                  className="p-2 bg-red-500 text-white rounded-md text-sm"
-                >
-                  Remove
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             onClick={handlers.addHop}

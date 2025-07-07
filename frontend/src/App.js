@@ -1,9 +1,9 @@
 // frontend/src/App.js
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
-// Optimized data fetching to prevent excessive re-renders.
-// REFACTORED: The "Manage Locations" tab now uses a unified, collapsible form for adding and editing,
-// replacing the inconsistent `prompt()` dialogs for a better user experience.
+// REFACTORED: The "Manage Locations" tab now uses a unified, collapsible form.
+// FIXED: The handleEditConnection function now passes the complete connection object to the form,
+// ensuring all dropdowns are correctly populated during an edit.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -60,7 +60,7 @@ function App() {
   // State for editing a connection
   const [editingConnection, setEditingConnection] = useState(null);
 
-  // --- State for Location Add/Edit Form ---
+  // State for Location Add/Edit Form
   const [editingLocation, setEditingLocation] = useState(null);
   const [locationFormName, setLocationFormName] = useState("");
   const [locationFormDoorNumber, setLocationFormDoorNumber] = useState("");
@@ -233,32 +233,10 @@ function App() {
     [fetchData, showMessage]
   );
 
+  // *** BUG FIX: Simplified this handler to pass the original, complete connection object.
+  // This ensures the form hook has all the nested data it needs.
   const handleEditConnection = useCallback((connection) => {
-    const formattedConnection = {
-      id: connection.id,
-      pc_id: connection.pc?.id,
-      switch_id: connection.switch?.id,
-      switch_port: connection.switch_port,
-      is_switch_port_up:
-        connection.is_switch_port_up !== undefined
-          ? connection.is_switch_port_up
-          : true,
-      cable_color: connection.cable_color || "",
-      cable_label: connection.cable_label || "",
-      hops: connection.hops.map((hop) => ({
-        patch_panel_id: hop.patch_panel?.id,
-        patch_panel_port: hop.patch_panel_port,
-        is_port_up: hop.is_port_up,
-        cable_color: hop.cable_color || "",
-        cable_label: hop.cable_label || "",
-        location_id: hop.patch_panel?.location_id
-          ? String(hop.patch_panel.location_id)
-          : "",
-      })),
-      pc: connection.pc,
-      switch: connection.switch,
-    };
-    setEditingConnection(formattedConnection);
+    setEditingConnection(connection);
   }, []);
 
   const handleAddEntity = useCallback(
@@ -283,19 +261,17 @@ function App() {
         const newEntity = await response.json();
         showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
 
-        // Use a dynamic setter based on the entity type
-        const setterName = `set${type.charAt(0).toUpperCase() + type.slice(1)}`;
-        const setterFunction = {
-          setPcs,
-          setPatchPanels,
-          setSwitches,
-          setLocations,
-          setRacks,
-        }[setterName];
+        const setterMap = {
+          pcs: setPcs,
+          patch_panels: setPatchPanels,
+          switches: setSwitches,
+          locations: setLocations,
+          racks: setRacks,
+        };
+        const setterFunction = setterMap[type];
         if (setterFunction) {
           setterFunction((prev) => [...prev, newEntity]);
         } else {
-          // Fallback to refetch if dynamic setter fails
           await fetchData(
             type,
             eval(`set${type.charAt(0).toUpperCase() + type.slice(1)}`)
@@ -334,7 +310,6 @@ function App() {
         }
         showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
 
-        // Re-fetch all relevant data after an update
         await Promise.all([
           fetchData("pcs", setPcs),
           fetchData("patch_panels", setPatchPanels),
@@ -378,7 +353,6 @@ function App() {
         }
         showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
 
-        // Re-fetch all relevant data after a delete
         await Promise.all([
           fetchData("pcs", setPcs),
           fetchData("patch_panels", setPatchPanels),

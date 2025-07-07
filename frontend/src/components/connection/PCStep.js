@@ -179,7 +179,7 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
         >
           <option value="">-- Select a PC --</option>
           {availablePcsForConnection.map((pc) => (
-            <option key={pc.id} value={pc.id}>
+            <option key={pc.id} value={String(pc.id)}>
               {pc.name} ({pc.ip_address || "No IP"}){" "}
               {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
             </option>
@@ -291,7 +291,7 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
                   >
                     <option value="">-- Select Rack --</option>
                     {sortedRacks.map((rack) => (
-                      <option key={rack.id} value={rack.id}>
+                      <option key={rack.id} value={String(rack.id)}>
                         {rack.name} ({rack.location_name})
                       </option>
                     ))}
