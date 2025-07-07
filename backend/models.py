@@ -2,6 +2,30 @@
 # This file defines the SQLAlchemy database models for the application.
 
 from .extensions import db # Import db from extensions.py
+from datetime import datetime # Import datetime for timestamping
+
+class SystemLog(db.Model):
+    __tablename__ = 'system_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    action_type = db.Column(db.String(50), nullable=False) # e.g., 'CREATE', 'UPDATE', 'DELETE'
+    entity_type = db.Column(db.String(50), nullable=False) # e.g., 'PC', 'Switch', 'Connection'
+    entity_id = db.Column(db.Integer, nullable=True)
+    entity_name = db.Column(db.String(255), nullable=True)
+    details = db.Column(db.JSON, nullable=True) # To store what changed for UPDATE actions
+
+    def to_dict(self):
+        """Converts a SystemLog object to a dictionary."""
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() + 'Z',
+            'action_type': self.action_type,
+            'entity_type': self.entity_type,
+            'entity_id': self.entity_id,
+            'entity_name': self.entity_name,
+            'details': self.details
+        }
+
 
 class Location(db.Model):
     __tablename__ = 'locations'

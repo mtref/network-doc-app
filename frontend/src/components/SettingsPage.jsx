@@ -17,6 +17,7 @@ import {
   MapPin,
   Columns, // Icon for Racks
 } from "lucide-react";
+import SystemLogViewer from "./SystemLogViewer"; // Import the new log viewer component
 
 // Base URL for the backend API.
 const API_BASE_URL =
@@ -82,7 +83,9 @@ function SettingsPage({ showMessage }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          result.error || `HTTP error! status: ${response.status}`
+        );
       }
 
       setPdfUploadMessage(result.message || "PDF uploaded successfully!");
@@ -107,7 +110,9 @@ function SettingsPage({ showMessage }) {
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
       showMessage("PDF template deleted successfully!", 3000);
       fetchPdfTemplates(); // Re-fetch list
@@ -126,7 +131,9 @@ function SettingsPage({ showMessage }) {
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
       showMessage("Default PDF template set successfully!", 3000);
       setDefaultPdfId(pdfId); // Update local state immediately
@@ -137,7 +144,10 @@ function SettingsPage({ showMessage }) {
   };
 
   const handleOpenPdf = (storedFilename) => {
-    window.open(`${API_BASE_URL}/pdf_templates/download/${storedFilename}`, '_blank');
+    window.open(
+      `${API_BASE_URL}/pdf_templates/download/${storedFilename}`,
+      "_blank"
+    );
   };
 
   // --- CSV Import/Export Functions (Existing) ---
@@ -279,8 +289,8 @@ function SettingsPage({ showMessage }) {
         <p className="text-gray-700 mb-4">
           Upload a CSV file to import data. Ensure the CSV format matches the
           exported format. Existing records with matching unique names (for
-          Locations, PCs, Patch Panels, Switches, Racks) or matching PC/Switch/Switch
-          Port combinations (for Connections) will be skipped.
+          Locations, PCs, Patch Panels, Switches, Racks) or matching
+          PC/Switch/Switch Port combinations (for Connections) will be skipped.
         </p>
         <form onSubmit={handleImport} className="space-y-4">
           <div>
@@ -366,7 +376,10 @@ function SettingsPage({ showMessage }) {
           </h4>
           <form onSubmit={handlePdfFileUpload} className="space-y-3">
             <div>
-              <label htmlFor="pdf-upload" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="pdf-upload"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Select PDF File:
               </label>
               <input
@@ -385,7 +398,9 @@ function SettingsPage({ showMessage }) {
               Upload PDF
             </button>
             {pdfUploadMessage && (
-              <p className="mt-2 text-sm text-center text-gray-600">{pdfUploadMessage}</p>
+              <p className="mt-2 text-sm text-center text-gray-600">
+                {pdfUploadMessage}
+              </p>
             )}
           </form>
         </div>
@@ -398,16 +413,31 @@ function SettingsPage({ showMessage }) {
           {pdfTemplates.length > 0 ? (
             <ul className="space-y-2">
               {pdfTemplates.map((template) => (
-                <li key={template.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-md bg-gray-50">
+                <li
+                  key={template.id}
+                  className="flex items-center justify-between p-2 border border-gray-100 rounded-md bg-gray-50"
+                >
                   <div className="flex-grow flex items-center">
                     {defaultPdfId === template.id ? (
-                      <CheckCircle size={18} className="text-green-500 mr-2" title="Default PDF" />
+                      <CheckCircle
+                        size={18}
+                        className="text-green-500 mr-2"
+                        title="Default PDF"
+                      />
                     ) : (
-                      <XCircle size={18} className="text-gray-400 mr-2" title="Not Default" />
+                      <XCircle
+                        size={18}
+                        className="text-gray-400 mr-2"
+                        title="Not Default"
+                      />
                     )}
                     <span className="text-sm text-gray-800 font-medium truncate">
                       {template.original_filename}
-                      {defaultPdfId === template.id && <span className="ml-2 text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">DEFAULT</span>}
+                      {defaultPdfId === template.id && (
+                        <span className="ml-2 text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">
+                          DEFAULT
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="flex space-x-2 flex-shrink-0">
@@ -427,13 +457,13 @@ function SettingsPage({ showMessage }) {
                         <CheckCircle size={20} />
                       </button>
                     ) : (
-                        <button
-                            onClick={() => handleSetDefaultPdf(null)} // Option to unset default
-                            className="p-1 text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                            title="Unset Default"
-                        >
-                            <XCircle size={20} />
-                        </button>
+                      <button
+                        onClick={() => handleSetDefaultPdf(null)} // Option to unset default
+                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                        title="Unset Default"
+                      >
+                        <XCircle size={20} />
+                      </button>
                     )}
                     <button
                       onClick={() => handleDeletePdfTemplate(template.id)}
@@ -447,10 +477,15 @@ function SettingsPage({ showMessage }) {
               ))}
             </ul>
           ) : (
-            <p className="text-center text-gray-500 text-sm">No PDF templates uploaded yet.</p>
+            <p className="text-center text-gray-500 text-sm">
+              No PDF templates uploaded yet.
+            </p>
           )}
         </div>
       </section>
+
+      {/* NEW: System Log Viewer Section */}
+      <SystemLogViewer showMessage={showMessage} />
     </div>
   );
 }

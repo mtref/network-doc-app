@@ -3,15 +3,65 @@
 
 import os
 import uuid
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, attributes
 from sqlalchemy import cast, Integer
+from datetime import datetime
 
 from .extensions import db
-from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
+from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings, SystemLog
 from .utils import validate_port_occupancy, validate_rack_unit_occupancy, check_rack_unit_decrease_conflict, allowed_file
 
 # --- Global Constants (can be moved to a config.py if more complex) ---
 MAX_HOPS = 5 # Maximum number of hops to export/import for connections
+
+# --- System Logging Service ---
+class SystemLogService:
+    @staticmethod
+    def _get_changed_fields(model_instance, new_data):
+        """Compares a model instance with new data and returns a dict of changes."""
+        changes = {}
+        for key, value in new_data.items():
+            # Use getattr_static to avoid triggering relationship loads
+            current_value = attributes.instance_state(model_instance).dict.get(key)
+            # Normalize values for comparison (e.g., handle None vs empty string)
+            normalized_current = "" if current_value is None else str(current_value)
+            normalized_new = "" if value is None else str(value)
+
+            if normalized_current != normalized_new:
+                changes[key] = {
+                    'old': normalized_current,
+                    'new': normalized_new
+                }
+        return changes
+
+    @staticmethod
+    def create_log(action_type, entity_type, entity_id=None, entity_name=None, details=None):
+        """Creates a new system log entry."""
+        log_entry = SystemLog(
+            action_type=action_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            details=details,
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(log_entry)
+        # The commit will be handled by the calling service method
+
+    @staticmethod
+    def get_all_logs(page=1, per_page=20, entity_type=None, action_type=None):
+        """Retrieves a paginated and filtered list of system logs."""
+        query = SystemLog.query
+        if entity_type:
+            query = query.filter(SystemLog.entity_type == entity_type)
+        if action_type:
+            query = query.filter(SystemLog.action_type == action_type)
+        
+        query = query.order_by(SystemLog.timestamp.desc())
+        
+        paginated_logs = query.paginate(page=page, per_page=per_page, error_out=False)
+        return paginated_logs
+
 
 class LocationService:
     @staticmethod
@@ -33,22 +83,33 @@ class LocationService:
             description=data.get('description')
         )
         db.session.add(new_location)
+        db.session.flush() # Flush to get the ID for logging
+        SystemLogService.create_log('CREATE', 'Location', new_location.id, new_location.name)
         db.session.commit()
         return new_location
 
     @staticmethod
     def update_location(location, data):
         """Updates an existing location."""
+        changes = SystemLogService._get_changed_fields(location, data)
+        
         location.name = data.get('name', location.name)
         location.door_number = data.get('door_number', location.door_number)
         location.description = data.get('description', location.description)
+
+        if changes:
+            SystemLogService.create_log('UPDATE', 'Location', location.id, location.name, changes)
+        
         db.session.commit()
         return location
 
     @staticmethod
     def delete_location(location):
         """Deletes a location."""
+        location_id = location.id
+        location_name = location.name
         db.session.delete(location)
+        SystemLogService.create_log('DELETE', 'Location', location_id, location_name)
         db.session.commit()
 
 class RackService:
@@ -81,6 +142,8 @@ class RackService:
             orientation=data.get('orientation', 'bottom-up')
         )
         db.session.add(new_rack)
+        db.session.flush() # Flush to get the ID for logging
+        SystemLogService.create_log('CREATE', 'Rack', new_rack.id, new_rack.name)
         db.session.commit()
         db.session.refresh(new_rack)
         return new_rack
@@ -88,6 +151,8 @@ class RackService:
     @staticmethod
     def update_rack(rack, data):
         """Updates an existing rack with validation for unit changes."""
+        changes = SystemLogService._get_changed_fields(rack, data)
+
         if 'total_units' in data:
             new_total_units = data.get('total_units')
             try:
@@ -108,6 +173,9 @@ class RackService:
         rack.description = data.get('description', rack.description)
         rack.orientation = data.get('orientation', rack.orientation)
         
+        if changes:
+             SystemLogService.create_log('UPDATE', 'Rack', rack.id, rack.name, changes)
+
         db.session.commit()
         db.session.refresh(rack)
         return rack
@@ -115,7 +183,10 @@ class RackService:
     @staticmethod
     def delete_rack(rack):
         """Deletes a rack."""
+        rack_id = rack.id
+        rack_name = rack.name
         db.session.delete(rack)
+        SystemLogService.create_log('DELETE', 'Rack', rack_id, rack_name)
         db.session.commit()
 
 class PCService:
@@ -184,6 +255,8 @@ class PCService:
             units_occupied=units_occupied
         )
         db.session.add(new_pc)
+        db.session.flush()
+        SystemLogService.create_log('CREATE', 'PC', new_pc.id, new_pc.name)
         db.session.commit()
         db.session.refresh(new_pc)
         return new_pc
@@ -191,6 +264,7 @@ class PCService:
     @staticmethod
     def update_pc(pc, data):
         """Updates an existing PC with validation."""
+        changes = SystemLogService._get_changed_fields(pc, data)
         pc_type = data.get('type', pc.type)
         rack_id = data.get('rack_id', pc.rack_id)
         row_in_rack = data.get('row_in_rack', pc.row_in_rack)
@@ -248,6 +322,9 @@ class PCService:
         pc.rack_id = rack_id
         pc.units_occupied = units_occupied
 
+        if changes:
+            SystemLogService.create_log('UPDATE', 'PC', pc.id, pc.name, changes)
+
         db.session.commit()
         db.session.refresh(pc)
         return pc
@@ -255,7 +332,10 @@ class PCService:
     @staticmethod
     def delete_pc(pc):
         """Deletes a PC."""
+        pc_id = pc.id
+        pc_name = pc.name
         db.session.delete(pc)
+        SystemLogService.create_log('DELETE', 'PC', pc_id, pc_name)
         db.session.commit()
 
     @staticmethod
@@ -323,6 +403,8 @@ class PatchPanelService:
             description=data.get('description')
         )
         db.session.add(new_pp)
+        db.session.flush()
+        SystemLogService.create_log('CREATE', 'Patch Panel', new_pp.id, new_pp.name)
         db.session.commit()
         db.session.refresh(new_pp)
         return new_pp
@@ -330,6 +412,7 @@ class PatchPanelService:
     @staticmethod
     def update_patch_panel(pp, data):
         """Updates an existing patch panel with validation."""
+        changes = SystemLogService._get_changed_fields(pp, data)
         rack_id = data.get('rack_id', pp.rack_id)
         row_in_rack = data.get('row_in_rack', pp.row_in_rack)
         units_occupied = data.get('units_occupied', pp.units_occupied)
@@ -372,6 +455,10 @@ class PatchPanelService:
         pp.units_occupied = units_occupied
         pp.total_ports = int(data.get('total_ports', pp.total_ports)) if str(data.get('total_ports', pp.total_ports)).isdigit() else pp.total_ports
         pp.description = data.get('description', pp.description)
+
+        if changes:
+            SystemLogService.create_log('UPDATE', 'Patch Panel', pp.id, pp.name, changes)
+
         db.session.commit()
         db.session.refresh(pp)
         return pp
@@ -379,7 +466,10 @@ class PatchPanelService:
     @staticmethod
     def delete_patch_panel(pp):
         """Deletes a patch panel."""
+        pp_id = pp.id
+        pp_name = pp.name
         db.session.delete(pp)
+        SystemLogService.create_log('DELETE', 'Patch Panel', pp_id, pp_name)
         db.session.commit()
 
     @staticmethod
@@ -496,6 +586,8 @@ class SwitchService:
             usage=data.get('usage')
         )
         db.session.add(new_switch)
+        db.session.flush()
+        SystemLogService.create_log('CREATE', 'Switch', new_switch.id, new_switch.name)
         db.session.commit()
         db.session.refresh(new_switch)
         return new_switch
@@ -503,6 +595,7 @@ class SwitchService:
     @staticmethod
     def update_switch(_switch, data):
         """Updates an existing switch with validation."""
+        changes = SystemLogService._get_changed_fields(_switch, data)
         rack_id = data.get('rack_id', _switch.rack_id)
         row_in_rack = data.get('row_in_rack', _switch.row_in_rack)
         units_occupied = data.get('units_occupied', _switch.units_occupied)
@@ -549,6 +642,10 @@ class SwitchService:
         _switch.model = data.get('model', _switch.model)
         _switch.description = data.get('description', _switch.description)
         _switch.usage = data.get('usage', _switch.usage)
+
+        if changes:
+            SystemLogService.create_log('UPDATE', 'Switch', _switch.id, _switch.name, changes)
+
         db.session.commit()
         db.session.refresh(_switch)
         return _switch
@@ -556,7 +653,10 @@ class SwitchService:
     @staticmethod
     def delete_switch(_switch):
         """Deletes a switch."""
+        switch_id = _switch.id
+        switch_name = _switch.name
         db.session.delete(_switch)
+        SystemLogService.create_log('DELETE', 'Switch', switch_id, switch_name)
         db.session.commit()
 
     @staticmethod
@@ -667,7 +767,6 @@ class ConnectionService:
             cable_color=data.get('cable_color'),
             cable_label=data.get('cable_label'),
             wall_point_label=data.get('wall_point_label'),
-            # ADDED: Handle new wall point cable fields on creation
             wall_point_cable_color=data.get('wall_point_cable_color'),
             wall_point_cable_label=data.get('wall_point_cable_label')
         )
@@ -699,6 +798,12 @@ class ConnectionService:
             )
             db.session.add(new_hop)
         
+        # Log creation
+        pc_name = pc.name if pc else "N/A"
+        switch_name = Switch.query.get(data['switch_id']).name or "N/A"
+        connection_name = f"{pc_name} -> {switch_name} (Port {data['switch_port']})"
+        SystemLogService.create_log('CREATE', 'Connection', new_connection.id, connection_name)
+
         db.session.commit()
         db.session.refresh(new_connection)
         return new_connection
@@ -706,6 +811,7 @@ class ConnectionService:
     @staticmethod
     def update_connection(connection, data):
         """Updates an existing connection with all necessary validations and hop updates."""
+        changes = SystemLogService._get_changed_fields(connection, data)
         new_pc_id = data.get('pc_id', connection.pc_id)
         if new_pc_id != connection.pc_id:
             new_pc = PC.query.get(new_pc_id)
@@ -735,11 +841,11 @@ class ConnectionService:
         connection.cable_color = data.get('cable_color', connection.cable_color)
         connection.cable_label = data.get('cable_label', connection.cable_label)
         connection.wall_point_label = data.get('wall_point_label', connection.wall_point_label)
-        # ADDED: Handle new wall point cable fields on update
         connection.wall_point_cable_color = data.get('wall_point_cable_color', connection.wall_point_cable_color)
         connection.wall_point_cable_label = data.get('wall_point_cable_label', connection.wall_point_cable_label)
 
         if 'hops' in data:
+            # Simple approach: delete and re-create hops. For complex logging, this would need more detail.
             for hop in connection.hops:
                 db.session.delete(hop)
             db.session.flush()
@@ -769,6 +875,13 @@ class ConnectionService:
                 )
                 db.session.add(new_hop)
         
+        # Log update
+        if changes:
+            pc_name = connection.pc.name if connection.pc else "N/A"
+            switch_name = connection.switch.name if connection.switch else "N/A"
+            connection_name = f"{pc_name} -> {switch_name} (Port {connection.switch_port})"
+            SystemLogService.create_log('UPDATE', 'Connection', connection.id, connection_name, changes)
+
         db.session.commit()
         db.session.refresh(connection)
         return connection
@@ -776,7 +889,13 @@ class ConnectionService:
     @staticmethod
     def delete_connection(connection):
         """Deletes a connection."""
+        conn_id = connection.id
+        pc_name = connection.pc.name if connection.pc else "N/A"
+        switch_name = connection.switch.name if connection.switch else "N/A"
+        connection_name = f"{pc_name} -> {switch_name} (Port {connection.switch_port})"
+        
         db.session.delete(connection)
+        SystemLogService.create_log('DELETE', 'Connection', conn_id, connection_name)
         db.session.commit()
 
 class PdfTemplateService:
@@ -810,6 +929,8 @@ class PdfTemplateService:
             stored_filename=unique_filename
         )
         db.session.add(new_pdf)
+        db.session.flush()
+        SystemLogService.create_log('CREATE', 'PDF Template', new_pdf.id, new_pdf.original_filename)
         db.session.commit()
         return new_pdf
 
@@ -820,11 +941,15 @@ class PdfTemplateService:
         if settings and settings.default_pdf_id == pdf_template.id:
             raise ValueError('Cannot delete default PDF template. Please set another default first.')
 
+        pdf_id = pdf_template.id
+        pdf_name = pdf_template.original_filename
+
         filepath = os.path.join(upload_folder, pdf_template.stored_filename)
         if os.path.exists(filepath):
             os.remove(filepath)
             
         db.session.delete(pdf_template)
+        SystemLogService.create_log('DELETE', 'PDF Template', pdf_id, pdf_name)
         db.session.commit()
 
 class AppSettingsService:
@@ -845,8 +970,21 @@ class AppSettingsService:
         if not settings:
             settings = AppSettings(id=1)
             db.session.add(settings)
-        
+
+        old_default_id = settings.default_pdf_id
         settings.default_pdf_id = default_pdf_id
+
+        # Log this change
+        old_template = PdfTemplate.query.get(old_default_id) if old_default_id else None
+        new_template = PdfTemplate.query.get(default_pdf_id) if default_pdf_id else None
+        details = {
+            'default_pdf_template': {
+                'old': old_template.original_filename if old_template else 'None',
+                'new': new_template.original_filename if new_template else 'None'
+            }
+        }
+        SystemLogService.create_log('UPDATE', 'Settings', 1, 'Default PDF Template', details)
+
         db.session.commit()
         db.session.refresh(settings)
         return settings

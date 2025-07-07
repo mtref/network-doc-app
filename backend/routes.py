@@ -15,10 +15,11 @@ from .services import (
     SwitchService,
     ConnectionService,
     PdfTemplateService,
-    AppSettingsService
+    AppSettingsService,
+    SystemLogService  # Import the new SystemLogService
 )
 # UPDATED: Import all necessary models for direct querying in routes
-from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
+from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings, SystemLog
 from .utils import MAX_HOPS # Import MAX_HOPS for CSV export/import headers
 from werkzeug.utils import secure_filename # For secure filenames
 
@@ -27,6 +28,36 @@ def register_routes(app):
     Registers all API routes with the given Flask application instance.
     This function is called from the main app.py to set up the routes.
     """
+
+    # --- NEW: System Log Endpoint ---
+    @app.route('/logs', methods=['GET'])
+    def get_system_logs():
+        try:
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 25, type=int) # Default to 25 logs per page
+            entity_type = request.args.get('entity_type', None, type=str)
+            action_type = request.args.get('action_type', None, type=str)
+
+            # Use the service to get paginated logs
+            paginated_logs = SystemLogService.get_all_logs(
+                page=page,
+                per_page=per_page,
+                entity_type=entity_type if entity_type else None,
+                action_type=action_type if action_type else None
+            )
+
+            return jsonify({
+                'logs': [log.to_dict() for log in paginated_logs.items],
+                'total': paginated_logs.total,
+                'pages': paginated_logs.pages,
+                'current_page': paginated_logs.page,
+                'has_next': paginated_logs.has_next,
+                'has_prev': paginated_logs.has_prev
+            }), 200
+        except Exception as e:
+            app.logger.error(f"Error fetching system logs: {str(e)}")
+            return jsonify({'error': 'Failed to fetch system logs'}), 500
+
 
     # Location Endpoints
     @app.route('/locations', methods=['GET', 'POST'])
