@@ -326,6 +326,50 @@ export const ConnectionDetailsStep = ({
                         -- Add New --
                       </option>
                     </select>
+                    {/* *** ADDED: Port Status Summary for each selected Patch Panel *** */}
+                    {hop.patch_panel_id &&
+                      getPortStatusSummary(
+                        "patch_panels",
+                        hop.patch_panel_id
+                      ) && (
+                        <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
+                          <span className="flex items-center">
+                            <Wifi size={14} className="text-green-500 mr-1" />
+                            Connected:{" "}
+                            {
+                              getPortStatusSummary(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              ).connected
+                            }
+                          </span>
+                          <span className="flex items-center">
+                            <CircleDot
+                              size={14}
+                              className="text-gray-500 mr-1"
+                            />
+                            Available:{" "}
+                            {
+                              getPortStatusSummary(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              ).available
+                            }
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onShowPortStatus(
+                                "patch_panels",
+                                hop.patch_panel_id
+                              )
+                            }
+                            className="text-blue-500 hover:underline ml-auto"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      )}
                   </div>
                   <div className="flex-none w-16">
                     <label className="block text-sm mb-1">Port:</label>
