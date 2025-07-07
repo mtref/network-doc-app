@@ -1,203 +1,239 @@
 // frontend/src/components/ConnectionList.js
-// This component displays a list of network connections in a compact, single-line format.
-// Each connection shows its full path from PC through multiple Patch Panels to a Switch,
-// with actions for editing and deleting.
-// The expand/collapse feature has been reintroduced with a more organized expanded view.
-// Now includes search and pagination.
-// UPDATED: Displays the new "Wall Point Label" field in the expanded view.
+// This component displays a list of network connections.
+// REFACTORED: The connection card now has a new single-line collapsed view showing the full path,
+// and a detailed, multi-section expanded view. The entire card is clickable to toggle the view.
 
 import React, { useState, useEffect } from "react";
 import {
   Laptop,
-  Split,
   Server,
+  Split,
   ArrowRight,
   WifiOff,
   Wifi,
-  User,
-  Monitor,
-  Columns,
-  Link,
-  Info,
-  MapPin,
   ChevronDown,
   ChevronUp,
-  HardDrive,
-  Router,
-  Building2,
   Tag,
   Palette,
-  Printer,
+  MapPin,
+  Router as IpIcon,
+  HardDrive,
+  Columns,
+  Info,
 } from "lucide-react";
 import SearchBar from "./SearchBar";
 
-// ConnectionCard component displays individual connection details
-function ConnectionCard({ connection, onDelete, onEdit, onPrint }) {
+// A small helper component for displaying details in the expanded view
+const DetailItem = ({ icon, label, value, children }) => (
+  <div className="flex items-start text-sm">
+    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-500">
+      {icon}
+    </div>
+    <div className="ml-2">
+      <span className="font-semibold text-gray-800">{label}:</span>
+      <span className="ml-1 text-gray-700">{value}</span>
+      {children}
+    </div>
+  </div>
+);
+
+// The main card component for a single connection
+function ConnectionCard({ connection, onDelete, onEdit }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const toggleExpand = () => {
-    setIsExpanded(!isExpanded);
+  const handleActionClick = (e, action) => {
+    e.stopPropagation(); // Prevent the card from expanding when clicking a button
+    action();
   };
 
+  const pcIcon =
+    connection.pc?.type === "Server" ? (
+      <Server size={20} className="text-indigo-500 flex-shrink-0" />
+    ) : (
+      <Laptop size={20} className="text-indigo-500 flex-shrink-0" />
+    );
+
   return (
-    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 p-4">
-      {/* Collapsed View */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2 overflow-hidden">
-          <Laptop size={20} className="text-indigo-500 flex-shrink-0" />
-          <span className="font-semibold text-gray-800 truncate">
+    <div
+      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200 cursor-pointer"
+      onClick={() => setIsExpanded(!isExpanded)}
+    >
+      {/* --- 1. Collapsed View --- */}
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center space-x-2 overflow-hidden min-w-0">
+          {pcIcon}
+          <span
+            className="font-semibold text-gray-800 truncate"
+            title={connection.pc?.name}
+          >
             {connection.pc?.name || "N/A"}
           </span>
-          <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
-          {connection.hops && connection.hops.length > 0 && (
-            <>
-              {connection.hops.map((hop, index) => (
-                <React.Fragment key={hop.id || index}>
-                  <Split size={20} className="text-green-500 flex-shrink-0" />
-                  <span className="text-gray-700 truncate">
-                    {hop.patch_panel?.name || "N/A"}
-                  </span>
-                  <ArrowRight
-                    size={18}
-                    className="text-gray-400 flex-shrink-0"
-                  />
-                </React.Fragment>
-              ))}
-            </>
-          )}
-          <Server size={20} className="text-red-500 flex-shrink-0" />
-          <span className="font-semibold text-gray-800 truncate">
-            {connection.switch?.name || "N/A"}
+          <span className="text-xs text-gray-500 truncate">
+            {connection.pc?.ip_address}
           </span>
-          <span className="text-sm text-gray-600 truncate">
-            (Port: {connection.switch_port})
+          <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
+
+          {connection.hops && connection.hops.length > 0 ? (
+            connection.hops.map((hop, index) => (
+              <React.Fragment key={hop.id || index}>
+                <Split size={20} className="text-green-500 flex-shrink-0" />
+                <span
+                  className="font-medium text-gray-700 truncate"
+                  title={`[P:${hop.patch_panel_port}] ${hop.patch_panel?.name} - ${hop.patch_panel?.location_name}`}
+                >
+                  [P:{hop.patch_panel_port}] {hop.patch_panel?.name}
+                </span>
+                <span className="text-xs text-gray-500 truncate">
+                  {hop.patch_panel?.location_name}
+                </span>
+                <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
+              </React.Fragment>
+            ))
+          ) : (
+            <span className="text-sm text-gray-400 italic">Direct</span>
+          )}
+
+          <Server size={20} className="text-red-500 flex-shrink-0" />
+          <span
+            className="font-semibold text-gray-800 truncate"
+            title={`[P:${connection.switch_port}] ${connection.switch?.name} - ${connection.switch?.location_name}`}
+          >
+            [P:{connection.switch_port}] {connection.switch?.name}
+          </span>
+          <span className="text-xs text-gray-500 truncate">
+            {connection.switch?.location_name}
           </span>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 pl-4">
           {connection.is_switch_port_up ? (
             <Wifi size={18} className="text-green-500" title="Port is Up" />
           ) : (
             <WifiOff size={18} className="text-red-500" title="Port is Down" />
           )}
           <button
-            onClick={onEdit}
+            onClick={(e) => handleActionClick(e, onEdit)}
             className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             Edit
           </button>
           <button
-            onClick={onDelete}
+            onClick={(e) => handleActionClick(e, onDelete)}
             className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
           >
             Delete
           </button>
-          <button
-            onClick={toggleExpand}
-            className="p-1 text-gray-600 hover:text-gray-900"
-          >
-            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-          </button>
+          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </div>
       </div>
 
-      {/* Expanded View */}
+      {/* --- 2. Expanded View --- */}
       {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* PC Details */}
-          <div className="bg-indigo-50 p-3 rounded-md">
-            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
-              <Laptop size={18} className="mr-2 text-indigo-500" /> PC Details
+        <div className="bg-gray-50 p-4 border-t border-gray-200 space-y-4">
+          {/* PC -> First Hop/Switch Segment */}
+          <div className="p-3 rounded-md border border-indigo-200 bg-indigo-50">
+            <h5 className="font-bold text-indigo-800 flex items-center mb-2">
+              {pcIcon}
+              <span className="ml-2">Start: {connection.pc?.name}</span>
             </h5>
-            <p className="text-sm">
-              <span className="font-medium">Name:</span>{" "}
-              {connection.pc?.name || "N/A"}
-            </p>
-            <p className="text-sm">
-              <span className="font-medium">IP:</span>{" "}
-              {connection.pc?.ip_address || "N/A"}
-            </p>
-            {/* ADDED: Display Wall Point Label */}
-            <p className="text-sm mt-1 flex items-start">
-              <Tag
-                size={14}
-                className="mr-1 mt-0.5 text-gray-500 flex-shrink-0"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              <DetailItem
+                icon={<IpIcon size={14} />}
+                label="IP Address"
+                value={connection.pc?.ip_address || "N/A"}
               />
-              <span className="font-medium">Wall Point:</span>&nbsp;
-              {connection.wall_point_label || "N/A"}
-            </p>
-            {connection.pc?.type === "Server" && (
-              <>
-                <p className="text-sm mt-1">
-                  <span className="font-medium">Rack:</span>{" "}
-                  {connection.pc.rack_name || "N/A"}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Row:</span>{" "}
-                  {connection.pc.row_in_rack || "N/A"}
-                </p>
-              </>
-            )}
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Wall Point"
+                value={connection.wall_point_label || "N/A"}
+              />
+              <DetailItem
+                icon={<Palette size={14} />}
+                label="Cable Color"
+                value={connection.cable_color || "N/A"}
+              />
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Cable Label"
+                value={connection.cable_label || "N/A"}
+              />
+            </div>
           </div>
 
-          {/* Hops Details */}
-          <div className="bg-green-50 p-3 rounded-md md:col-span-2">
-            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
-              <Split size={18} className="mr-2 text-green-500" /> Connection
-              Path
-            </h5>
-            {connection.hops && connection.hops.length > 0 ? (
+          {/* Hops Segment */}
+          {connection.hops && connection.hops.length > 0 && (
+            <div className="p-3 rounded-md border border-green-200 bg-green-50">
+              <h5 className="font-bold text-green-800 flex items-center mb-2">
+                <Split size={20} className="mr-2" />
+                Path Hops
+              </h5>
               <div className="space-y-3">
                 {connection.hops.map((hop, index) => (
                   <div
                     key={hop.id || index}
-                    className="border-b border-green-200 pb-2 last:border-b-0"
+                    className="pl-4 border-l-2 border-green-300"
                   >
-                    <p className="text-sm font-medium">
-                      Hop {index + 1}: {hop.patch_panel?.name || "N/A"}
-                    </p>
-                    <p className="text-xs text-gray-600 ml-4">
-                      Port: {hop.patch_panel_port || "N/A"} (
-                      {hop.is_port_up ? "Up" : "Down"})
-                    </p>
-                    <p className="text-xs text-gray-600 ml-4">
-                      Cable Label: {hop.cable_label || "N/A"}
-                    </p>
+                    <DetailItem
+                      icon={<Split size={14} />}
+                      label={`Hop ${index + 1}`}
+                      value={hop.patch_panel?.name || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<MapPin size={14} />}
+                      label="Location"
+                      value={hop.patch_panel?.location_name || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<HardDrive size={14} />}
+                      label="Port"
+                      value={`${hop.patch_panel_port} (${
+                        hop.is_port_up ? "Up" : "Down"
+                      })`}
+                    />
+                    <DetailItem
+                      icon={<Palette size={14} />}
+                      label="Cable Color"
+                      value={hop.cable_color || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<Tag size={14} />}
+                      label="Cable Label"
+                      value={hop.cable_label || "N/A"}
+                    />
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-gray-500">
-                No patch panel hops in this connection.
-              </p>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Switch Details */}
-          <div className="bg-red-50 p-3 rounded-md md:col-span-3">
-            <h5 className="font-semibold text-gray-700 flex items-center mb-2">
-              <Server size={18} className="mr-2 text-red-500" /> Switch Details
+          {/* Switch Segment */}
+          <div className="p-3 rounded-md border border-red-200 bg-red-50">
+            <h5 className="font-bold text-red-800 flex items-center mb-2">
+              <Server size={20} className="mr-2" />
+              End: {connection.switch?.name}
             </h5>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-              <p>
-                <span className="font-medium">Name:</span>{" "}
-                {connection.switch?.name || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">IP:</span>{" "}
-                {connection.switch?.ip_address || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">Port:</span>{" "}
-                {connection.switch_port || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">Status:</span>{" "}
-                {connection.is_switch_port_up ? "Up" : "Down"}
-              </p>
-              <p className="col-span-full">
-                <span className="font-medium">Cable Label:</span>{" "}
-                {connection.cable_label || "N/A"}
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              <DetailItem
+                icon={<IpIcon size={14} />}
+                label="IP Address"
+                value={connection.switch?.ip_address || "N/A"}
+              />
+              <DetailItem
+                icon={<MapPin size={14} />}
+                label="Location"
+                value={connection.switch?.location_name || "N/A"}
+              />
+              <DetailItem
+                icon={<HardDrive size={14} />}
+                label="Port"
+                value={`${connection.switch_port} (${
+                  connection.is_switch_port_up ? "Up" : "Down"
+                })`}
+              />
+              <DetailItem
+                icon={<Info size={14} />}
+                label="Model"
+                value={connection.switch?.model || "N/A"}
+              />
             </div>
           </div>
         </div>
@@ -206,7 +242,7 @@ function ConnectionCard({ connection, onDelete, onEdit, onPrint }) {
   );
 }
 
-function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
+function ConnectionList({ connections, onDelete, onEdit }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredConnections, setFilteredConnections] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -216,6 +252,7 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
     const filtered = connections.filter((connection) => {
       const pcName = (connection.pc?.name || "").toLowerCase();
+      const pcIp = (connection.pc?.ip_address || "").toLowerCase();
       const switchName = (connection.switch?.name || "").toLowerCase();
       const switchPort = (connection.switch_port || "").toLowerCase();
       const wallPoint = (connection.wall_point_label || "").toLowerCase();
@@ -229,6 +266,7 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
 
       return (
         pcName.includes(lowerCaseSearchTerm) ||
+        pcIp.includes(lowerCaseSearchTerm) ||
         switchName.includes(lowerCaseSearchTerm) ||
         switchPort.includes(lowerCaseSearchTerm) ||
         wallPoint.includes(lowerCaseSearchTerm) ||
@@ -259,7 +297,6 @@ function ConnectionList({ connections, onDelete, onEdit, onPrint }) {
             connection={connection}
             onDelete={() => onDelete(connection.id)}
             onEdit={() => onEdit(connection)}
-            onPrint={() => onPrint(connection)}
           />
         ))
       ) : (
