@@ -18,16 +18,25 @@ docker-compose up -d --build
 
 ==
 docker-compose down --volumes --rmi all
+
 rm -rf backend/migrations/
 
+
 cd backend/
+
 source venv/bin/activate
 
+
 export FLASK_APP=app.py
+
 python -m flask db init
+
 python -m flask db migrate -m "Initial migration"
+
 deactivate
+
 cd ..
+
 docker-compose up --build
 
 
