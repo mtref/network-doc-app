@@ -40,4 +40,10 @@ cd ..
 
 docker-compose up --build
 
+another mogration =====
+docker-compose up -d --build
+docker-compose exec backend flask --app backend/app.py db init
+docker-compose exec backend flask --app backend/app.py db migrate -m "Add user table for authentication"
+docker-compose exec backend flask --app backend/app.py db upgrade
+
 
