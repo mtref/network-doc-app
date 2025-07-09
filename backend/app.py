@@ -4,81 +4,72 @@
 
 import os
 from flask import Flask
-from flask_cors import CORS # For handling Cross-Origin Resource Sharing
+from flask_cors import CORS
+from datetime import timedelta
 
 # Import initialized extensions
-from .extensions import db, migrate
+from .extensions import db, migrate, bcrypt, jwt
 
 # Import models to ensure they are registered with SQLAlchemy
-from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
+from .models import User, Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
 
 # Import the function to register routes
 from .routes import register_routes
 
-# --- Debugging Start ---
-print("--- app.py: Starting Flask app initialization ---")
-# --- Debugging End ---
+def create_admin_user_if_not_exists(app):
+    """Create a default admin user if no users exist in the database."""
+    with app.app_context():
+        if not User.query.first():
+            print("No users found. Creating default admin user...")
+            hashed_password = bcrypt.generate_password_hash('admin').decode('utf-8')
+            admin_user = User(username='admin', password_hash=hashed_password, role='Admin')
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Default admin user created.")
 
 def create_app():
     """
     Factory function to create and configure the Flask application.
     """
-    app = Flask(__name__)
-    CORS(app) # Enable CORS for all routes
+    app = Flask(__name__, instance_path='/data')
+    
+    # Enable CORS for all routes, allowing credentials
+    CORS(app, supports_credentials=True) 
 
-    # --- Debugging Start ---
-    print("--- app.py: CORS initialized ---")
-    # --- Debugging End ---
-
-    # Database configuration
-    # Using SQLite for simplicity. The database file will be stored in the 'instance' folder.
+    # --- Configuration ---
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a-hard-to-guess-string')
+    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'another-super-secret-key')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network_doc.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-    # Configuration for PDF uploads
-    UPLOAD_FOLDER_PATH = os.path.join(app.root_path, 'uploads/pdf_templates')
-    ALLOWED_EXTENSIONS_SET = {'pdf'}
-    MAX_PDF_FILES_LIMIT = 5
-
+    UPLOAD_FOLDER_PATH = os.path.join(app.instance_path, 'uploads/pdf_templates')
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER_PATH
-    app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS_SET
-    app.config['MAX_PDF_FILES'] = MAX_PDF_FILES_LIMIT
+    app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
+    app.config['MAX_PDF_FILES'] = 5
 
-    # --- Debugging Start ---
-    print(f"--- app.py: App config set. UPLOAD_FOLDER: {app.config['UPLOAD_FOLDER']}, MAX_PDF_FILES: {app.config['MAX_PDF_FILES']} ---")
-    # --- Debugging End ---
-
-    # Ensure the upload folder exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-    # --- Debugging Start ---
-    print(f"--- app.py: Upload folder checked/created: {app.config['UPLOAD_FOLDER']} ---")
-    # --- Debugging End ---
 
     # Initialize extensions with the app
     db.init_app(app)
     migrate.init_app(app, db)
-
-    # --- Debugging Start ---
-    print("--- app.py: SQLAlchemy and Migrate initialized ---")
-    # --- Debugging End ---
+    bcrypt.init_app(app)
+    jwt.init_app(app)
 
     # Register routes
     register_routes(app)
 
-    # --- Debugging Start ---
-    print("--- app.py: Routes registered ---")
-    # --- Debugging End ---
+    # NEW: Register a custom CLI command to seed the database
+    @app.cli.command("seed")
+    def seed_db():
+        """Seeds the database with initial data (e.g., admin user)."""
+        create_admin_user_if_not_exists(app)
 
     return app
 
 # Create the app instance
 app = create_app()
 
+# REMOVED: The problematic call to create_admin_user_if_not_exists(app) was here.
+
 if __name__ == '__main__':
-    # The 'flask db upgrade' command in docker-compose handles initial migration
-    # and database creation when running with gunicorn.
-    # For local development without docker-compose, you might run:
-    # with app.app_context():
-    #     db.create_all()
     app.run(debug=True, host='0.0.0.0')

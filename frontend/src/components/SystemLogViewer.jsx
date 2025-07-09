@@ -1,8 +1,8 @@
 // frontend/src/components/SystemLogViewer.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import api from '../services/api'; 
+import { useAuth } from '../context/AuthContext';
 import { RefreshCw, Filter, XCircle, Eye, RotateCcw, BadgeCheck } from 'lucide-react';
-
-const API_BASE_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5004';
 
 // Modal to show detailed changes for UPDATE actions
 const LogDetailsModal = ({ isOpen, onClose, details }) => {
@@ -30,12 +30,8 @@ const LogDetailsModal = ({ isOpen, onClose, details }) => {
               {Object.entries(details).map(([field, values]) => (
                 <tr key={field}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{field}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono bg-red-50 rounded-md">
-                    <pre><code>{String(values.old)}</code></pre>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono bg-green-50 rounded-md">
-                    <pre><code>{String(values.new)}</code></pre>
-                  </td>
+                  <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-500">{String(values.old)}</td>
+                  <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-500">{String(values.new)}</td>
                 </tr>
               ))}
             </tbody>
@@ -49,28 +45,23 @@ const LogDetailsModal = ({ isOpen, onClose, details }) => {
 
 function SystemLogViewer({ showMessage }) {
   const [logs, setLogs] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, pages: 1, current_page: 1 });
+  const [pagination, setPagination] = useState({});
   const [filters, setFilters] = useState({ entity_type: '', action_type: '' });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedLogDetails, setSelectedLogDetails] = useState(null);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const { user } = useAuth();
 
-  const entityTypes = ['Location', 'Rack', 'PC', 'Patch Panel', 'Switch', 'Connection', 'PDF Template', 'Settings'];
-  const actionTypes = ['CREATE', 'UPDATE', 'DELETE', 'REVERT'];
-
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (page = 1, perPage = 15) => {
     setLoading(true);
+    const params = new URLSearchParams({
+      page,
+      per_page: perPage,
+      entity_type: filters.entity_type,
+      action_type: filters.action_type,
+    });
+
     try {
-      const params = new URLSearchParams({
-        page: pagination.current_page,
-        per_page: 15,
-        ...filters,
-      });
-      const response = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
+      const data = await api(`logs?${params.toString()}`);
       setLogs(data.logs);
       setPagination({
         total: data.total,
@@ -81,150 +72,126 @@ function SystemLogViewer({ showMessage }) {
       });
     } catch (error) {
       console.error("Failed to fetch system logs:", error);
-      showMessage(`Error fetching logs: ${error.message}`, 5000);
+      showMessage(`Failed to fetch system logs: ${error.message}`, 5000);
     } finally {
       setLoading(false);
     }
-  }, [pagination.current_page, filters, showMessage]);
+  }, [filters, showMessage]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
   const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-    setPagination(prev => ({ ...prev, current_page: 1 }));
-  };
-  
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.pages) {
-        setPagination(prev => ({ ...prev, current_page: newPage }));
-    }
+    setFilters({ ...filters, [e.target.name]: e.target.value });
   };
 
-  const handleViewDetails = (details) => {
-    setSelectedLogDetails(details);
-    setIsDetailsModalOpen(true);
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.pages) {
+      fetchLogs(newPage);
+    }
   };
 
   const handleRevert = async (logId) => {
-      if (!window.confirm("Are you sure you want to revert this action? This cannot be undone.")) {
-          return;
-      }
-      try {
-          const response = await fetch(`${API_BASE_URL}/logs/${logId}/revert`, {
-              method: 'POST'
-          });
-          const result = await response.json();
-          if (!response.ok) {
-              throw new Error(result.error || `HTTP error! status: ${response.status}`);
-          }
-          showMessage(result.message || 'Action reverted successfully!');
-          fetchLogs(); // Refresh the logs to show the reverted status
-      } catch (error) {
-          console.error("Failed to revert action:", error);
-          showMessage(`Error reverting action: ${error.message}`, 5000);
-      }
-  };
-
-  const formatTimestamp = (isoString) => {
-    try {
-      return new Date(isoString).toLocaleString(undefined, {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-      });
-    } catch (e) {
-      return "Invalid Date";
-    }
-  };
-
-  const getActionColor = (action) => {
-    switch(action) {
-      case 'CREATE': return 'bg-green-100 text-green-800';
-      case 'UPDATE': return 'bg-yellow-100 text-yellow-800';
-      case 'DELETE': return 'bg-red-100 text-red-800';
-      case 'REVERT': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+    if(window.confirm('Are you sure you want to revert this action? This can have cascading effects.')) {
+        try {
+            const response = await api(`logs/${logId}/revert`, { method: 'POST' });
+            showMessage(response.message || 'Action reverted successfully.');
+            fetchLogs(pagination.current_page);
+        } catch (error) {
+            showMessage(`Failed to revert action: ${error.message}`, 5000);
+        }
     }
   };
 
   return (
-    <div>
-      <LogDetailsModal isOpen={isDetailsModalOpen} onClose={() => setIsDetailsModalOpen(false)} details={selectedLogDetails} />
-      
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-4 p-4 bg-white rounded-md border">
-        <div className="flex items-center space-x-2">
-          <Filter size={16} className="text-gray-500" />
-          <label htmlFor="entity_type" className="text-sm font-medium text-gray-700">Entity:</label>
+    <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+      {selectedLogDetails && (
+        <LogDetailsModal 
+            isOpen={!!selectedLogDetails} 
+            onClose={() => setSelectedLogDetails(null)} 
+            details={selectedLogDetails} 
+        />
+      )}
+      <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
+        <h3 className="text-2xl font-bold text-gray-800">System Activity Log</h3>
+        <div className="flex items-center gap-2">
           <select name="entity_type" value={filters.entity_type} onChange={handleFilterChange} className="p-2 border rounded-md text-sm">
-            <option value="">All</option>
-            {entityTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            <option value="">All Entities</option>
+            <option value="PC">PC</option>
+            <option value="Switch">Switch</option>
+            <option value="Patch Panel">Patch Panel</option>
+            <option value="Connection">Connection</option>
+            <option value="Location">Location</option>
+            <option value="Rack">Rack</option>
           </select>
-        </div>
-        <div className="flex items-center space-x-2">
-          <label htmlFor="action_type" className="text-sm font-medium text-gray-700">Action:</label>
           <select name="action_type" value={filters.action_type} onChange={handleFilterChange} className="p-2 border rounded-md text-sm">
-            <option value="">All</option>
-            {actionTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            <option value="">All Actions</option>
+            <option value="CREATE">Create</option>
+            <option value="UPDATE">Update</option>
+            <option value="DELETE">Delete</option>
+            <option value="REVERT">Revert</option>
           </select>
+          <button onClick={() => fetchLogs()} className="p-2 border rounded-md bg-blue-500 text-white hover:bg-blue-600">
+            <Filter size={20} />
+          </button>
         </div>
-        <button onClick={fetchLogs} disabled={loading} className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-blue-300 flex items-center">
-          <RefreshCw size={16} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
       </div>
-
-      {/* Log Table */}
+      
       <div className="overflow-x-auto">
-        <table className="min-w-full bg-white shadow-md rounded-lg">
-          <thead className="bg-gray-100">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Timestamp</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Action</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Entity</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Name / ID</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Details</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name/ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
-              <tr><td colSpan="6" className="text-center py-8">Loading logs...</td></tr>
+              <tr><td colSpan="6" className="text-center py-8"><RefreshCw className="animate-spin inline-block" /></td></tr>
             ) : logs.length > 0 ? (
               logs.map(log => (
-                <tr key={log.id} className={`hover:bg-gray-50 ${log.is_reverted ? 'bg-gray-200 opacity-60' : ''}`}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{formatTimestamp(log.timestamp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getActionColor(log.action_type)}`}>
-                      {log.action_type}
+                <tr key={log.id} className={`${log.is_reverted ? 'bg-gray-200 opacity-60' : ''}`}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(log.timestamp).toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        log.action_type === 'CREATE' ? 'bg-green-100 text-green-800' :
+                        log.action_type === 'UPDATE' ? 'bg-yellow-100 text-yellow-800' :
+                        log.action_type === 'DELETE' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                    }`}>
+                        {log.action_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800 font-medium">{log.entity_type}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{log.entity_name || `ID: ${log.entity_id}`}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm">
-                    {log.action_type === 'UPDATE' && log.details && (
-                      <button onClick={() => handleViewDetails(log.details)} className="text-blue-600 hover:underline flex items-center">
-                        <Eye size={16} className="mr-1" /> View Changes
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm">
-                    {log.is_reverted ? (
-                        <span className="flex items-center text-gray-500 italic">
-                            <BadgeCheck size={16} className="mr-1" /> Reverted
-                        </span>
-                    ) : (
-                      <button 
-                        onClick={() => handleRevert(log.id)}
-                        disabled={log.action_type === 'REVERT'}
-                        className="text-blue-600 hover:underline flex items-center disabled:text-gray-400 disabled:cursor-not-allowed"
-                        title={log.action_type === 'REVERT' ? 'Cannot revert this action' : 'Revert this action'}
-                      >
-                        <RotateCcw size={16} className="mr-1" /> Revert
-                      </button>
-                    )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.entity_type}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.entity_name || log.entity_id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.action_by}</td>
+                  {/* CORRECTED: Wrapped actions in a flex container for better alignment */}
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-4">
+                        {log.action_type === 'UPDATE' && log.details && (
+                        <button onClick={() => setSelectedLogDetails(log.details)} className="text-blue-600 hover:text-blue-900" title="View Changes">
+                            <Eye size={18} />
+                        </button>
+                        )}
+                        {log.is_reverted && (
+                            <BadgeCheck size={18} className="text-green-600" title="This action has been reverted." />
+                        )}
+                        {user.role === 'Admin' && !log.is_reverted && (
+                        <button 
+                            onClick={() => handleRevert(log.id)} 
+                            className="flex items-center px-2 py-1 text-xs bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
+                            disabled={log.action_type === 'REVERT'}
+                            title={log.action_type === 'REVERT' ? 'Cannot revert this action' : 'Revert this action'}
+                        >
+                            <RotateCcw size={14} className="mr-1" /> Revert
+                        </button>
+                        )}
+                    </div>
                   </td>
                 </tr>
               ))

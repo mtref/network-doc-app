@@ -1,15 +1,19 @@
 // frontend/src/index.js
 // The entry point for the React application.
 // This file renders the main App component into the DOM.
+// UPDATED: Wrapped the App component with AuthProvider to provide global auth state.
 
 import React from 'react';
-import ReactDOM from 'react-dom/client'; // Use createRoot for React 18+
-import './index.css'; // Tailwind CSS imports will go here
+import ReactDOM from 'react-dom/client';
+import './index.css';
 import App from './App';
+import { AuthProvider } from './context/AuthContext'; // Import the AuthProvider
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </React.StrictMode>
 );

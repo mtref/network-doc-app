@@ -4,6 +4,22 @@
 from .extensions import db # Import db from extensions.py
 from datetime import datetime # Import datetime for timestamping
 
+# NEW: User model for authentication
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    role = db.Column(db.String(50), nullable=False, default='Viewer') # Roles: Admin, Editor, Viewer
+
+    def to_dict(self):
+        """Converts a User object to a dictionary, excluding the password hash."""
+        return {
+            'id': self.id,
+            'username': self.username,
+            'role': self.role
+        }
+
 class SystemLog(db.Model):
     __tablename__ = 'system_logs'
     id = db.Column(db.Integer, primary_key=True)
@@ -89,12 +105,10 @@ class PC(db.Model):
     row_in_rack = db.Column(db.Integer, nullable=True)
     rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
     units_occupied = db.Column(db.Integer, nullable=False, default=1)
-    
-    # NEW FIELDS
     serial_number = db.Column(db.String(255), nullable=True)
     pc_specification = db.Column(db.String(500), nullable=True)
     monitor_model = db.Column(db.String(255), nullable=True)
-    disk_info = db.Column(db.String(500), nullable=True) # For size, type, and number of disks
+    disk_info = db.Column(db.String(500), nullable=True) 
 
     rack = db.relationship('Rack', backref='pcs_in_rack', lazy=True)
 
@@ -117,7 +131,6 @@ class PC(db.Model):
             'units_occupied': self.units_occupied,
             'rack_name': self.rack.name if self.rack else None,
             'rack': self.rack.to_dict() if self.rack else None,
-            # NEW FIELDS
             'serial_number': self.serial_number,
             'pc_specification': self.pc_specification,
             'monitor_model': self.monitor_model,
@@ -197,14 +210,9 @@ class Connection(db.Model):
     switch_id = db.Column(db.Integer, db.ForeignKey('switches.id'), nullable=False)
     switch_port = db.Column(db.String(50), nullable=False)
     is_switch_port_up = db.Column(db.Boolean, nullable=False, default=True)
-    
-    # Cable from Switch Port to the last Patch Panel (or directly to Wall Point if no hops)
     cable_color = db.Column(db.String(50), nullable=True)
     cable_label = db.Column(db.String(100), nullable=True)
-    
-    # Cable from PC to the Wall Point
     wall_point_label = db.Column(db.String(100), nullable=True)
-    # ADDED: New fields for Wall Point cable
     wall_point_cable_color = db.Column(db.String(50), nullable=True)
     wall_point_cable_label = db.Column(db.String(100), nullable=True)
 
@@ -226,7 +234,6 @@ class Connection(db.Model):
             'cable_color': self.cable_color,
             'cable_label': self.cable_label,
             'wall_point_label': self.wall_point_label,
-            # ADDED: Include new fields in the dictionary
             'wall_point_cable_color': self.wall_point_cable_color,
             'wall_point_cable_label': self.wall_point_cable_label
         }

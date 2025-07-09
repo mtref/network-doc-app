@@ -1,27 +1,40 @@
 #!/bin/sh
 # start.sh (at the root of your network-doc-app directory)
-# This script is responsible for starting the Flask backend (Gunicorn)
-# and the Nginx frontend proxy in a single Docker container.
+# This script is responsible for starting the Flask backend.
 
-# Wait for a moment to ensure file system is ready (optional, but can help)
-sleep 1
+# Exit immediately if a command exits with a non-zero status.
+set -e
 
 # Set PYTHONPATH to include the root directory of your application,
 # which contains the 'backend' package.
 export PYTHONPATH=/app:$PYTHONPATH
+MIGRATIONS_DIR="/app/backend/migrations"
 
-# IMPORTANT: DO NOT change directory to /app/backend here.
-# Flask and Gunicorn will be run from /app, referencing 'backend/app.py'.
+# Attempt to upgrade the database. If it fails because the migrations
+# directory doesn't exist, we'll initialize everything. This makes
+# the first run seamless.
+echo "Attempting database upgrade..."
+if ! python3 -m flask --app backend.app db upgrade -d "$MIGRATIONS_DIR"; then
+    echo "Database upgrade failed. This is likely the first run. Initializing database..."
+    
+    # 1. Initialize the migrations directory
+    python3 -m flask --app backend.app db init -d "$MIGRATIONS_DIR"
+    
+    # 2. Create the initial migration script based on current models
+    python3 -m flask --app backend.app db migrate -d "$MIGRATIONS_DIR" -m "Initial database schema."
+    
+    # 3. Now, run the upgrade again with the newly created scripts
+    python3 -m flask --app backend.app db upgrade -d "$MIGRATIONS_DIR"
+    
+    echo "Database initialized and upgraded successfully."
+fi
 
-# Run Flask database upgrade (applies all pending migrations)
-echo "Running Flask database upgrade..."
-python3 -m flask --app backend/app.py db upgrade -d /app/backend/migrations
 
-# Start Nginx in the background
-echo "Starting Nginx..."
-nginx -g "daemon off;" & # Start Nginx in background, redirecting its output to /dev/null if desired
+# Seed the database with the default admin user
+echo "Seeding database..."
+python3 -m flask --app backend.app seed
 
 # Start Flask backend using Gunicorn in the foreground
 # This command will keep the container running as it is the primary process.
-echo "Starting Flask backend (Gunicorn) in foreground..."
-exec gunicorn -w 4 -b 0.0.0.0:5000 backend.app:app
+echo "Starting Flask backend (Gunicorn)..."
+exec gunicorn -w 4 -b 0.0.0.0:5000 "backend.app:create_app()"

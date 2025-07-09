@@ -1,16 +1,14 @@
 // frontend/src/components/PcList.js
-// This component displays a searchable list of PCs in a card format,
-// now including filter options by In Domain, OS, Office, Type, Usage, Model, Location, and Rack.
-// UPDATED: Added Serial Number, PC Specification, Monitor Model, and Disk Info fields.
-// UPDATED: Added support for custom 'Usage' values.
+// This component displays a searchable list of PCs in a card format.
+// UPDATED: Hides Add/Edit/Delete controls based on user role.
 
 import React, { useState, useEffect } from "react";
-import SearchBar from "./SearchBar"; // Reusing the generic SearchBar component
+import SearchBar from "./SearchBar"; 
 import {
   Laptop,
   Router,
   Info,
-  PlusCircle, // The plus icon for "Add New PC"
+  PlusCircle,
   ChevronDown,
   ChevronUp,
   User,
@@ -20,18 +18,18 @@ import {
   Monitor,
   Building2,
   Filter,
-  Link, // Icon for multi-port
-  Server, // Icon for PC type: Server
-  MonitorCheck, // Icon for PC type: Workstation (assuming it fits)
-  Activity, // New icon for Usage
-  Tag, // New icon for Model
-  Cpu, // New icon for OS
-  MapPin, // New icon for Office/Location
-  Globe, // New icon for In Domain
-  Columns, // Icon for Rack
-  Fingerprint, // New icon for Serial Number
-  ClipboardList, // New icon for PC Spec
-  Database, // New icon for Disk Info
+  Link, 
+  Server, 
+  MonitorCheck,
+  Activity, 
+  Tag, 
+  Cpu, 
+  MapPin, 
+  Globe, 
+  Columns, 
+  Fingerprint, 
+  ClipboardList, 
+  Database, 
 } from "lucide-react";
 
 function PcList({
@@ -41,6 +39,7 @@ function PcList({
   onDeleteEntity,
   locations,
   racks,
+  user // Receive user prop
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPcs, setFilteredPcs] = useState([]);
@@ -59,19 +58,13 @@ function PcList({
   const [pcFormRowInRack, setPcFormRowInRack] = useState("");
   const [pcFormRackId, setPcFormRackId] = useState("");
   const [pcFormUnitsOccupied, setPcFormUnitsOccupied] = useState(1);
-  
-  // NEW: State for new fields
   const [pcFormSerialNumber, setPcFormSerialNumber] = useState("");
   const [pcFormSpecification, setPcFormSpecification] = useState("");
   const [pcFormMonitorModel, setPcFormMonitorModel] = useState("");
   const [pcFormDiskInfo, setPcFormDiskInfo] = useState("");
-
-  // NEW: State for custom usage input
   const [showCustomUsageInput, setShowCustomUsageInput] = useState(false);
   const [customUsageValue, setCustomUsageValue] = useState("");
-
   const [isAddPcFormExpanded, setIsAddPcFormExpanded] = useState(false);
-
   const [selectedDomainFilter, setSelectedDomainFilter] = useState("all");
   const [selectedOsFilter, setSelectedOsFilter] = useState("all");
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState("all");
@@ -79,7 +72,6 @@ function PcList({
   const [selectedUsageFilter, setSelectedUsageFilter] = useState("all");
   const [selectedModelFilter, setSelectedModelFilter] = useState("all");
   const [selectedRackFilter, setSelectedRackFilter] = useState("all");
-
   const [availableOsOptions, setAvailableOsOptions] = useState([]);
   const [availableOfficeOptions, setAvailableOfficeOptions] = useState([]);
   const [availableModelOptions, setAvailableModelOptions] = useState([]);
@@ -98,6 +90,8 @@ function PcList({
     "Monitoring",
   ];
 
+  const canEdit = user && (user.role === 'Admin' || user.role === 'Editor');
+
   useEffect(() => {
     const uniqueOs = [...new Set(pcs.map((pc) => pc.operating_system).filter(Boolean))].sort();
     setAvailableOsOptions(uniqueOs);
@@ -108,7 +102,6 @@ function PcList({
     const uniqueModels = [...new Set(pcs.map((pc) => pc.model).filter(Boolean))].sort();
     setAvailableModelOptions(uniqueModels);
 
-    // Combine predefined and custom usages for the filter dropdown
     const allUsages = new Set([...initialUsageOptions, ...pcs.map(pc => pc.usage).filter(Boolean)]);
     setAvailableUsageOptions([...allUsages].sort());
 
@@ -345,74 +338,76 @@ function PcList({
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
-        <div className="flex justify-center items-center p-3 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg" onClick={() => setIsAddPcFormExpanded(!isAddPcFormExpanded)}>
-          <h3 className="text-xl font-bold text-indigo-700 flex items-center">
-            <PlusCircle size={20} className="mr-2" /> {editingPc ? "Edit PC" : "Add New PC"}
-          </h3>
-          {isAddPcFormExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </div>
-        <div className={`collapsible-content ${isAddPcFormExpanded ? "expanded" : ""}`}>
-          <form onSubmit={handlePcFormSubmit} className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50">
-            <input type="text" placeholder="PC Name" value={pcFormName} onChange={(e) => setPcFormName(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required />
-            <input type="text" placeholder="IP Address" value={pcFormIp} onChange={(e) => setPcFormIp(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <input type="text" placeholder="Username" value={pcFormUsername} onChange={(e) => setPcFormUsername(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <input type="text" placeholder="Serial Number" value={pcFormSerialNumber} onChange={(e) => setPcFormSerialNumber(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <textarea placeholder="PC Specification (e.g., CPU, RAM, GPU)" value={pcFormSpecification} onChange={(e) => setPcFormSpecification(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
-            <input type="text" placeholder="Monitor Model(s)" value={pcFormMonitorModel} onChange={(e) => setPcFormMonitorModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <input type="text" placeholder="Disk Info (e.g., 1x 512GB NVMe, 2x 1TB SSD)" value={pcFormDiskInfo} onChange={(e) => setPcFormDiskInfo(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center">
-                <input id="pc-in-domain" type="checkbox" checked={pcFormInDomain} onChange={(e) => setPcFormInDomain(e.target.checked)} className="h-4 w-4 text-blue-600" />
-                <label htmlFor="pc-in-domain" className="ml-2 text-sm">In Domain</label>
+      {canEdit && (
+        <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
+          <div className="flex justify-center items-center p-3 cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200 rounded-t-lg" onClick={() => setIsAddPcFormExpanded(!isAddPcFormExpanded)}>
+            <h3 className="text-xl font-bold text-indigo-700 flex items-center">
+              <PlusCircle size={20} className="mr-2" /> {editingPc ? "Edit PC" : "Add New PC"}
+            </h3>
+            {isAddPcFormExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+          <div className={`collapsible-content ${isAddPcFormExpanded ? "expanded" : ""}`}>
+            <form onSubmit={handlePcFormSubmit} className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50">
+              <input type="text" placeholder="PC Name" value={pcFormName} onChange={(e) => setPcFormName(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required />
+              <input type="text" placeholder="IP Address" value={pcFormIp} onChange={(e) => setPcFormIp(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <input type="text" placeholder="Username" value={pcFormUsername} onChange={(e) => setPcFormUsername(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <input type="text" placeholder="Serial Number" value={pcFormSerialNumber} onChange={(e) => setPcFormSerialNumber(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <textarea placeholder="PC Specification (e.g., CPU, RAM, GPU)" value={pcFormSpecification} onChange={(e) => setPcFormSpecification(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
+              <input type="text" placeholder="Monitor Model(s)" value={pcFormMonitorModel} onChange={(e) => setPcFormMonitorModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <input type="text" placeholder="Disk Info (e.g., 1x 512GB NVMe, 2x 1TB SSD)" value={pcFormDiskInfo} onChange={(e) => setPcFormDiskInfo(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center">
+                  <input id="pc-in-domain" type="checkbox" checked={pcFormInDomain} onChange={(e) => setPcFormInDomain(e.target.checked)} className="h-4 w-4 text-blue-600" />
+                  <label htmlFor="pc-in-domain" className="ml-2 text-sm">In Domain</label>
+                </div>
+                <div className="flex items-center">
+                  <input id="pc-multi-port" type="checkbox" checked={pcFormMultiPort} onChange={(e) => setPcFormMultiPort(e.target.checked)} className="h-4 w-4 text-blue-600" />
+                  <label htmlFor="pc-multi-port" className="ml-2 text-sm">Multi-Port PC</label>
+                </div>
               </div>
-              <div className="flex items-center">
-                <input id="pc-multi-port" type="checkbox" checked={pcFormMultiPort} onChange={(e) => setPcFormMultiPort(e.target.checked)} className="h-4 w-4 text-blue-600" />
-                <label htmlFor="pc-multi-port" className="ml-2 text-sm">Multi-Port PC</label>
+              <select value={pcFormType} onChange={(e) => {setPcFormType(e.target.value); if (e.target.value === "Workstation") {setPcFormRackId(""); setPcFormRowInRack(""); setPcFormUnitsOccupied(1);}}} className="w-full p-2 border border-gray-300 rounded-md" required>
+                <option value="Workstation">Workstation</option>
+                <option value="Server">Server</option>
+              </select>
+              {pcFormType === "Server" && (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <Columns size={20} className="text-gray-500" />
+                    <select value={pcFormRackId} onChange={(e) => setPcFormRackId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required>
+                      <option value="">-- Select Rack --</option>
+                      {sortedRacks.map((rack) => (<option key={rack.id} value={String(rack.id)}>{rack.name} ({rack.location_name})</option>))}
+                    </select>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Server size={20} className="text-gray-500" />
+                    <input type="number" placeholder="Starting Row in Rack" value={pcFormRowInRack} onChange={(e) => setPcFormRowInRack(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <HardDrive size={20} className="text-gray-500" />
+                    <input type="number" placeholder="Units Occupied" value={pcFormUnitsOccupied} onChange={(e) => setPcFormUnitsOccupied(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
+                  </div>
+                </>
+              )}
+              <input type="text" placeholder="OS" value={pcFormOs} onChange={(e) => setPcFormOs(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <input type="text" placeholder="Model" value={pcFormModel} onChange={(e) => setPcFormModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <input type="text" placeholder="Office" value={pcFormOffice} onChange={(e) => setPcFormOffice(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              <select value={pcFormUsage} onChange={handleUsageChange} className="w-full p-2 border border-gray-300 rounded-md">
+                <option value="">-- Select Usage (Optional) --</option>
+                {initialUsageOptions.map((o) => (<option key={o} value={o}>{o}</option>))}
+                <option value="Other">Other...</option>
+              </select>
+              {showCustomUsageInput && (
+                <input type="text" placeholder="Enter custom usage" value={customUsageValue} onChange={(e) => setCustomUsageValue(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+              )}
+              <textarea placeholder="Description" value={pcFormDesc} onChange={(e) => setPcFormDesc(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
+              <div className="flex space-x-3 justify-end">
+                {editingPc && (<button type="button" onClick={() => {setEditingPc(null); setIsAddPcFormExpanded(false);}} className="px-4 py-2 bg-gray-300 rounded-md">Cancel Edit</button>)}
+                <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600">{editingPc ? "Update PC" : "Add PC"}</button>
               </div>
-            </div>
-            <select value={pcFormType} onChange={(e) => {setPcFormType(e.target.value); if (e.target.value === "Workstation") {setPcFormRackId(""); setPcFormRowInRack(""); setPcFormUnitsOccupied(1);}}} className="w-full p-2 border border-gray-300 rounded-md" required>
-              <option value="Workstation">Workstation</option>
-              <option value="Server">Server</option>
-            </select>
-            {pcFormType === "Server" && (
-              <>
-                <div className="flex items-center space-x-2">
-                  <Columns size={20} className="text-gray-500" />
-                  <select value={pcFormRackId} onChange={(e) => setPcFormRackId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required>
-                    <option value="">-- Select Rack --</option>
-                    {sortedRacks.map((rack) => (<option key={rack.id} value={String(rack.id)}>{rack.name} ({rack.location_name})</option>))}
-                  </select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Server size={20} className="text-gray-500" />
-                  <input type="number" placeholder="Starting Row in Rack" value={pcFormRowInRack} onChange={(e) => setPcFormRowInRack(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <HardDrive size={20} className="text-gray-500" />
-                  <input type="number" placeholder="Units Occupied" value={pcFormUnitsOccupied} onChange={(e) => setPcFormUnitsOccupied(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
-                </div>
-              </>
-            )}
-            <input type="text" placeholder="OS" value={pcFormOs} onChange={(e) => setPcFormOs(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <input type="text" placeholder="Model" value={pcFormModel} onChange={(e) => setPcFormModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <input type="text" placeholder="Office" value={pcFormOffice} onChange={(e) => setPcFormOffice(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            <select value={pcFormUsage} onChange={handleUsageChange} className="w-full p-2 border border-gray-300 rounded-md">
-              <option value="">-- Select Usage (Optional) --</option>
-              {initialUsageOptions.map((o) => (<option key={o} value={o}>{o}</option>))}
-              <option value="Other">Other...</option>
-            </select>
-            {showCustomUsageInput && (
-              <input type="text" placeholder="Enter custom usage" value={customUsageValue} onChange={(e) => setCustomUsageValue(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
-            )}
-            <textarea placeholder="Description" value={pcFormDesc} onChange={(e) => setPcFormDesc(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
-            <div className="flex space-x-3 justify-end">
-              {editingPc && (<button type="button" onClick={() => {setEditingPc(null); setIsAddPcFormExpanded(false);}} className="px-4 py-2 bg-gray-300 rounded-md">Cancel Edit</button>)}
-              <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600">{editingPc ? "Update PC" : "Add PC"}</button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
 
       {filteredPcs.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -441,10 +436,12 @@ function PcList({
                 </>
               )}
               <p className="text-sm text-gray-700 mb-3 flex items-start"><Info size={16} className="text-gray-500 mr-2 flex-shrink-0 mt-0.5" /> Description: {pc.description || "No description"}</p>
-              <div className="flex justify-end space-x-2">
-                <button onClick={() => handleEdit(pc)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200">Edit</button>
-                <button onClick={() => onDeleteEntity("pcs", pc.id)} className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200">Delete</button>
-              </div>
+              {canEdit && (
+                <div className="flex justify-end space-x-2">
+                  <button onClick={() => handleEdit(pc)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200">Edit</button>
+                  <button onClick={() => onDeleteEntity("pcs", pc.id)} className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200">Delete</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

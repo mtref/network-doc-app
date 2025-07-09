@@ -1,8 +1,8 @@
-"""Initial migration
+"""Initial database schema.
 
-Revision ID: 7f3412bab21f
+Revision ID: 2968844c2210
 Revises: 
-Create Date: 2025-07-09 12:11:00.615861
+Create Date: 2025-07-09 15:31:45.678227
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '7f3412bab21f'
+revision = '2968844c2210'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -45,6 +45,14 @@ def upgrade():
     sa.Column('is_reverted', sa.Boolean(), nullable=False),
     sa.Column('action_by', sa.String(length=100), nullable=True),
     sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('users',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('username', sa.String(length=80), nullable=False),
+    sa.Column('password_hash', sa.String(length=128), nullable=False),
+    sa.Column('role', sa.String(length=50), nullable=False),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('username')
     )
     op.create_table('app_settings',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -159,6 +167,7 @@ def downgrade():
     op.drop_table('patch_panels')
     op.drop_table('racks')
     op.drop_table('app_settings')
+    op.drop_table('users')
     op.drop_table('system_logs')
     op.drop_table('pdf_templates')
     op.drop_table('locations')
