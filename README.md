@@ -46,8 +46,23 @@ docker-compose up -d --build
 
 docker-compose exec backend flask --app backend/app.py db init
 
+======
+
+
+docker-compose exec backend flask --app backend.app db migrate -d /app/backend/migrations -m "Add PasswordEntry model"
+
 docker-compose exec backend flask --app backend/app.py db migrate -m "Add user table for authentication"
 
 docker-compose exec backend flask --app backend/app.py db upgrade
+
+
+=========
+
+
+docker-compose exec backend flask --app backend.app db migrate -d /app/backend/migrations -m "Add PasswordEntry model"
+
+
+
+docker-compose exec backend flask --app backend.app db upgrade -d /app/backend/migrations
 
 
