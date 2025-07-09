@@ -8,12 +8,15 @@ services:
     build:
       context: . # Build context is the project root
       dockerfile: backend/Dockerfile.backend # Path to the backend Dockerfile
+    # NEW: Load environment variables from the .env file
+    env_file:
+      - .env
     ports:
       - "5004:5000" # Maps host's 5004 to backend container's 5000
     volumes:
-      # Mount the backend source code for development. This no longer conflicts with the data volume.
+      # Mount the backend source code for development.
       - ./backend:/app/backend
-      # CORRECTED: Mount the persistent volume to a dedicated /data directory, separate from the code.
+      # Persistent volume for SQLite DB
       - network_doc_db:/data
     environment:
       FLASK_ENV: development
@@ -32,3 +35,4 @@ services:
 # Define the named volume for persistent database storage.
 volumes:
   network_doc_db:
+

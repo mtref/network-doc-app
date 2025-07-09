@@ -1,10 +1,49 @@
 # backend/models.py
 # This file defines the SQLAlchemy database models for the application.
+# UPDATED: Added PasswordEntry model for the password manager feature.
 
-from .extensions import db # Import db from extensions.py
-from datetime import datetime # Import datetime for timestamping
+from .extensions import db
+from datetime import datetime
+from cryptography.fernet import Fernet
+from flask import current_app
 
-# NEW: User model for authentication
+# NEW: PasswordEntry model for the password manager
+class PasswordEntry(db.Model):
+    __tablename__ = 'password_entries'
+    id = db.Column(db.Integer, primary_key=True)
+    service = db.Column(db.String(255), nullable=False)
+    server_or_url = db.Column(db.String(255), nullable=True)
+    username = db.Column(db.String(255), nullable=True)
+    encrypted_password = db.Column(db.String(512), nullable=False)
+
+    def set_password(self, password):
+        """Encrypts the password and stores it."""
+        key = current_app.config['FERNET_KEY']
+        f = Fernet(key)
+        self.encrypted_password = f.encrypt(password.encode()).decode()
+
+    def get_password(self):
+        """Decrypts and returns the password."""
+        key = current_app.config['FERNET_KEY']
+        f = Fernet(key)
+        try:
+            return f.decrypt(self.encrypted_password.encode()).decode()
+        except Exception:
+            return "Error decrypting password"
+
+    def to_dict(self, decrypt=False):
+        """Converts a PasswordEntry object to a dictionary."""
+        data = {
+            'id': self.id,
+            'service': self.service,
+            'server_or_url': self.server_or_url,
+            'username': self.username,
+        }
+        if decrypt:
+            data['password'] = self.get_password()
+        return data
+
+# User model for authentication
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)

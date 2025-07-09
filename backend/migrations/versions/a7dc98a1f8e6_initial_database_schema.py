@@ -1,8 +1,8 @@
 """Initial database schema.
 
-Revision ID: 2968844c2210
+Revision ID: a7dc98a1f8e6
 Revises: 
-Create Date: 2025-07-09 15:31:45.678227
+Create Date: 2025-07-09 17:08:19.535645
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '2968844c2210'
+revision = 'a7dc98a1f8e6'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -25,6 +25,14 @@ def upgrade():
     sa.Column('description', sa.String(length=255), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
+    )
+    op.create_table('password_entries',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('service', sa.String(length=255), nullable=False),
+    sa.Column('server_or_url', sa.String(length=255), nullable=True),
+    sa.Column('username', sa.String(length=255), nullable=True),
+    sa.Column('encrypted_password', sa.String(length=512), nullable=False),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('pdf_templates',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -170,5 +178,6 @@ def downgrade():
     op.drop_table('users')
     op.drop_table('system_logs')
     op.drop_table('pdf_templates')
+    op.drop_table('password_entries')
     op.drop_table('locations')
     # ### end Alembic commands ###

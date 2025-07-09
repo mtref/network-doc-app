@@ -1,17 +1,18 @@
 # backend/app.py
 # This is the main Flask application for the network documentation backend.
-# It initializes the app, database, and registers the API routes.
+# UPDATED: Now requires the FERNET_KEY to be set as an environment variable.
 
 import os
 from flask import Flask
 from flask_cors import CORS
 from datetime import timedelta
+from cryptography.fernet import Fernet
 
 # Import initialized extensions
 from .extensions import db, migrate, bcrypt, jwt
 
 # Import models to ensure they are registered with SQLAlchemy
-from .models import User, Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings
+from .models import User, Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings, PasswordEntry
 
 # Import the function to register routes
 from .routes import register_routes
@@ -33,15 +34,23 @@ def create_app():
     """
     app = Flask(__name__, instance_path='/data')
     
-    # Enable CORS for all routes, allowing credentials
     CORS(app, supports_credentials=True) 
 
     # --- Configuration ---
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a-hard-to-guess-string')
     app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'another-super-secret-key')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+    
+    # CORRECTED: Require the FERNET_KEY from the environment.
+    # This prevents a new key from being generated on every restart.
+    fernet_key = os.environ.get('FERNET_KEY')
+    if not fernet_key:
+        raise ValueError("No FERNET_KEY set for Flask application. Please set it in your .env file.")
+    app.config['FERNET_KEY'] = fernet_key
+
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///network_doc.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
     UPLOAD_FOLDER_PATH = os.path.join(app.instance_path, 'uploads/pdf_templates')
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER_PATH
     app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
@@ -49,16 +58,13 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # Initialize extensions with the app
     db.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     jwt.init_app(app)
 
-    # Register routes
     register_routes(app)
 
-    # NEW: Register a custom CLI command to seed the database
     @app.cli.command("seed")
     def seed_db():
         """Seeds the database with initial data (e.g., admin user)."""
@@ -66,10 +72,7 @@ def create_app():
 
     return app
 
-# Create the app instance
 app = create_app()
-
-# REMOVED: The problematic call to create_admin_user_if_not_exists(app) was here.
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

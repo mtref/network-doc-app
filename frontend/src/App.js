@@ -1,15 +1,22 @@
 // frontend/src/App.js
 // This component now acts as the main router for the application.
-// It checks the authentication state and renders either the LoginPage
-// or the main application (MainApp).
+// It checks the URL to display the correct page (Manual or Main App/Login).
 
 import React from 'react';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
 import MainApp from './components/MainApp';
+import UserManual from './components/UserManual'; // Import the new UserManual component
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
+
+  // Simple routing based on URL path
+  const path = window.location.pathname;
+
+  if (path === '/manual') {
+    return <UserManual />;
+  }
 
   // Display a loading indicator while the auth state is being determined.
   if (loading) {

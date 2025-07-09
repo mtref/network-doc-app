@@ -1,6 +1,6 @@
 // frontend/src/components/MainApp.js
 // This component contains the main application layout and logic.
-// UPDATED: Restored the handleViewSwitchDiagram function to fix build error.
+// UPDATED: Added a new "Passwords" tab, visible only to Admins.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,8 @@ import SettingsPage from "./SettingsPage";
 import RackList from "./RackList";
 import RackViewModal from "./RackViewModal";
 import PcDetailsModal from "./PcDetailsModal";
+import PasswordManager from './PasswordManager'; // Import the new component
+import UserManual from './UserManual';
 import {
   Printer,
   Info,
@@ -23,27 +25,21 @@ import {
   ChevronDown,
   ChevronUp,
   LogOut,
-  User as UserIcon,
+  User as UserIcon,BookOpen
 } from "lucide-react";
 
 function MainApp() {
   const { user, logout } = useAuth();
 
-  // State variables to store fetched data
   const [pcs, setPcs] = useState([]);
   const [patchPanels, setPatchPanels] = useState([]);
   const [switches, setSwitches] = useState([]);
   const [connections, setConnections] = useState([]);
   const [locations, setLocations] = useState([]);
   const [racks, setRacks] = useState([]);
-
-  // State for current active tab
   const [activeTab, setActiveTab] = useState("connections");
-
   const [message, setMessage] = useState("");
   const [isMessageVisible, setIsMessageVisible] = useState(false);
-
-  // State for Modals
   const [showPortStatusModal, setShowPortStatusModal] = useState(false);
   const [portStatusData, setPortStatusData] = useState(null);
   const [modalEntityType, setModalEntityType] = useState(null);
@@ -54,18 +50,12 @@ function MainApp() {
   const [selectedRackForView, setSelectedRackForView] = useState(null);
   const [showPcDetailsModal, setShowPcDetailsModal] = useState(false);
   const [selectedPcForDetails, setSelectedPcForDetails] = useState(null);
-
-  // State for editing a connection
   const [editingConnection, setEditingConnection] = useState(null);
-
-  // State for Location Add/Edit Form
   const [editingLocation, setEditingLocation] = useState(null);
   const [locationFormName, setLocationFormName] = useState("");
   const [locationFormDoorNumber, setLocationFormDoorNumber] = useState("");
   const [locationFormDescription, setLocationFormDescription] = useState("");
   const [isAddLocationFormExpanded, setIsAddLocationFormExpanded] = useState(false);
-
-  // States for PDF templates and app settings
   const [pdfTemplates, setPdfTemplates] = useState([]);
   const [defaultPdfId, setDefaultPdfId] = useState(null);
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(null);
@@ -117,8 +107,6 @@ function MainApp() {
     }
   }, [showMessage, selectedPrintTemplateId]);
 
-
-  // Initial data load on component mount
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
@@ -238,14 +226,11 @@ function MainApp() {
   };
 
   const handleClosePortStatusModal = useCallback(() => setShowPortStatusModal(false), []);
-  
-  // CORRECTED: Added function back to MainApp
   const handleViewSwitchDiagram = useCallback((_switch) => {
     setSelectedSwitchForDiagram(_switch);
     setShowSwitchDiagramModal(true);
   }, []);
   const handleCloseSwitchDiagramModal = useCallback(() => setShowSwitchDiagramModal(false), []);
-
   const handleViewRackDetails = useCallback((rack) => {
     setSelectedRackForView(rack);
     setShowRackViewModal(true);
@@ -274,30 +259,49 @@ function MainApp() {
       {showRackViewModal && <RackViewModal isOpen={showRackViewModal} onClose={handleCloseRackViewModal} rack={selectedRackForView} switches={switches} patchPanels={patchPanels} pcs={pcs} onShowPortStatus={handleShowPortStatus} onViewPcDetails={handleViewPcDetails} />}
       {showPcDetailsModal && <PcDetailsModal isOpen={showPcDetailsModal} onClose={handleClosePcDetailsModal} pc={selectedPcForDetails} />}
 
-      <div>
-        <header className="mb-8 text-center">
+      <div className="max-w-7xl mx-auto">
+        <header className="relative mb-8 text-center">
           <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight sm:text-5xl">
             Network Device Documentation
           </h1>
-          <div className="mt-4 flex justify-center items-center gap-4">
-            <div className="flex items-center text-gray-600">
-                <UserIcon size={20} className="mr-2" />
-                <span>Welcome, <strong>{user.username}</strong> ({user.role})</span>
+          <div className="absolute top-0 right-0 flex items-center space-x-3 bg-white p-2 rounded-lg shadow-sm border">
+            <UserIcon size={20} className="text-gray-500" />
+            <div className="text-sm">
+                <span className="font-semibold text-gray-800">{user.username}</span>
+                <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded-full ${
+                    user.role === 'Admin' ? 'bg-red-100 text-red-800' :
+                    user.role === 'Editor' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-green-100 text-green-800'
+                }`}>
+                    {user.role}
+                </span>
             </div>
-            <button onClick={logout} className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md shadow-sm hover:bg-red-600">
-                <LogOut size={16} className="mr-2" />
-                Logout
+            <button
+  onClick={() => setActiveTab("usermanual")}
+  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors duration-200"
+  title="User Manual"
+>
+  <BookOpen size={20} />
+</button>
+            <button onClick={logout} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors duration-200" title="Logout">
+                <LogOut size={20} />
             </button>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+        <main className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
           <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
             {["connections", "pcs", "switches", "patch_panels", "locations", "racks"].map((tab) => (
               <button key={tab} className={`py-3 px-4 sm:px-6 text-base sm:text-lg font-medium whitespace-nowrap ${activeTab === tab ? "border-b-4 border-blue-600 text-blue-800" : "text-gray-600 hover:text-blue-600"}`} onClick={() => handleTabClick(tab)}>
                 {tab.charAt(0).toUpperCase() + tab.slice(1).replace("_", " ")}
               </button>
             ))}
+            {/* NEW: Conditionally render Passwords and Settings tabs */}
             {user.role === 'Admin' && (
+                <button className={`py-3 px-4 sm:px-6 text-base sm:text-lg font-medium whitespace-nowrap ${activeTab === 'passwords' ? "border-b-4 border-blue-600 text-blue-800" : "text-gray-600 hover:text-blue-600"}`} onClick={() => handleTabClick('passwords')}>
+                    Passwords
+                </button>
+            )}
+            {user.role !== 'Viewer' && (
                 <button className={`py-3 px-4 sm:px-6 text-base sm:text-lg font-medium whitespace-nowrap ${activeTab === 'settings' ? "border-b-4 border-blue-600 text-blue-800" : "text-gray-600 hover:text-blue-600"}`} onClick={() => handleTabClick('settings')}>
                     Settings
                 </button>
@@ -382,7 +386,9 @@ function MainApp() {
             </section>
           )}
           {activeTab === "racks" && <RackList racks={racks} locations={locations} switches={switches} patchPanels={patchPanels} pcs={pcs} onAddEntity={handleAddEntity} onUpdateEntity={handleUpdateEntity} onDeleteEntity={handleDeleteEntity} onShowPortStatus={handleShowPortStatus} onViewRackDetails={handleViewRackDetails} showMessage={showMessage} onViewPcDetails={handleViewPcDetails} user={user} />}
-          {activeTab === "settings" && user.role === 'Admin' && <SettingsPage showMessage={showMessage} user={user} />}
+          {activeTab === "settings" && user.role !== 'Viewer' && <SettingsPage showMessage={showMessage} user={user} />}
+          {activeTab === "passwords" && user.role === 'Admin' && <PasswordManager showMessage={showMessage} />}
+          {activeTab === "usermanual" && user.role === 'Admin' && <UserManual showMessage={showMessage} />}
         </main>
         <footer className="mt-12 text-center text-gray-500 text-sm">
           <p>&copy; 2025 Network Doc App. All rights reserved.</p>
