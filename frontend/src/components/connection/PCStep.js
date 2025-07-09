@@ -163,14 +163,8 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
           id="pc-select"
           value={pcId}
           onChange={(e) => {
-            if (e.target.value === "add-new-pc") {
-              setIsNewPcExpanded(true);
-              document
-                .getElementById("new-pc-creation-section")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              setPcId("");
-            } else {
-              setPcId(e.target.value);
+            setPcId(e.target.value);
+            if (e.target.value) {
               setCurrentStep(2);
             }
           }}
@@ -184,9 +178,6 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
               {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
             </option>
           ))}
-          <option value="add-new-pc" className="italic text-blue-600">
-            -- Add New PC --
-          </option>
         </select>
       </div>
       <div className="relative flex py-5 items-center">

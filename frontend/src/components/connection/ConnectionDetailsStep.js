@@ -1,7 +1,5 @@
 // /frontend/src/components/connection/ConnectionDetailsStep.js
 import React from "react";
-import { AddPatchPanelForm } from "./AddPatchPanelForm";
-import { AddSwitchForm } from "./AddSwitchForm";
 import {
   ArrowRight,
   Cable,
@@ -18,7 +16,6 @@ export const ConnectionDetailsStep = ({
   formState,
   formSetters,
   handlers,
-  onAddEntity,
   onShowPortStatus,
 }) => {
   const {
@@ -38,10 +35,7 @@ export const ConnectionDetailsStep = ({
     cableColorOptions,
     showAddColorInput,
     newCustomColor,
-    isNewPpExpanded,
-    isNewSwitchExpanded,
     locations,
-    racks,
     patchPanels,
   } = formState;
 
@@ -58,8 +52,6 @@ export const ConnectionDetailsStep = ({
     setWallPointCableLabel,
     setShowAddColorInput,
     setNewCustomColor,
-    setIsNewPpExpanded,
-    setIsNewSwitchExpanded,
   } = formSetters;
 
   const {
@@ -191,11 +183,7 @@ export const ConnectionDetailsStep = ({
             <select
               id="switch-select"
               value={switchId}
-              onChange={(e) =>
-                e.target.value === "add-new-switch"
-                  ? (setIsNewSwitchExpanded(true), setSwitchId(""))
-                  : setSwitchId(e.target.value)
-              }
+              onChange={(e) => setSwitchId(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md"
               required
             >
@@ -205,9 +193,6 @@ export const ConnectionDetailsStep = ({
                   {_switch.name} ({_switch.ip_address})
                 </option>
               ))}
-              <option value="add-new-switch" className="italic text-red-600">
-                -- Add New Switch --
-              </option>
             </select>
             {switchId && getPortStatusSummary("switches", switchId) && (
               <div className="mt-2 text-xs text-gray-600 flex items-center space-x-2">
@@ -373,13 +358,11 @@ export const ConnectionDetailsStep = ({
                     <select
                       value={hop.patch_panel_id}
                       onChange={(e) =>
-                        e.target.value === "add-new-pp"
-                          ? setIsNewPpExpanded(true)
-                          : handlers.handleHopChange(
-                              index,
-                              "patch_panel_id",
-                              e.target.value
-                            )
+                        handlers.handleHopChange(
+                          index,
+                          "patch_panel_id",
+                          e.target.value
+                        )
                       }
                       className="w-full p-2 border rounded-md text-sm"
                       required
@@ -390,11 +373,7 @@ export const ConnectionDetailsStep = ({
                           {pp.name}
                         </option>
                       ))}
-                      <option value="add-new-pp" className="italic">
-                        -- Add New --
-                      </option>
                     </select>
-                    {/* *** ADDED BACK: Port Status Summary for each selected Patch Panel *** */}
                     {hop.patch_panel_id &&
                       getPortStatusSummary(
                         "patch_panels",
@@ -527,26 +506,6 @@ export const ConnectionDetailsStep = ({
             Add Patch Panel Hop
           </button>
         </div>
-        <AddPatchPanelForm
-          isExpanded={isNewPpExpanded}
-          toggleExpanded={setIsNewPpExpanded}
-          formState={formState}
-          formSetters={formSetters}
-          onAddEntity={onAddEntity}
-          showMessage={handlers.showMessage}
-          locations={locations}
-          racks={racks}
-        />
-        <AddSwitchForm
-          isExpanded={isNewSwitchExpanded}
-          toggleExpanded={setIsNewSwitchExpanded}
-          formState={formState}
-          formSetters={formSetters}
-          onAddEntity={onAddEntity}
-          showMessage={handlers.showMessage}
-          locations={locations}
-          racks={racks}
-        />
         <div className="flex justify-end space-x-3 mt-6">
           {formState.editingConnection && (
             <button
