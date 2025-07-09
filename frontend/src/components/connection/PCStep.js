@@ -1,5 +1,5 @@
 // /frontend/src/components/connection/PCStep.js
-import React, { useState } from "react";
+import React from "react";
 import {
   PlusCircle,
   ChevronDown,
@@ -20,8 +20,8 @@ import {
   ClipboardList,
   Database,
   Monitor,
-  Search,
 } from "lucide-react";
+import { SearchableSelect } from './SearchableSelect'; // Import the new component
 
 export const PCStep = ({ formState, formSetters, handlers, refs }) => {
   const {
@@ -79,9 +79,6 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
   } = formSetters;
   const { onAddEntity, showMessage } = handlers;
   const { lastCreatedPcIdRef } = refs;
-
-  // NEW: State for the PC dropdown search
-  const [pcSearchTerm, setPcSearchTerm] = useState("");
 
   const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -192,11 +189,12 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
     }
   };
 
-  // NEW: Filter PCs based on search term
-  const searchablePcs = availablePcsForConnection.filter(pc =>
-    pc.name.toLowerCase().includes(pcSearchTerm.toLowerCase()) ||
-    (pc.ip_address || "").toLowerCase().includes(pcSearchTerm.toLowerCase())
-  );
+  const handlePcSelect = (selectedPcId) => {
+    setPcId(selectedPcId);
+    if (selectedPcId) {
+      setCurrentStep(2);
+    }
+  };
 
   return (
     <section className="p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
@@ -207,39 +205,13 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
         <h3 className="text-lg font-semibold text-gray-700 mb-3">
           Select Existing PC:
         </h3>
-        {/* NEW: Search input for PC dropdown */}
-        <div className="relative mb-2">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <Search size={16} className="text-gray-400" />
-            </div>
-            <input
-                type="text"
-                placeholder="Search for PC by name or IP..."
-                value={pcSearchTerm}
-                onChange={(e) => setPcSearchTerm(e.target.value)}
-                className="w-full p-2 pl-10 border border-gray-300 rounded-md"
-            />
-        </div>
-        <select
-          id="pc-select"
-          value={pcId}
-          onChange={(e) => {
-            setPcId(e.target.value);
-            if (e.target.value) {
-              setCurrentStep(2);
-            }
-          }}
-          className="w-full p-2 border border-gray-300 rounded-md"
-          required={!isNewPcExpanded}
-        >
-          <option value="">-- Select a PC --</option>
-          {searchablePcs.map((pc) => (
-            <option key={pc.id} value={String(pc.id)}>
-              {pc.name} ({pc.ip_address || "No IP"}){" "}
-              {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
-            </option>
-          ))}
-        </select>
+        {/* UPDATED: Replaced select with SearchableSelect */}
+        <SearchableSelect
+            options={availablePcsForConnection}
+            value={pcId}
+            onChange={handlePcSelect}
+            placeholder="-- Search and select a PC --"
+        />
       </div>
       <div className="relative flex py-5 items-center">
         <div className="flex-grow border-t border-gray-300"></div>
