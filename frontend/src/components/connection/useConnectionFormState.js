@@ -91,8 +91,7 @@ export const useConnectionFormState = ({
   const [newPcSpecification, setNewPcSpecification] = useState("");
   const [newPcMonitorModel, setNewPcMonitorModel] = useState("");
   const [newPcDiskInfo, setNewPcDiskInfo] = useState("");
-  const [showNewPcCustomUsageInput, setShowNewPcCustomUsageInput] =
-    useState(false);
+  const [showNewPcCustomUsageInput, setShowNewPcCustomUsageInput] = useState(false);
   const [newPcCustomUsageValue, setNewPcCustomUsageValue] = useState("");
 
   // State for the "Add New Patch Panel" form
@@ -219,6 +218,7 @@ export const useConnectionFormState = ({
     fetchAvailablePcs();
   }, [fetchAvailablePcs]);
 
+
   useEffect(() => {
     if (editingConnection) {
       setPcId(String(editingConnection.pc_id || ""));
@@ -280,7 +280,8 @@ export const useConnectionFormState = ({
     setHops(updatedHops);
   };
 
-  const addHop = () =>
+  // CORRECTED: Assign a sequence number when adding a hop
+  const addHop = () => {
     setHops([
       ...hops,
       {
@@ -290,8 +291,11 @@ export const useConnectionFormState = ({
         is_port_up: true,
         cable_color: "",
         cable_label: "",
+        sequence: hops.length, // Add the sequence number based on the current array length
       },
     ]);
+  };
+
   const removeHop = (index) => setHops(hops.filter((_, i) => i !== index));
 
   const handleAddCustomColor = () => {
@@ -340,9 +344,10 @@ export const useConnectionFormState = ({
       wall_point_label: wallPointLabel,
       wall_point_cable_color: wallPointCableColor,
       wall_point_cable_label: wallPointCableLabel,
-      hops: hops.map((hop) => ({
+      hops: hops.map((hop, index) => ({ // Ensure sequence is set on submit as well, just in case
         ...hop,
         patch_panel_id: parseInt(hop.patch_panel_id),
+        sequence: hop.sequence ?? index,
       })),
     };
     const result = editingConnection
@@ -451,7 +456,7 @@ export const useConnectionFormState = ({
       newSwitchUnitsOccupied,
       editingConnection,
       ipRegex,
-      usageOptions: usageOptions, // CORRECTED: Use the defined 'usageOptions'
+      usageOptions: usageOptions,
       locations,
       racks,
       patchPanels,

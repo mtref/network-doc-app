@@ -62,16 +62,15 @@ function PcDetailsModal({ isOpen, onClose, pc }) {
               <User size={16} className="text-gray-500 mr-2" /> Username:{" "}
               <span className="font-medium">{pc.username || "N/A"}</span>
             </p>
-            <p className="text-sm text-gray-700 flex items-center col-span-full">
-              <Fingerprint size={16} className="text-gray-500 mr-2" /> Serial
-              Number:{" "}
+             <p className="text-sm text-gray-700 flex items-center col-span-full">
+              <Fingerprint size={16} className="text-gray-500 mr-2" /> Serial Number:{" "}
               <span className="font-medium">{pc.serial_number || "N/A"}</span>
             </p>
-            <p className="text-sm text-gray-700 flex items-center col-span-full">
+             <p className="text-sm text-gray-700 flex items-center col-span-full">
               <Monitor size={16} className="text-gray-500 mr-2" /> Monitor(s):{" "}
               <span className="font-medium">{pc.monitor_model || "N/A"}</span>
             </p>
-            <p className="text-sm text-gray-700 flex items-center col-span-full">
+             <p className="text-sm text-gray-700 flex items-center col-span-full">
               <Database size={16} className="text-gray-500 mr-2" /> Disk(s):{" "}
               <span className="font-medium">{pc.disk_info || "N/A"}</span>
             </p>

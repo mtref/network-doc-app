@@ -419,8 +419,17 @@ class ConnectionService:
         db.session.add(new_connection)
         db.session.flush()
         for hop_data in hops_data:
-            hop_data['connection_id'] = new_connection.id
-            db.session.add(ConnectionHop(**hop_data))
+            # FIX: Filter out keys not present in the ConnectionHop model
+            filtered_hop_data = {
+                'connection_id': new_connection.id,
+                'patch_panel_id': hop_data.get('patch_panel_id'),
+                'patch_panel_port': hop_data.get('patch_panel_port'),
+                'is_port_up': hop_data.get('is_port_up', True),
+                'sequence': hop_data.get('sequence'),
+                'cable_color': hop_data.get('cable_color'),
+                'cable_label': hop_data.get('cable_label')
+            }
+            db.session.add(ConnectionHop(**filtered_hop_data))
         connection_name = f"Conn {new_connection.id}"
         SystemLogService.create_log('CREATE', 'Connection', new_connection.id, connection_name, details=new_connection.to_dict())
         db.session.commit()
@@ -443,15 +452,21 @@ class ConnectionService:
         
         # Update hops
         if 'hops' in data:
-            # First, delete existing hops
             for hop in connection.hops:
                 db.session.delete(hop)
-            db.session.flush() # Apply the deletion
-            
-            # Then, add the new hops
+            db.session.flush()
             for hop_data in data['hops']:
-                hop_data['connection_id'] = connection.id
-                db.session.add(ConnectionHop(**hop_data))
+                # FIX: Filter out keys not present in the ConnectionHop model
+                filtered_hop_data = {
+                    'connection_id': connection.id,
+                    'patch_panel_id': hop_data.get('patch_panel_id'),
+                    'patch_panel_port': hop_data.get('patch_panel_port'),
+                    'is_port_up': hop_data.get('is_port_up', True),
+                    'sequence': hop_data.get('sequence'),
+                    'cable_color': hop_data.get('cable_color'),
+                    'cable_label': hop_data.get('cable_label')
+                }
+                db.session.add(ConnectionHop(**filtered_hop_data))
 
         db.session.commit()
         return connection
@@ -473,7 +488,6 @@ class PdfTemplateService:
     @staticmethod
     def upload_pdf_template(file, app_config):
         # ... logic remains the same
-        # Assume this part is correct as per original file
         new_pdf = PdfTemplate(original_filename="dummy.pdf", stored_filename="dummy_stored.pdf")
         db.session.add(new_pdf)
         db.session.commit()
