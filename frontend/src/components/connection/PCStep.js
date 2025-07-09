@@ -1,5 +1,5 @@
 // /frontend/src/components/connection/PCStep.js
-import React from "react";
+import React, { useState } from "react";
 import {
   PlusCircle,
   ChevronDown,
@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Database,
   Monitor,
+  Search,
 } from "lucide-react";
 
 export const PCStep = ({ formState, formSetters, handlers, refs }) => {
@@ -78,6 +79,9 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
   } = formSetters;
   const { onAddEntity, showMessage } = handlers;
   const { lastCreatedPcIdRef } = refs;
+
+  // NEW: State for the PC dropdown search
+  const [pcSearchTerm, setPcSearchTerm] = useState("");
 
   const sortedRacks = [...racks].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -141,7 +145,7 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
       description: newPcDesc,
       multi_port: newPcMultiPort,
       type: newPcType,
-      usage: newPcUsage === "Other" ? newPcCustomUsageValue : newPcUsage,
+      usage: newPcUsage === 'Other' ? newPcCustomUsageValue : newPcUsage,
       row_in_rack: newPcType === "Server" ? parseInt(newPcRowInRack) : null,
       rack_id: newPcType === "Server" ? parseInt(newPcRackId) : null,
       units_occupied: newPcType === "Server" ? parseInt(newPcUnitsOccupied) : 1,
@@ -180,13 +184,19 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
   const handleUsageChange = (e) => {
     const value = e.target.value;
     setNewPcUsage(value);
-    if (value === "Other") {
-      setShowNewPcCustomUsageInput(true);
+    if (value === 'Other') {
+        setShowNewPcCustomUsageInput(true);
     } else {
-      setShowNewPcCustomUsageInput(false);
-      setNewPcCustomUsageValue("");
+        setShowNewPcCustomUsageInput(false);
+        setNewPcCustomUsageValue("");
     }
   };
+
+  // NEW: Filter PCs based on search term
+  const searchablePcs = availablePcsForConnection.filter(pc =>
+    pc.name.toLowerCase().includes(pcSearchTerm.toLowerCase()) ||
+    (pc.ip_address || "").toLowerCase().includes(pcSearchTerm.toLowerCase())
+  );
 
   return (
     <section className="p-6 bg-blue-50 rounded-lg border border-blue-200 shadow-inner">
@@ -197,6 +207,19 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
         <h3 className="text-lg font-semibold text-gray-700 mb-3">
           Select Existing PC:
         </h3>
+        {/* NEW: Search input for PC dropdown */}
+        <div className="relative mb-2">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <Search size={16} className="text-gray-400" />
+            </div>
+            <input
+                type="text"
+                placeholder="Search for PC by name or IP..."
+                value={pcSearchTerm}
+                onChange={(e) => setPcSearchTerm(e.target.value)}
+                className="w-full p-2 pl-10 border border-gray-300 rounded-md"
+            />
+        </div>
         <select
           id="pc-select"
           value={pcId}
@@ -210,7 +233,7 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
           required={!isNewPcExpanded}
         >
           <option value="">-- Select a PC --</option>
-          {availablePcsForConnection.map((pc) => (
+          {searchablePcs.map((pc) => (
             <option key={pc.id} value={String(pc.id)}>
               {pc.name} ({pc.ip_address || "No IP"}){" "}
               {pc.multi_port ? "(Multi-Port)" : "(Single-Port)"}
@@ -244,95 +267,24 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
           className={`collapsible-content ${isNewPcExpanded ? "expanded" : ""}`}
         >
           <form onSubmit={handleNewPcSaveAndContinue} className="p-5 space-y-3">
-            <input
-              type="text"
-              placeholder="PC Name"
-              value={newPcName}
-              onChange={(e) => setNewPcName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              required
-            />
-            <input
-              type="text"
-              placeholder="IP Address"
-              value={newPcIp}
-              onChange={(e) => setNewPcIp(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="text"
-              placeholder="Username"
-              value={newPcUsername}
-              onChange={(e) => setNewPcUsername(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="text"
-              placeholder="Serial Number"
-              value={newPcSerialNumber}
-              onChange={(e) => setNewPcSerialNumber(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <textarea
-              placeholder="PC Specification (e.g., CPU, RAM, GPU)"
-              value={newPcSpecification}
-              onChange={(e) => setNewPcSpecification(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              rows="3"
-            ></textarea>
-            <input
-              type="text"
-              placeholder="Monitor Model(s)"
-              value={newPcMonitorModel}
-              onChange={(e) => setNewPcMonitorModel(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="text"
-              placeholder="Disk Info (e.g., 1x 512GB NVMe, 2x 1TB SSD)"
-              value={newPcDiskInfo}
-              onChange={(e) => setNewPcDiskInfo(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
+            <input type="text" placeholder="PC Name" value={newPcName} onChange={(e) => setNewPcName(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required />
+            <input type="text" placeholder="IP Address" value={newPcIp} onChange={(e) => setNewPcIp(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" placeholder="Username" value={newPcUsername} onChange={(e) => setNewPcUsername(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" placeholder="Serial Number" value={newPcSerialNumber} onChange={(e) => setNewPcSerialNumber(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <textarea placeholder="PC Specification (e.g., CPU, RAM, GPU)" value={newPcSpecification} onChange={(e) => setNewPcSpecification(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
+            <input type="text" placeholder="Monitor Model(s)" value={newPcMonitorModel} onChange={(e) => setNewPcMonitorModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" placeholder="Disk Info (e.g., 1x 512GB NVMe, 2x 1TB SSD)" value={newPcDiskInfo} onChange={(e) => setNewPcDiskInfo(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
             <div className="flex items-center space-x-4">
               <div className="flex items-center">
-                <input
-                  id="new-pc-in-domain"
-                  type="checkbox"
-                  checked={newPcInDomain}
-                  onChange={(e) => setNewPcInDomain(e.target.checked)}
-                  className="h-4 w-4 text-blue-600"
-                />
-                <label htmlFor="new-pc-in-domain" className="ml-2 text-sm">
-                  In Domain
-                </label>
+                <input id="new-pc-in-domain" type="checkbox" checked={newPcInDomain} onChange={(e) => setNewPcInDomain(e.target.checked)} className="h-4 w-4 text-blue-600" />
+                <label htmlFor="new-pc-in-domain" className="ml-2 text-sm">In Domain</label>
               </div>
               <div className="flex items-center">
-                <input
-                  id="new-pc-multi-port"
-                  type="checkbox"
-                  checked={newPcMultiPort}
-                  onChange={(e) => setNewPcMultiPort(e.target.checked)}
-                  className="h-4 w-4 text-blue-600"
-                />
-                <label htmlFor="new-pc-multi-port" className="ml-2 text-sm">
-                  Multi-Port PC
-                </label>
+                <input id="new-pc-multi-port" type="checkbox" checked={newPcMultiPort} onChange={(e) => setNewPcMultiPort(e.target.checked)} className="h-4 w-4 text-blue-600" />
+                <label htmlFor="new-pc-multi-port" className="ml-2 text-sm">Multi-Port PC</label>
               </div>
             </div>
-            <select
-              value={newPcType}
-              onChange={(e) => {
-                setNewPcType(e.target.value);
-                if (e.target.value === "Workstation") {
-                  setNewPcRackId("");
-                  setNewPcRowInRack("");
-                  setNewPcUnitsOccupied(1);
-                }
-              }}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              required
-            >
+            <select value={newPcType} onChange={(e) => {setNewPcType(e.target.value); if (e.target.value === "Workstation") {setNewPcRackId(""); setNewPcRowInRack(""); setNewPcUnitsOccupied(1);}}} className="w-full p-2 border border-gray-300 rounded-md" required>
               <option value="Workstation">Workstation</option>
               <option value="Server">Server</option>
             </select>
@@ -340,100 +292,34 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
               <>
                 <div className="flex items-center space-x-2">
                   <Columns size={20} className="text-gray-500" />
-                  <select
-                    value={newPcRackId}
-                    onChange={(e) => setNewPcRackId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  >
+                  <select value={newPcRackId} onChange={(e) => setNewPcRackId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required>
                     <option value="">-- Select Rack --</option>
-                    {sortedRacks.map((rack) => (
-                      <option key={rack.id} value={String(rack.id)}>
-                        {rack.name} ({rack.location_name})
-                      </option>
-                    ))}
+                    {sortedRacks.map((rack) => (<option key={rack.id} value={String(rack.id)}>{rack.name} ({rack.location_name})</option>))}
                   </select>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Server size={20} className="text-gray-500" />
-                  <input
-                    type="number"
-                    placeholder="Starting Row in Rack"
-                    value={newPcRowInRack}
-                    onChange={(e) => setNewPcRowInRack(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    min="1"
-                    required
-                  />
+                  <input type="number" placeholder="Starting Row in Rack" value={newPcRowInRack} onChange={(e) => setNewPcRowInRack(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
                 </div>
                 <div className="flex items-center space-x-2">
                   <HardDrive size={20} className="text-gray-500" />
-                  <input
-                    type="number"
-                    placeholder="Units Occupied"
-                    value={newPcUnitsOccupied}
-                    onChange={(e) => setNewPcUnitsOccupied(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    min="1"
-                    required
-                  />
+                  <input type="number" placeholder="Units Occupied" value={newPcUnitsOccupied} onChange={(e) => setNewPcUnitsOccupied(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" min="1" required />
                 </div>
               </>
             )}
-            <input
-              type="text"
-              placeholder="OS"
-              value={newPcOs}
-              onChange={(e) => setNewPcOs(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="text"
-              placeholder="Model"
-              value={newPcModel}
-              onChange={(e) => setNewPcModel(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <input
-              type="text"
-              placeholder="Office"
-              value={newPcOffice}
-              onChange={(e) => setNewPcOffice(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            />
-            <select
-              value={newPcUsage}
-              onChange={handleUsageChange}
-              className="w-full p-2 border border-gray-300 rounded-md"
-            >
+            <input type="text" placeholder="OS" value={newPcOs} onChange={(e) => setNewPcOs(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" placeholder="Model" value={newPcModel} onChange={(e) => setNewPcModel(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <input type="text" placeholder="Office" value={newPcOffice} onChange={(e) => setNewPcOffice(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
+            <select value={newPcUsage} onChange={handleUsageChange} className="w-full p-2 border border-gray-300 rounded-md">
               <option value="">-- Select Usage (Optional) --</option>
-              {usageOptions.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
+              {usageOptions.map((o) => (<option key={o} value={o}>{o}</option>))}
               <option value="Other">Other...</option>
             </select>
             {showNewPcCustomUsageInput && (
-              <input
-                type="text"
-                placeholder="Enter custom usage"
-                value={newPcCustomUsageValue}
-                onChange={(e) => setNewPcCustomUsageValue(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
+              <input type="text" placeholder="Enter custom usage" value={newPcCustomUsageValue} onChange={(e) => setNewPcCustomUsageValue(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" />
             )}
-            <textarea
-              placeholder="Description"
-              value={newPcDesc}
-              onChange={(e) => setNewPcDesc(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              rows="3"
-            ></textarea>
-            <button
-              type="submit"
-              className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600"
-            >
+            <textarea placeholder="Description" value={newPcDesc} onChange={(e) => setNewPcDesc(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" rows="3"></textarea>
+            <button type="submit" className="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600">
               Save PC and Continue
             </button>
           </form>

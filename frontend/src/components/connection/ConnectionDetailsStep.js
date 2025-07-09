@@ -32,6 +32,35 @@ const PathVisualizer = ({ segments }) => (
   </div>
 );
 
+// Helper function to format the display name for rack-mounted devices
+const formatDeviceDisplay = (device) => {
+  let parts = [];
+  
+  // Check if it's a switch (by checking for a switch-specific property like ip_address)
+  const isSwitch = device.hasOwnProperty('ip_address');
+
+  if (isSwitch) {
+    let nameAndUsage = device.name;
+    if (device.usage) {
+      nameAndUsage += ` (${device.usage})`;
+    }
+    parts.push(nameAndUsage);
+  } else {
+    // It's a patch panel
+    parts.push(device.name);
+  }
+
+  if (device.rack_name) {
+    parts.push(`Rack: ${device.rack_name}`);
+  }
+  if (device.row_in_rack) {
+    parts.push(`Row: ${device.row_in_rack}`);
+  }
+  
+  return parts.join(' - ');
+};
+
+
 export const ConnectionDetailsStep = ({
   formState,
   formSetters,
@@ -173,7 +202,7 @@ export const ConnectionDetailsStep = ({
                             <label className="block text-sm font-medium text-gray-700 mb-1">Patch Panel</label>
                             <select value={hop.patch_panel_id} onChange={(e) => handleHopChange(index, "patch_panel_id", e.target.value)} className="w-full p-2 border rounded-md text-sm" required>
                                 <option value="">-- Select Patch Panel --</option>
-                                {filteredPatchPanelsForThisHop.map((pp) => (<option key={pp.id} value={String(pp.id)}>{pp.name}</option>))}
+                                {filteredPatchPanelsForThisHop.map((pp) => (<option key={pp.id} value={String(pp.id)}>{formatDeviceDisplay(pp)}</option>))}
                             </select>
                             {hop.patch_panel_id && getPortStatusSummary("patch_panels", hop.patch_panel_id) && (
                                 <div className="mt-1 text-xs text-gray-600 flex items-center space-x-2">
@@ -234,7 +263,7 @@ export const ConnectionDetailsStep = ({
                     <label htmlFor="switch-select" className="block text-sm font-medium text-gray-700 mb-1">Select Switch:</label>
                     <select id="switch-select" value={switchId} onChange={(e) => setSwitchId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md" required>
                         <option value="">-- Select a Switch --</option>
-                        {filteredSwitchesByLocation.map((_switch) => (<option key={_switch.id} value={String(_switch.id)}>{_switch.name} ({_switch.ip_address})</option>))}
+                        {filteredSwitchesByLocation.map((_switch) => (<option key={_switch.id} value={String(_switch.id)}>{formatDeviceDisplay(_switch)}</option>))}
                     </select>
                     {switchId && getPortStatusSummary("switches", switchId) && (
                         <div className="mt-1 text-xs text-gray-600 flex items-center space-x-2">
