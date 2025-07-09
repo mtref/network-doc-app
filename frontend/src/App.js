@@ -1,8 +1,7 @@
 // frontend/src/App.js
 // This is the main React component for the frontend application.
 // It orchestrates the display of various sections (Connections, PCs, Switches, Patch Panels, Settings).
-// REFACTORED: The "Manage Locations" tab now uses a unified, collapsible form.
-// UPDATED: Passing modal handlers down to the ConnectionList component.
+// UPDATED: Data is now refreshed every time a new tab is selected.
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ConnectionList from "./components/ConnectionList";
@@ -114,31 +113,49 @@ function App() {
     [showMessage]
   );
 
-  useEffect(() => {
-    const fetchAllInitialData = async () => {
-      await fetchData("pcs", setPcs);
-      await fetchData("patch_panels", setPatchPanels);
-      await fetchData("switches", setSwitches);
-      await fetchData("connections", setConnections);
-      await fetchData("locations", setLocations);
-      await fetchData("racks", setRacks);
-      try {
-        const pdfResponse = await fetch(`${API_BASE_URL}/pdf_templates`);
-        const pdfData = await pdfResponse.json();
-        setPdfTemplates(pdfData.templates);
-        setDefaultPdfId(pdfData.default_pdf_id);
+  // NEW: Central function to fetch all application data.
+  const fetchAllData = useCallback(async () => {
+    await Promise.all([
+      fetchData("pcs", setPcs),
+      fetchData("patch_panels", setPatchPanels),
+      fetchData("switches", setSwitches),
+      fetchData("connections", setConnections),
+      fetchData("locations", setLocations),
+      fetchData("racks", setRacks),
+    ]);
+    try {
+      const pdfResponse = await fetch(`${API_BASE_URL}/pdf_templates`);
+      const pdfData = await pdfResponse.json();
+      setPdfTemplates(pdfData.templates);
+      setDefaultPdfId(pdfData.default_pdf_id);
+      // Set the selected template to default if it's not set or invalid
+      if (
+        !selectedPrintTemplateId ||
+        !pdfData.templates.some((t) => t.id === selectedPrintTemplateId)
+      ) {
         setSelectedPrintTemplateId(pdfData.default_pdf_id);
-      } catch (error) {
-        console.error("Failed to fetch PDF templates or app settings:", error);
-        showMessage("Error fetching PDF templates or app settings.", 5000);
       }
-    };
-    fetchAllInitialData();
+    } catch (error) {
+      console.error("Failed to fetch PDF templates or app settings:", error);
+      showMessage("Error fetching PDF templates or app settings.", 5000);
+    }
+  }, [fetchData, showMessage, selectedPrintTemplateId]);
+
+  // Initial data load on component mount
+  useEffect(() => {
+    fetchAllData();
+    // Fetch CSS for printing once
     fetch("/static/css/main.css")
       .then((res) => res.text())
       .then((css) => setCssContent(css))
       .catch((err) => console.error("Failed to load CSS for printing:", err));
-  }, [fetchData]);
+  }, [fetchAllData]); // fetchAllData is memoized and stable
+
+  // NEW: Handler for tab clicks that refreshes data
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+    fetchAllData();
+  };
 
   const handleAddConnection = useCallback(
     async (newConnectionData) => {
@@ -161,8 +178,7 @@ function App() {
         }
         showMessage("Connection added successfully!");
         setEditingConnection(null);
-        await fetchData("connections", setConnections);
-        await fetchData("pcs", setPcs);
+        await fetchAllData(); // Refresh all data
         return { success: true };
       } catch (error) {
         console.error("Error adding connection:", error);
@@ -170,7 +186,7 @@ function App() {
         return { success: false, error: error.message };
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleUpdateConnection = useCallback(
@@ -194,8 +210,7 @@ function App() {
         }
         showMessage("Connection updated successfully!");
         setEditingConnection(null);
-        await fetchData("connections", setConnections);
-        await fetchData("pcs", setPcs);
+        await fetchAllData(); // Refresh all data
         return { success: true };
       } catch (error) {
         console.error("Error updating connection:", error);
@@ -203,7 +218,7 @@ function App() {
         return { success: false, error: error.message };
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleDeleteConnection = useCallback(
@@ -222,14 +237,13 @@ function App() {
           );
         }
         showMessage("Connection deleted successfully!");
-        await fetchData("connections", setConnections);
-        await fetchData("pcs", setPcs);
+        await fetchAllData(); // Refresh all data
       } catch (error) {
         console.error("Error deleting connection:", error);
         showMessage(`Error deleting connection: ${error.message}`, 5000);
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleEditConnection = useCallback((connection) => {
@@ -257,25 +271,7 @@ function App() {
         }
         const newEntity = await response.json();
         showMessage(`${type.slice(0, -1).toUpperCase()} added successfully!`);
-
-        const setterMap = {
-          pcs: setPcs,
-          patch_panels: setPatchPanels,
-          switches: setSwitches,
-          locations: setLocations,
-          racks: setRacks,
-        };
-        const setterFunction = setterMap[type];
-        if (setterFunction) {
-          setterFunction((prev) => [...prev, newEntity]);
-        } else {
-          await fetchData(
-            type,
-            eval(`set${type.charAt(0).toUpperCase() + type.slice(1)}`)
-          );
-        }
-
-        await fetchData("connections", setConnections);
+        await fetchAllData(); // Refresh all data
         return { success: true, entity: newEntity };
       } catch (error) {
         console.error(`Error adding ${type}:`, error);
@@ -283,7 +279,7 @@ function App() {
         return { success: false, error: error.message };
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleUpdateEntity = useCallback(
@@ -306,16 +302,7 @@ function App() {
           };
         }
         showMessage(`${type.slice(0, -1).toUpperCase()} updated successfully!`);
-
-        await Promise.all([
-          fetchData("pcs", setPcs),
-          fetchData("patch_panels", setPatchPanels),
-          fetchData("switches", setSwitches),
-          fetchData("locations", setLocations),
-          fetchData("racks", setRacks),
-          fetchData("connections", setConnections),
-        ]);
-
+        await fetchAllData(); // Refresh all data
         return { success: true };
       } catch (error) {
         console.error(`Error updating ${type}:`, error);
@@ -323,7 +310,7 @@ function App() {
         return { success: false, error: error.message };
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleDeleteEntity = useCallback(
@@ -349,21 +336,13 @@ function App() {
           );
         }
         showMessage(`${type.slice(0, -1).toUpperCase()} deleted successfully!`);
-
-        await Promise.all([
-          fetchData("pcs", setPcs),
-          fetchData("patch_panels", setPatchPanels),
-          fetchData("switches", setSwitches),
-          fetchData("locations", setLocations),
-          fetchData("racks", setRacks),
-          fetchData("connections", setConnections),
-        ]);
+        await fetchAllData(); // Refresh all data
       } catch (error) {
         console.error(`Error deleting ${type}:`, error);
         showMessage(`Error deleting ${type}: ${error.message}`, 5000);
       }
     },
-    [fetchData, showMessage]
+    [fetchAllData, showMessage]
   );
 
   const handleShowPortStatus = useCallback(
@@ -562,7 +541,7 @@ function App() {
                     ? "border-b-4 border-blue-600 text-blue-800"
                     : "text-gray-600 hover:text-blue-600"
                 }`}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabClick(tab)}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1).replace("_", " ")}
               </button>
@@ -642,7 +621,6 @@ function App() {
                   connections={connections}
                   onDelete={handleDeleteConnection}
                   onEdit={handleEditConnection}
-                  // ADDED: Pass the modal handlers to the connection list
                   onViewPcDetails={handleViewPcDetails}
                   onShowPortStatus={handleShowPortStatus}
                 />
