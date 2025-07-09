@@ -20,7 +20,7 @@ from .services import (
 )
 # UPDATED: Import all necessary models for direct querying in routes
 from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings, SystemLog
-from .utils import MAX_HOPS # Import MAX_HOPS for CSV export/import headers
+from .utils import MAX_HOPS, validate_rack_unit_occupancy # Import MAX_HOPS for CSV export/import headers
 from werkzeug.utils import secure_filename # For secure filenames
 
 def register_routes(app):
@@ -552,8 +552,8 @@ def register_routes(app):
                         if existing_location:
                             raise ValueError(f"Location '{name}' already exists. Skipped.")
                         
-                        # The service will pick up the 'description' from row_dict if present
-                        LocationService.create_location(row_dict)
+                        # CORRECTED: Call the correct service method
+                        LocationService.create(row_dict)
 
                     elif entity_type == 'racks':
                         name = row_dict.get('name')
@@ -576,7 +576,8 @@ def register_routes(app):
                             'total_units': int(row_dict.get('total_units', 42)),
                             'orientation': row_dict.get('orientation', 'bottom-up'),
                         }
-                        RackService.create_rack(rack_data)
+                        # CORRECTED: Call the correct service method
+                        RackService.create(rack_data)
 
                     elif entity_type == 'pcs':
                         name = row_dict.get('name')
@@ -635,7 +636,8 @@ def register_routes(app):
                                 'rack_id': rack_id,
                                 'units_occupied': units_occupied, 
                             }
-                            PCService.update_pc(existing_pc, update_data)
+                            # CORRECTED: Call the correct service method
+                            PCService.update(existing_pc, update_data)
                         else:
                             create_data = {
                                 'name': name,
@@ -653,7 +655,8 @@ def register_routes(app):
                                 'rack_id': rack_id,
                                 'units_occupied': units_occupied, 
                             }
-                            PCService.create_pc(create_data)
+                            # CORRECTED: Call the correct service method
+                            PCService.create(create_data)
 
                     elif entity_type == 'patch_panels':
                         name = row_dict.get('name')
@@ -707,7 +710,8 @@ def register_routes(app):
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'description': row_dict.get('description')
                         }
-                        PatchPanelService.create_patch_panel(pp_data)
+                        # CORRECTED: Call the correct service method
+                        PatchPanelService.create(pp_data)
 
                     elif entity_type == 'switches':
                         name = row_dict.get('name')
@@ -765,7 +769,8 @@ def register_routes(app):
                             'description': row_dict.get('description'),
                             'usage': row_dict.get('usage')
                         }
-                        SwitchService.create_switch(switch_data)
+                        # CORRECTED: Call the correct service method
+                        SwitchService.create(switch_data)
 
                     elif entity_type == 'connections':
                         pc_name = row_dict.get('pc_name')
@@ -832,7 +837,8 @@ def register_routes(app):
                                     'cable_label': hop_cable_label
                                 })
                         
-                        ConnectionService.create_connection(connection_data)
+                        # CORRECTED: Call the correct service method
+                        ConnectionService.create(connection_data)
 
                     else:
                         raise ValueError('Invalid entity type for import.')

@@ -11,11 +11,10 @@ services:
     ports:
       - "5004:5000" # Maps host's 5004 to backend container's 5000
     volumes:
-      # Mount the backend source code for development.
-      # This will override the files copied during build, which is fine for dev.
+      # Mount the backend source code for development. This no longer conflicts with the data volume.
       - ./backend:/app/backend
-      # Persistent volume for SQLite DB, located within the backend app directory.
-      - network_doc_db:/app/backend/instance
+      # CORRECTED: Mount the persistent volume to a dedicated /data directory, separate from the code.
+      - network_doc_db:/data
     environment:
       FLASK_ENV: development
     # The CMD in Dockerfile.backend will execute start.sh
