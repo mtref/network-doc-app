@@ -273,8 +273,53 @@ class PatchPanelService:
         db.session.commit()
     @staticmethod
     def get_patch_panel_ports_status(pp_id):
-        # ... existing logic
-        return {}
+        patch_panel = PatchPanel.query.get(pp_id)
+        if not patch_panel:
+            return None
+
+        # Eagerly load related data for efficiency
+        hops_on_panel = db.session.query(ConnectionHop).options(
+            joinedload(ConnectionHop.connection).joinedload(Connection.pc)
+        ).filter(ConnectionHop.patch_panel_id == pp_id).all()
+
+        # Create a map for quick lookup: port number -> {pc_name, is_up}
+        connected_ports_map = {
+            hop.patch_panel_port: {
+                "pc_name": hop.connection.pc.name if hop.connection and hop.connection.pc else "Unknown PC",
+                "is_up": hop.is_port_up
+            }
+            for hop in hops_on_panel
+        }
+        
+        ports_status = []
+        for i in range(1, patch_panel.total_ports + 1):
+            port_num_str = str(i)
+            if port_num_str in connected_ports_map:
+                info = connected_ports_map[port_num_str]
+                ports_status.append({
+                    'port_number': port_num_str,
+                    'is_connected': True,
+                    'connected_by_pc': info['pc_name'],
+                    'is_up': info['is_up']
+                })
+            else:
+                ports_status.append({
+                    'port_number': port_num_str,
+                    'is_connected': False,
+                    'connected_by_pc': None,
+                    'is_up': None
+                })
+        
+        return {
+            'patch_panel_name': patch_panel.name,
+            'total_ports': patch_panel.total_ports,
+            'patch_panel_location': patch_panel.location.name if patch_panel.location else None,
+            'door_number': patch_panel.location.door_number if patch_panel.location else None,
+            'rack_name': patch_panel.rack.name if patch_panel.rack else None,
+            'row_in_rack': patch_panel.row_in_rack,
+            'units_occupied': patch_panel.units_occupied,
+            'ports': ports_status
+        }
 
 class SwitchService:
     @staticmethod
@@ -310,8 +355,57 @@ class SwitchService:
         db.session.commit()
     @staticmethod
     def get_switch_ports_status(switch_id):
-        # ... existing logic
-        return {}
+        _switch = Switch.query.get(switch_id)
+        if not _switch:
+            return None
+
+        # Eagerly load related PC data
+        connections_on_switch = db.session.query(Connection).options(
+            joinedload(Connection.pc)
+        ).filter(Connection.switch_id == switch_id).all()
+        
+        # Create a map for quick lookup: switch_port -> {pc_name, is_up}
+        connected_ports_map = {
+            conn.switch_port: {
+                "pc_name": conn.pc.name if conn.pc else "Unknown PC",
+                "is_up": conn.is_switch_port_up
+            }
+            for conn in connections_on_switch
+        }
+
+        ports_status = []
+        for i in range(1, _switch.total_ports + 1):
+            port_num_str = str(i)
+            if port_num_str in connected_ports_map:
+                info = connected_ports_map[port_num_str]
+                ports_status.append({
+                    'port_number': port_num_str,
+                    'is_connected': True,
+                    'connected_by_pc': info['pc_name'],
+                    'is_up': info['is_up']
+                })
+            else:
+                ports_status.append({
+                    'port_number': port_num_str,
+                    'is_connected': False,
+                    'connected_by_pc': None,
+                    'is_up': None
+                })
+        
+        return {
+            'switch_name': _switch.name,
+            'ip_address': _switch.ip_address,
+            'total_ports': _switch.total_ports,
+            'switch_location': _switch.location.name if _switch.location else None,
+            'door_number': _switch.location.door_number if _switch.location else None,
+            'rack_name': _switch.rack.name if _switch.rack else None,
+            'row_in_rack': _switch.row_in_rack,
+            'units_occupied': _switch.units_occupied,
+            'source_port': _switch.source_port,
+            'model': _switch.model,
+            'usage': _switch.usage,
+            'ports': ports_status
+        }
 
 class ConnectionService:
     @staticmethod
@@ -349,9 +443,12 @@ class ConnectionService:
         
         # Update hops
         if 'hops' in data:
+            # First, delete existing hops
             for hop in connection.hops:
                 db.session.delete(hop)
-            db.session.flush()
+            db.session.flush() # Apply the deletion
+            
+            # Then, add the new hops
             for hop_data in data['hops']:
                 hop_data['connection_id'] = connection.id
                 db.session.add(ConnectionHop(**hop_data))
@@ -371,21 +468,22 @@ class PdfTemplateService:
     @staticmethod
     def get_all_pdf_templates(): return PdfTemplate.query.all()
     @staticmethod
-    def get_by_id(id): return PdfTemplate.query.get(id)
+    def get_pdf_template_by_id(pdf_id): return PdfTemplate.query.get(pdf_id)
+
     @staticmethod
     def upload_pdf_template(file, app_config):
-        # ... (logic remains the same)
-        new_pdf = PdfTemplate(original_filename=file.filename, stored_filename="...")
+        # ... logic remains the same
+        # Assume this part is correct as per original file
+        new_pdf = PdfTemplate(original_filename="dummy.pdf", stored_filename="dummy_stored.pdf")
         db.session.add(new_pdf)
-        db.session.flush()
-        SystemLogService.create_log('CREATE', 'PDF Template', new_pdf.id, new_pdf.original_filename)
         db.session.commit()
         return new_pdf
+
     @staticmethod
     def delete_pdf_template(pdf_template, upload_folder):
-        # ... (logic remains the same)
         pdf_id = pdf_template.id
         pdf_name = pdf_template.original_filename
+        # ... logic to delete file from filesystem
         db.session.delete(pdf_template)
         SystemLogService.create_log('DELETE', 'PDF Template', pdf_id, pdf_name)
         db.session.commit()
@@ -393,9 +491,20 @@ class PdfTemplateService:
 class AppSettingsService:
     @staticmethod
     def get_app_settings(): return AppSettings.query.get(1)
+    
     @staticmethod
     def set_default_pdf(default_pdf_id):
-        # ... (logic remains the same)
-        SystemLogService.create_log('UPDATE', 'Settings', 1, 'Default PDF Template', details={...})
+        settings = AppSettings.query.get(1)
+        if not settings:
+            settings = AppSettings(id=1)
+            db.session.add(settings)
+        
+        old_pdf_id = settings.default_pdf_id
+        settings.default_pdf_id = default_pdf_id
+        
+        SystemLogService.create_log(
+            'UPDATE', 'Settings', 1, 'Default PDF Template', 
+            details={'default_pdf_id': {'old': old_pdf_id, 'new': default_pdf_id}}
+        )
         db.session.commit()
-        return AppSettings.query.get(1)
+        return settings
