@@ -1,27 +1,25 @@
 // frontend/src/components/SwitchList.js
 // This component displays a searchable list of Switches in a card format,
 // now including filter options by Location, Rack, Model, and Usage.
-// Added a "View Diagram" button to each switch card.
-// UPDATED: Added units_occupied for Switches.
-// FIXED: Correctly casts location_id and rack_id to strings when editing.
+// UPDATED: Added support for custom 'Usage' values.
 
 import React, { useState, useEffect } from "react";
 import SearchBar from "./SearchBar";
 import {
-  Server, // Main icon for Switch, also for PC type Server
-  Router, // IP Address
-  MapPin, // Location/Office
-  Info, // Description/Generic Info
-  PlusCircle, // Add button
+  Server,
+  Router,
+  MapPin,
+  Info,
+  PlusCircle,
   ChevronDown,
   ChevronUp,
-  Columns, // Rack
-  HardDrive, // Total Ports
-  Link, // Source Port
-  Filter, // Filter section
-  Network, // Diagram button
-  Cpu, // Model
-  Activity, // Usage
+  Columns,
+  HardDrive,
+  Link,
+  Filter,
+  Network,
+  Cpu,
+  Activity,
 } from "lucide-react";
 
 function SwitchList({
@@ -42,12 +40,16 @@ function SwitchList({
   const [switchFormLocationId, setSwitchFormLocationId] = useState("");
   const [switchFormRowInRack, setSwitchFormRowInRack] = useState("");
   const [switchFormRackId, setSwitchFormRackId] = useState("");
-  const [switchFormUnitsOccupied, setSwitchFormUnitsOccupied] = useState(1); // NEW: State for units occupied
+  const [switchFormUnitsOccupied, setSwitchFormUnitsOccupied] = useState(1);
   const [switchFormTotalPorts, setSwitchFormTotalPorts] = useState(1);
   const [switchFormSourcePort, setSwitchFormSourcePort] = useState("");
   const [switchFormModel, setSwitchFormModel] = useState("");
   const [switchFormDesc, setSwitchFormDesc] = useState("");
   const [switchFormUsage, setSwitchFormUsage] = useState("");
+
+  // NEW: State for custom usage input
+  const [showCustomUsageInput, setShowCustomUsageInput] = useState(false);
+  const [customUsageValue, setCustomUsageValue] = useState("");
 
   const [isAddSwitchFormExpanded, setIsAddSwitchFormExpanded] = useState(false);
 
@@ -64,14 +66,13 @@ function SwitchList({
   const ipRegex =
     /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
 
-  const usageOptions = [
+  const initialUsageOptions = [
     "Production",
     "Development",
     "Test",
     "Staging",
     "Backup",
     "Monitoring",
-    "Other",
   ];
 
   useEffect(() => {
@@ -100,10 +101,11 @@ function SwitchList({
     ].sort();
     setAvailableModelOptions(uniqueModels);
 
-    const uniqueUsage = [
-      ...new Set(switches.map((s) => s.usage).filter(Boolean)),
-    ].sort();
-    setAvailableUsageOptions(uniqueUsage);
+    const allUsages = new Set([
+      ...initialUsageOptions,
+      ...switches.map((s) => s.usage).filter(Boolean),
+    ]);
+    setAvailableUsageOptions([...allUsages].sort());
   }, [switches, locations, racks]);
 
   useEffect(() => {
@@ -125,7 +127,7 @@ function SwitchList({
           .includes(lowerCaseSearchTerm) ||
         (_switch.units_occupied ? `${_switch.units_occupied}u` : "")
           .toLowerCase()
-          .includes(lowerCaseSearchTerm) || // NEW: Search by units occupied
+          .includes(lowerCaseSearchTerm) ||
         (_switch.rack_name || "").toLowerCase().includes(lowerCaseSearchTerm) ||
         switchRackNameWithLocation
           .toLowerCase()
@@ -182,7 +184,6 @@ function SwitchList({
     setEditingSwitch(_switch);
     setSwitchFormName(_switch.name);
     setSwitchFormIp(_switch.ip_address || "");
-    // *** BUG FIX: Cast IDs to strings to match dropdown value types ***
     setSwitchFormLocationId(String(_switch.location_id || ""));
     setSwitchFormRackId(String(_switch.rack_id || ""));
     setSwitchFormRowInRack(_switch.row_in_rack || "");
@@ -191,7 +192,18 @@ function SwitchList({
     setSwitchFormSourcePort(_switch.source_port || "");
     setSwitchFormModel(_switch.model || "");
     setSwitchFormDesc(_switch.description || "");
-    setSwitchFormUsage(_switch.usage || "");
+
+    const usage = _switch.usage || "";
+    if (initialUsageOptions.includes(usage) || usage === "") {
+      setSwitchFormUsage(usage);
+      setShowCustomUsageInput(false);
+      setCustomUsageValue("");
+    } else {
+      setSwitchFormUsage("Other");
+      setShowCustomUsageInput(true);
+      setCustomUsageValue(usage);
+    }
+
     setIsAddSwitchFormExpanded(true);
   };
 
@@ -256,14 +268,12 @@ function SwitchList({
       source_port: switchFormSourcePort,
       model: switchFormModel,
       description: switchFormDesc,
-      usage: switchFormUsage,
+      usage: switchFormUsage === "Other" ? customUsageValue : switchFormUsage,
     };
 
     if (editingSwitch) {
-      console.log("Updating switch:", editingSwitch.id, switchData);
       await onUpdateEntity("switches", editingSwitch.id, switchData);
     } else {
-      console.log("Adding new switch:", switchData);
       await onAddEntity("switches", switchData);
     }
     setEditingSwitch(null);
@@ -278,7 +288,20 @@ function SwitchList({
     setSwitchFormModel("");
     setSwitchFormDesc("");
     setSwitchFormUsage("");
+    setShowCustomUsageInput(false);
+    setCustomUsageValue("");
     setIsAddSwitchFormExpanded(false);
+  };
+
+  const handleUsageChange = (e) => {
+    const value = e.target.value;
+    setSwitchFormUsage(value);
+    if (value === "Other") {
+      setShowCustomUsageInput(true);
+    } else {
+      setShowCustomUsageInput(false);
+      setCustomUsageValue("");
+    }
   };
 
   const sortedLocations = [...locations].sort((a, b) =>
@@ -288,15 +311,12 @@ function SwitchList({
 
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      {/* Filter Options */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-wrap gap-4 items-center">
         <Filter size={20} className="text-gray-600 flex-shrink-0" />
         <span className="font-semibold text-gray-700 mr-2">Filter By:</span>
 
-        {/* Location Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-location-filter"
@@ -319,7 +339,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Rack Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-rack-filter"
@@ -342,7 +361,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Model Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-model-filter"
@@ -365,7 +383,6 @@ function SwitchList({
           </select>
         </div>
 
-        {/* Usage Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
           <label
             htmlFor="switch-usage-filter"
@@ -380,7 +397,7 @@ function SwitchList({
             className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           >
             <option value="all">All</option>
-            {usageOptions.map((usage) => (
+            {availableUsageOptions.map((usage) => (
               <option key={usage} value={usage}>
                 {usage}
               </option>
@@ -389,9 +406,7 @@ function SwitchList({
         </div>
       </div>
 
-      {/* Add/Edit Switch Form (Collapsible) - Outer container now has width and centering */}
       <div className="bg-white rounded-lg shadow-sm border border-blue-200 mx-auto w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
-        {/* Header (no mx-auto or w-x/y here, it's w-full of its parent) */}
         <div
           className="flex justify-center items-center p-3 cursor-pointer bg-red-50 hover:bg-red-100 transition-colors duration-200 rounded-t-lg"
           onClick={() => setIsAddSwitchFormExpanded(!isAddSwitchFormExpanded)}
@@ -411,68 +426,53 @@ function SwitchList({
             isAddSwitchFormExpanded ? "expanded" : ""
           }`}
         >
-          {/* Form container with matching width, centering, and a more visible border */}
           <form
             onSubmit={handleSwitchFormSubmit}
             className="p-5 space-y-3 border border-gray-300 rounded-b-lg shadow-md bg-gray-50"
           >
-            <div className="flex items-center space-x-2">
-              <Server size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Switch Name"
-                value={switchFormName}
-                onChange={(e) => setSwitchFormName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Router size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="IP Address (Optional)"
-                value={switchFormIp}
-                onChange={(e) => setSwitchFormIp(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <MapPin size={20} className="text-gray-500" />
-              <select
-                value={switchFormLocationId}
-                onChange={(e) => {
-                  setSwitchFormLocationId(e.target.value);
-                  setSwitchFormRackId(""); // Reset rack when location changes
-                  setSwitchFormRowInRack(""); // Reset row
-                  setSwitchFormUnitsOccupied(1); // Reset units
-                }}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">-- Select Location --</option>
-                {sortedLocations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {locations.length === 0 && (
-              <p className="text-sm text-red-500 mt-1">
-                Please add locations first.
-              </p>
-            )}
+            <input
+              type="text"
+              placeholder="Switch Name"
+              value={switchFormName}
+              onChange={(e) => setSwitchFormName(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+              required
+            />
+            <input
+              type="text"
+              placeholder="IP Address (Optional)"
+              value={switchFormIp}
+              onChange={(e) => setSwitchFormIp(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <select
+              value={switchFormLocationId}
+              onChange={(e) => {
+                setSwitchFormLocationId(e.target.value);
+                setSwitchFormRackId("");
+                setSwitchFormRowInRack("");
+                setSwitchFormUnitsOccupied(1);
+              }}
+              className="w-full p-2 border border-gray-300 rounded-md"
+              required
+            >
+              <option value="">-- Select Location --</option>
+              {sortedLocations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name} {loc.door_number && `(Door: ${loc.door_number})`}
+                </option>
+              ))}
+            </select>
             <div className="flex items-center space-x-2">
               <Columns size={20} className="text-gray-500" />
               <select
                 value={switchFormRackId}
                 onChange={(e) => {
                   setSwitchFormRackId(e.target.value);
-                  setSwitchFormRowInRack(""); // Reset row when rack changes
-                  setSwitchFormUnitsOccupied(1); // Reset units
+                  setSwitchFormRowInRack("");
+                  setSwitchFormUnitsOccupied(1);
                 }}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-md"
               >
                 <option value="">-- Select Rack (Optional) --</option>
                 {sortedRacks
@@ -492,15 +492,6 @@ function SwitchList({
                   ))}
               </select>
             </div>
-            {(racks.length === 0 ||
-              (switchFormLocationId &&
-                sortedRacks.filter(
-                  (rack) => String(rack.location_id) === switchFormLocationId
-                ).length === 0)) && (
-              <p className="text-sm text-gray-500 mt-1">
-                No racks available for selected location.
-              </p>
-            )}
             {switchFormRackId && (
               <>
                 <div className="flex items-center space-x-2">
@@ -510,7 +501,7 @@ function SwitchList({
                     placeholder="Starting Row in Rack (e.g., 1)"
                     value={switchFormRowInRack}
                     onChange={(e) => setSwitchFormRowInRack(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     min="1"
                     required={!!switchFormRackId}
                   />
@@ -522,108 +513,71 @@ function SwitchList({
                     placeholder="Units Occupied (e.g., 1, 2)"
                     value={switchFormUnitsOccupied}
                     onChange={(e) => setSwitchFormUnitsOccupied(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     min="1"
                     required={!!switchFormRackId}
                   />
                 </div>
               </>
             )}
-            <div className="flex items-center space-x-2">
-              <HardDrive size={20} className="text-gray-500" />
-              <input
-                type="number"
-                placeholder="Total Ports (e.g., 4)"
-                value={switchFormTotalPorts}
-                onChange={(e) => setSwitchFormTotalPorts(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                min="1"
-                required
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Link size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Source Port (Optional)"
-                value={switchFormSourcePort}
-                onChange={(e) => setSwitchFormSourcePort(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Cpu size={20} className="text-gray-500" />
-              <input
-                type="text"
-                placeholder="Model (Optional)"
-                value={switchFormModel}
-                onChange={(e) => setSwitchFormModel(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Activity size={20} className="text-gray-500" />
-              <select
-                value={switchFormUsage}
-                onChange={(e) => setSwitchFormUsage(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">-- Select Usage (Optional) --</option>
-                {usageOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-                <option value="other">Add Custom Usage...</option>
-              </select>
-            </div>
-            {switchFormUsage === "other" && (
+            <input
+              type="number"
+              placeholder="Total Ports (e.g., 4)"
+              value={switchFormTotalPorts}
+              onChange={(e) => setSwitchFormTotalPorts(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+              min="1"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Source Port (Optional)"
+              value={switchFormSourcePort}
+              onChange={(e) => setSwitchFormSourcePort(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <input
+              type="text"
+              placeholder="Model (Optional)"
+              value={switchFormModel}
+              onChange={(e) => setSwitchFormModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <select
+              value={switchFormUsage}
+              onChange={handleUsageChange}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            >
+              <option value="">-- Select Usage (Optional) --</option>
+              {initialUsageOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value="Other">Other...</option>
+            </select>
+            {showCustomUsageInput && (
               <input
                 type="text"
                 placeholder="Enter custom usage"
-                onBlur={(e) => {
-                  const customUsage = e.target.value.trim();
-                  if (customUsage) {
-                    // Check if the custom usage already exists in the options
-                    if (!usageOptions.includes(customUsage)) {
-                      // Add the new custom usage to the options
-                      usageOptions.push(customUsage);
-                    }
-                    setSwitchFormUsage(customUsage);
-                  } else {
-                    setSwitchFormUsage("");
-                  }
-                }}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                value={customUsageValue}
+                onChange={(e) => setCustomUsageValue(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md"
               />
             )}
-            <div className="flex items-start space-x-2">
-              <Info size={20} className="text-gray-500 mt-2" />
-              <textarea
-                placeholder="Description (Optional)"
-                value={switchFormDesc}
-                onChange={(e) => setSwitchFormDesc(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-y"
-                rows="3"
-              ></textarea>
-            </div>
+            <textarea
+              placeholder="Description (Optional)"
+              value={switchFormDesc}
+              onChange={(e) => setSwitchFormDesc(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md resize-y"
+              rows="3"
+            ></textarea>
             <div className="flex space-x-3 justify-end">
               {editingSwitch && (
                 <button
                   type="button"
                   onClick={() => {
                     setEditingSwitch(null);
-                    setSwitchFormName("");
-                    setSwitchFormIp("");
-                    setSwitchFormLocationId("");
-                    setSwitchFormRowInRack("");
-                    setSwitchFormRackId("");
-                    setSwitchFormUnitsOccupied(1);
-                    setSwitchFormTotalPorts(1);
-                    setSwitchFormSourcePort("");
-                    setSwitchFormModel("");
-                    setSwitchFormDesc("");
-                    setSwitchFormUsage("");
                     setIsAddSwitchFormExpanded(false);
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200"
@@ -642,7 +596,6 @@ function SwitchList({
         </div>
       </div>
 
-      {/* Switch List Display */}
       {filteredSwitches.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSwitches.map((_switch) => (
@@ -685,11 +638,11 @@ function SwitchList({
                 {_switch.source_port || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Model:{" "}
+                <Cpu size={16} className="text-gray-500 mr-2" /> Model:{" "}
                 {_switch.model || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-1 flex items-center">
-                <Info size={16} className="text-gray-500 mr-2" /> Usage:{" "}
+                <Activity size={16} className="text-gray-500 mr-2" /> Usage:{" "}
                 {_switch.usage || "N/A"}
               </p>
               <p className="text-sm text-gray-700 mb-3 flex items-start">

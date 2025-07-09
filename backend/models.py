@@ -89,6 +89,13 @@ class PC(db.Model):
     row_in_rack = db.Column(db.Integer, nullable=True)
     rack_id = db.Column(db.Integer, db.ForeignKey('racks.id'), nullable=True)
     units_occupied = db.Column(db.Integer, nullable=False, default=1)
+    
+    # NEW FIELDS
+    serial_number = db.Column(db.String(255), nullable=True)
+    pc_specification = db.Column(db.String(500), nullable=True)
+    monitor_model = db.Column(db.String(255), nullable=True)
+    disk_info = db.Column(db.String(500), nullable=True) # For size, type, and number of disks
+
     rack = db.relationship('Rack', backref='pcs_in_rack', lazy=True)
 
     def to_dict(self):
@@ -110,6 +117,11 @@ class PC(db.Model):
             'units_occupied': self.units_occupied,
             'rack_name': self.rack.name if self.rack else None,
             'rack': self.rack.to_dict() if self.rack else None,
+            # NEW FIELDS
+            'serial_number': self.serial_number,
+            'pc_specification': self.pc_specification,
+            'monitor_model': self.monitor_model,
+            'disk_info': self.disk_info,
         }
 
 class PatchPanel(db.Model):

@@ -16,12 +16,11 @@ from .services import (
     ConnectionService,
     PdfTemplateService,
     AppSettingsService,
-    SystemLogService  # Import the new SystemLogService
+    SystemLogService
 )
-# UPDATED: Import all necessary models for direct querying in routes
 from .models import Location, Rack, PC, PatchPanel, Switch, Connection, ConnectionHop, PdfTemplate, AppSettings, SystemLog
-from .utils import MAX_HOPS, validate_rack_unit_occupancy # Import MAX_HOPS for CSV export/import headers
-from werkzeug.utils import secure_filename # For secure filenames
+from .utils import MAX_HOPS, validate_rack_unit_occupancy
+from werkzeug.utils import secure_filename
 
 def register_routes(app):
     """
@@ -422,36 +421,42 @@ def register_routes(app):
         headers = []
         data_rows = []
         filename = f'{entity_type}.csv'
-        errors = [] # Collect errors during export if any
+        errors = []
 
         try:
             if entity_type == 'locations':
-                # ADDED: 'description' to headers
                 headers = ['id', 'name', 'door_number', 'description']
                 items = LocationService.get_all_locations()
-                # ADDED: item.description to data row
                 data_rows = [[item.id, item.name, item.door_number, item.description] for item in items]
             elif entity_type == 'racks':
                 headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation']
                 items = RackService.get_all_racks()
                 data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in items]
             elif entity_type == 'pcs':
-                # UPDATED: Add 'units_occupied' to PC export headers
-                headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name']
+                # UPDATED: Add new fields to PC export headers
+                headers = [
+                    'id', 'name', 'ip_address', 'username', 'in_domain', 
+                    'operating_system', 'model', 'office', 'description', 
+                    'multi_port', 'type', 'usage', 'row_in_rack', 'units_occupied', 
+                    'rack_id', 'rack_name', 'serial_number', 'pc_specification', 
+                    'monitor_model', 'disk_info'
+                ]
                 items = PCService.get_all_pcs()
-                # UPDATED: Add 'units_occupied' to PC export data
-                data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.units_occupied, pc.rack_id, pc.rack.name if pc.rack else ''] for pc in items]
+                # UPDATED: Add new fields to PC export data
+                data_rows = [[
+                    pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, 
+                    pc.operating_system, pc.model, pc.office, pc.description, 
+                    pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.units_occupied, 
+                    pc.rack_id, pc.rack.name if pc.rack else '', pc.serial_number, 
+                    pc.pc_specification, pc.monitor_model, pc.disk_info
+                ] for pc in items]
             elif entity_type == 'patch_panels':
-                # UPDATED: Add 'units_occupied' to Patch Panel export headers
                 headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'description']
                 items = PatchPanelService.get_all_patch_panels()
-                # UPDATED: Add 'units_occupied' to Patch Panel export data
                 data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.location.door_number if pp.location else '', pp.row_in_rack, pp.units_occupied, pp.rack_id, pp.rack.name if pp.rack else '', pp.total_ports, pp.description] for pp in items]
             elif entity_type == 'switches':
-                # UPDATED: Add 'units_occupied' to Switch export headers
                 headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'source_port', 'model', 'description', 'usage']
                 items = SwitchService.get_all_switches()
-                # UPDATED: Add 'units_occupied' to Switch export data
                 data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.location.door_number if s.location else '', s.row_in_rack, s.units_occupied, s.rack_id, s.rack.name if s.rack else '', s.total_ports, s.source_port, s.model, s.description, s.usage] for s in items]
             elif entity_type == 'connections':
                 headers = [
@@ -547,12 +552,9 @@ def register_routes(app):
                         name = row_dict.get('name')
                         if not name:
                             raise ValueError("Missing 'name' field.")
-                        # Check for existing location by name before creating
                         existing_location = db.session.query(Location).filter_by(name=name).first()
                         if existing_location:
                             raise ValueError(f"Location '{name}' already exists. Skipped.")
-                        
-                        # CORRECTED: Call the correct service method
                         LocationService.create(row_dict)
 
                     elif entity_type == 'racks':
@@ -576,7 +578,6 @@ def register_routes(app):
                             'total_units': int(row_dict.get('total_units', 42)),
                             'orientation': row_dict.get('orientation', 'bottom-up'),
                         }
-                        # CORRECTED: Call the correct service method
                         RackService.create(rack_data)
 
                     elif entity_type == 'pcs':
@@ -634,9 +635,13 @@ def register_routes(app):
                                 'usage': row_dict.get('usage', existing_pc.usage),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
-                                'units_occupied': units_occupied, 
+                                'units_occupied': units_occupied,
+                                # NEW FIELDS
+                                'serial_number': row_dict.get('serial_number', existing_pc.serial_number),
+                                'pc_specification': row_dict.get('pc_specification', existing_pc.pc_specification),
+                                'monitor_model': row_dict.get('monitor_model', existing_pc.monitor_model),
+                                'disk_info': row_dict.get('disk_info', existing_pc.disk_info),
                             }
-                            # CORRECTED: Call the correct service method
                             PCService.update(existing_pc, update_data)
                         else:
                             create_data = {
@@ -653,9 +658,13 @@ def register_routes(app):
                                 'usage': row_dict.get('usage'),
                                 'row_in_rack': row_in_rack,
                                 'rack_id': rack_id,
-                                'units_occupied': units_occupied, 
+                                'units_occupied': units_occupied,
+                                # NEW FIELDS
+                                'serial_number': row_dict.get('serial_number'),
+                                'pc_specification': row_dict.get('pc_specification'),
+                                'monitor_model': row_dict.get('monitor_model'),
+                                'disk_info': row_dict.get('disk_info'),
                             }
-                            # CORRECTED: Call the correct service method
                             PCService.create(create_data)
 
                     elif entity_type == 'patch_panels':
@@ -710,7 +719,6 @@ def register_routes(app):
                             'total_ports': int(row_dict.get('total_ports', 1)),
                             'description': row_dict.get('description')
                         }
-                        # CORRECTED: Call the correct service method
                         PatchPanelService.create(pp_data)
 
                     elif entity_type == 'switches':
@@ -769,7 +777,6 @@ def register_routes(app):
                             'description': row_dict.get('description'),
                             'usage': row_dict.get('usage')
                         }
-                        # CORRECTED: Call the correct service method
                         SwitchService.create(switch_data)
 
                     elif entity_type == 'connections':
@@ -837,7 +844,6 @@ def register_routes(app):
                                     'cable_label': hop_cable_label
                                 })
                         
-                        # CORRECTED: Call the correct service method
                         ConnectionService.create(connection_data)
 
                     else:

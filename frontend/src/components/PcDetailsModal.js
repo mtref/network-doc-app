@@ -1,6 +1,6 @@
 // frontend/src/components/PcDetailsModal.js
 // This modal displays detailed information about a selected PC.
-// UPDATED: Now displays units_occupied for Server type PCs.
+// UPDATED: Now displays new fields: Serial Number, PC Specification, Monitor Model, and Disk Info.
 
 import React from "react";
 import {
@@ -13,12 +13,17 @@ import {
   User,
   HardDrive,
   ToggleRight,
+  ToggleLeft,
   MonitorCheck,
   Activity,
   Tag,
   Link,
   Router,
   Globe,
+  Fingerprint,
+  ClipboardList,
+  Database,
+  Monitor,
 } from "lucide-react";
 
 function PcDetailsModal({ isOpen, onClose, pc }) {
@@ -57,11 +62,24 @@ function PcDetailsModal({ isOpen, onClose, pc }) {
               <User size={16} className="text-gray-500 mr-2" /> Username:{" "}
               <span className="font-medium">{pc.username || "N/A"}</span>
             </p>
+            <p className="text-sm text-gray-700 flex items-center col-span-full">
+              <Fingerprint size={16} className="text-gray-500 mr-2" /> Serial
+              Number:{" "}
+              <span className="font-medium">{pc.serial_number || "N/A"}</span>
+            </p>
+            <p className="text-sm text-gray-700 flex items-center col-span-full">
+              <Monitor size={16} className="text-gray-500 mr-2" /> Monitor(s):{" "}
+              <span className="font-medium">{pc.monitor_model || "N/A"}</span>
+            </p>
+            <p className="text-sm text-gray-700 flex items-center col-span-full">
+              <Database size={16} className="text-gray-500 mr-2" /> Disk(s):{" "}
+              <span className="font-medium">{pc.disk_info || "N/A"}</span>
+            </p>
             <p className="text-sm text-gray-700 flex items-center">
               {pc.in_domain ? (
                 <ToggleRight size={16} className="text-green-500 mr-2" />
               ) : (
-                <ToggleRight size={16} className="text-gray-400 mr-2" />
+                <ToggleLeft size={16} className="text-red-500 mr-2" />
               )}{" "}
               In Domain:{" "}
               <span className="font-medium">{pc.in_domain ? "Yes" : "No"}</span>
@@ -93,6 +111,15 @@ function PcDetailsModal({ isOpen, onClose, pc }) {
             <p className="text-sm text-gray-700 flex items-center">
               <Activity size={16} className="text-gray-500 mr-2" /> Usage:{" "}
               <span className="font-medium">{pc.usage || "N/A"}</span>
+            </p>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="text-md font-semibold text-gray-700 mb-2 flex items-center">
+              <ClipboardList size={18} className="mr-2" /> PC Specification:
+            </h3>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {pc.pc_specification || "No specification provided."}
             </p>
           </div>
 

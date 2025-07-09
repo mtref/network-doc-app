@@ -10,7 +10,6 @@ const usageOptions = [
   "Staging",
   "Backup",
   "Monitoring",
-  "Other",
 ];
 
 export const useConnectionFormState = ({
@@ -40,7 +39,6 @@ export const useConnectionFormState = ({
 
   // Cable from PC to Wall Point
   const [wallPointLabel, setWallPointLabel] = useState("");
-  // ADDED: State for the new wall point cable fields
   const [wallPointCableColor, setWallPointCableColor] = useState("");
   const [wallPointCableLabel, setWallPointCableLabel] = useState("");
 
@@ -89,6 +87,13 @@ export const useConnectionFormState = ({
   const [newPcRowInRack, setNewPcRowInRack] = useState("");
   const [newPcRackId, setNewPcRackId] = useState("");
   const [newPcUnitsOccupied, setNewPcUnitsOccupied] = useState(1);
+  const [newPcSerialNumber, setNewPcSerialNumber] = useState("");
+  const [newPcSpecification, setNewPcSpecification] = useState("");
+  const [newPcMonitorModel, setNewPcMonitorModel] = useState("");
+  const [newPcDiskInfo, setNewPcDiskInfo] = useState("");
+  const [showNewPcCustomUsageInput, setShowNewPcCustomUsageInput] =
+    useState(false);
+  const [newPcCustomUsageValue, setNewPcCustomUsageValue] = useState("");
 
   // State for the "Add New Patch Panel" form
   const [newPpName, setNewPpName] = useState("");
@@ -153,6 +158,67 @@ export const useConnectionFormState = ({
     }
   }, [selectedLocationIdForSwitch, switches, editingConnection]);
 
+  const resetFormFields = useCallback(() => {
+    setCurrentStep(1);
+    setPcId("");
+    setSwitchId("");
+    setSelectedLocationIdForSwitch("");
+    setSwitchPort("");
+    setIsSwitchPortUp(true);
+    setCableColor("");
+    setCableLabel("");
+    setWallPointLabel("");
+    setWallPointCableColor("");
+    setWallPointCableLabel("");
+    setHops([]);
+
+    // Reset PC form
+    setNewPcName("");
+    setNewPcIp("");
+    setNewPcUsername("");
+    setNewPcInDomain(false);
+    setNewPcOs("");
+    setNewPcModel("");
+    setNewPcOffice("");
+    setNewPcDesc("");
+    setNewPcMultiPort(false);
+    setNewPcType("Workstation");
+    setNewPcUsage("");
+    setNewPcRowInRack("");
+    setNewPcRackId("");
+    setNewPcUnitsOccupied(1);
+    setNewPcSerialNumber("");
+    setNewPcSpecification("");
+    setNewPcMonitorModel("");
+    setNewPcDiskInfo("");
+    setShowNewPcCustomUsageInput(false);
+    setNewPcCustomUsageValue("");
+
+    // Reset PP form
+    setNewPpName("");
+    setNewPpLocationId("");
+    setNewPpRowInRack("");
+    setNewPpRackId("");
+    setNewPpTotalPorts(1);
+    setNewPpDesc("");
+    setNewPpUnitsOccupied(1);
+
+    // Reset Switch form
+    setNewSwitchName("");
+    setNewSwitchIp("");
+    setNewSwitchLocationId("");
+    setNewSwitchRowInRack("");
+    setNewSwitchRackId("");
+    setNewSwitchTotalPorts(1);
+    setNewSwitchSourcePort("");
+    setNewSwitchModel("");
+    setNewSwitchDesc("");
+    setNewSwitchUsage("");
+    setNewSwitchUnitsOccupied(1);
+
+    fetchAvailablePcs();
+  }, [fetchAvailablePcs]);
+
   useEffect(() => {
     if (editingConnection) {
       setPcId(String(editingConnection.pc_id || ""));
@@ -165,16 +231,12 @@ export const useConnectionFormState = ({
       setCableColor(editingConnection.cable_color || "");
       setCableLabel(editingConnection.cable_label || "");
       setWallPointLabel(editingConnection.wall_point_label || "");
-      // ADDED: Set new wall point cable fields when editing
       setWallPointCableColor(editingConnection.wall_point_cable_color || "");
       setWallPointCableLabel(editingConnection.wall_point_cable_label || "");
       setHops(
         editingConnection.hops.map((hop) => ({
+          ...hop,
           patch_panel_id: String(hop.patch_panel?.id || ""),
-          patch_panel_port: hop.patch_panel_port || "",
-          is_port_up: hop.is_port_up ?? true,
-          cable_color: hop.cable_color || "",
-          cable_label: hop.cable_label || "",
           location_id: String(hop.patch_panel?.location_id || ""),
         })) || []
       );
@@ -192,57 +254,9 @@ export const useConnectionFormState = ({
       });
       setCurrentStep(2);
     } else {
-      // Reset all form states
-      setCurrentStep(1);
-      setPcId("");
-      setSwitchId("");
-      setSelectedLocationIdForSwitch("");
-      setSwitchPort("");
-      setIsSwitchPortUp(true);
-      setCableColor("");
-      setCableLabel("");
-      setWallPointLabel("");
-      // ADDED: Reset new wall point cable fields
-      setWallPointCableColor("");
-      setWallPointCableLabel("");
-      setHops([]);
-
-      setNewPcName("");
-      setNewPcIp("");
-      setNewPcUsername("");
-      setNewPcInDomain(false);
-      setNewPcOs("");
-      setNewPcModel("");
-      setNewPcOffice("");
-      setNewPcDesc("");
-      setNewPcMultiPort(false);
-      setNewPcType("Workstation");
-      setNewPcUsage("");
-      setNewPcRowInRack("");
-      setNewPcRackId("");
-      setNewPcUnitsOccupied(1);
-      setNewPpName("");
-      setNewPpLocationId("");
-      setNewPpRowInRack("");
-      setNewPpRackId("");
-      setNewPpTotalPorts(1);
-      setNewPpDesc("");
-      setNewPpUnitsOccupied(1);
-      setNewSwitchName("");
-      setNewSwitchIp("");
-      setNewSwitchLocationId("");
-      setNewSwitchRowInRack("");
-      setNewSwitchRackId("");
-      setNewSwitchTotalPorts(1);
-      setNewSwitchSourcePort("");
-      setNewSwitchModel("");
-      setNewSwitchDesc("");
-      setNewSwitchUsage("");
-      setNewSwitchUnitsOccupied(1);
-
-      fetchAvailablePcs();
+      resetFormFields();
     }
-  }, [editingConnection, fetchAvailablePcs, setEditingConnection]);
+  }, [editingConnection, resetFormFields]);
 
   useEffect(() => {
     if (
@@ -324,7 +338,6 @@ export const useConnectionFormState = ({
       cable_color: cableColor,
       cable_label: cableLabel,
       wall_point_label: wallPointLabel,
-      // ADDED: Include new wall point cable fields in submitted data
       wall_point_cable_color: wallPointCableColor,
       wall_point_cable_label: wallPointCableLabel,
       hops: hops.map((hop) => ({
@@ -412,6 +425,12 @@ export const useConnectionFormState = ({
       newPcRowInRack,
       newPcRackId,
       newPcUnitsOccupied,
+      newPcSerialNumber,
+      newPcSpecification,
+      newPcMonitorModel,
+      newPcDiskInfo,
+      showNewPcCustomUsageInput,
+      newPcCustomUsageValue,
       newPpName,
       newPpLocationId,
       newPpRowInRack,
@@ -432,7 +451,7 @@ export const useConnectionFormState = ({
       newSwitchUnitsOccupied,
       editingConnection,
       ipRegex,
-      usageOptions,
+      usageOptions: usageOptions, // CORRECTED: Use the defined 'usageOptions'
       locations,
       racks,
       patchPanels,
@@ -469,6 +488,12 @@ export const useConnectionFormState = ({
       setNewPcRowInRack,
       setNewPcRackId,
       setNewPcUnitsOccupied,
+      setNewPcSerialNumber,
+      setNewPcSpecification,
+      setNewPcMonitorModel,
+      setNewPcDiskInfo,
+      setShowNewPcCustomUsageInput,
+      setNewPcCustomUsageValue,
       setNewPpName,
       setNewPpLocationId,
       setNewPpRowInRack,

@@ -16,6 +16,10 @@ import {
   Building2,
   Activity,
   Info,
+  Fingerprint,
+  ClipboardList,
+  Database,
+  Monitor,
 } from "lucide-react";
 
 export const PCStep = ({ formState, formSetters, handlers, refs }) => {
@@ -37,6 +41,12 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
     newPcRowInRack,
     newPcRackId,
     newPcUnitsOccupied,
+    newPcSerialNumber,
+    newPcSpecification,
+    newPcMonitorModel,
+    newPcDiskInfo,
+    showNewPcCustomUsageInput,
+    newPcCustomUsageValue,
     ipRegex,
     usageOptions,
     racks,
@@ -59,6 +69,12 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
     setNewPcRowInRack,
     setNewPcRackId,
     setNewPcUnitsOccupied,
+    setNewPcSerialNumber,
+    setNewPcSpecification,
+    setNewPcMonitorModel,
+    setNewPcDiskInfo,
+    setShowNewPcCustomUsageInput,
+    setNewPcCustomUsageValue,
   } = formSetters;
   const { onAddEntity, showMessage } = handlers;
   const { lastCreatedPcIdRef } = refs;
@@ -125,13 +141,18 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
       description: newPcDesc,
       multi_port: newPcMultiPort,
       type: newPcType,
-      usage: newPcUsage,
+      usage: newPcUsage === "Other" ? newPcCustomUsageValue : newPcUsage,
       row_in_rack: newPcType === "Server" ? parseInt(newPcRowInRack) : null,
       rack_id: newPcType === "Server" ? parseInt(newPcRackId) : null,
       units_occupied: newPcType === "Server" ? parseInt(newPcUnitsOccupied) : 1,
+      serial_number: newPcSerialNumber,
+      pc_specification: newPcSpecification,
+      monitor_model: newPcMonitorModel,
+      disk_info: newPcDiskInfo,
     });
     if (result.success && result.entity) {
       lastCreatedPcIdRef.current = result.entity.id;
+      // Reset form fields
       setNewPcName("");
       setNewPcIp("");
       setNewPcUsername("");
@@ -146,7 +167,24 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
       setNewPcRowInRack("");
       setNewPcRackId("");
       setNewPcUnitsOccupied(1);
+      setNewPcSerialNumber("");
+      setNewPcSpecification("");
+      setNewPcMonitorModel("");
+      setNewPcDiskInfo("");
+      setShowNewPcCustomUsageInput(false);
+      setNewPcCustomUsageValue("");
       setIsNewPcExpanded(false);
+    }
+  };
+
+  const handleUsageChange = (e) => {
+    const value = e.target.value;
+    setNewPcUsage(value);
+    if (value === "Other") {
+      setShowNewPcCustomUsageInput(true);
+    } else {
+      setShowNewPcCustomUsageInput(false);
+      setNewPcCustomUsageValue("");
     }
   };
 
@@ -226,6 +264,34 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
               placeholder="Username"
               value={newPcUsername}
               onChange={(e) => setNewPcUsername(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <input
+              type="text"
+              placeholder="Serial Number"
+              value={newPcSerialNumber}
+              onChange={(e) => setNewPcSerialNumber(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <textarea
+              placeholder="PC Specification (e.g., CPU, RAM, GPU)"
+              value={newPcSpecification}
+              onChange={(e) => setNewPcSpecification(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+              rows="3"
+            ></textarea>
+            <input
+              type="text"
+              placeholder="Monitor Model(s)"
+              value={newPcMonitorModel}
+              onChange={(e) => setNewPcMonitorModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md"
+            />
+            <input
+              type="text"
+              placeholder="Disk Info (e.g., 1x 512GB NVMe, 2x 1TB SSD)"
+              value={newPcDiskInfo}
+              onChange={(e) => setNewPcDiskInfo(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md"
             />
             <div className="flex items-center space-x-4">
@@ -337,16 +403,26 @@ export const PCStep = ({ formState, formSetters, handlers, refs }) => {
             />
             <select
               value={newPcUsage}
-              onChange={(e) => setNewPcUsage(e.target.value)}
+              onChange={handleUsageChange}
               className="w-full p-2 border border-gray-300 rounded-md"
             >
-              <option value="">-- Select Usage --</option>
+              <option value="">-- Select Usage (Optional) --</option>
               {usageOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
+              <option value="Other">Other...</option>
             </select>
+            {showNewPcCustomUsageInput && (
+              <input
+                type="text"
+                placeholder="Enter custom usage"
+                value={newPcCustomUsageValue}
+                onChange={(e) => setNewPcCustomUsageValue(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              />
+            )}
             <textarea
               placeholder="Description"
               value={newPcDesc}
