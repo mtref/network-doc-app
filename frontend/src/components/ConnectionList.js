@@ -1,6 +1,8 @@
 // frontend/src/components/ConnectionList.js
 // This component displays a list of network connections.
-// UPDATED: Hides Edit/Delete buttons based on user role.
+// REFACTORED: The connection card now has a new single-line collapsed view showing the full path,
+// and a detailed, multi-section expanded view. The entire card is clickable to toggle the view.
+// UPDATED: The expanded view now includes more details for the PC and Switch sections.
 
 import React, { useState, useEffect } from "react";
 import {
@@ -22,8 +24,6 @@ import {
   Building2,
   Columns,
   Activity,
-  Edit,
-  Trash2
 } from "lucide-react";
 import SearchBar from "./SearchBar";
 
@@ -47,121 +47,256 @@ function ConnectionCard({
   onEdit,
   onViewPcDetails,
   onShowPortStatus,
-  user // Receive user prop
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const pc = connection.pc || {};
-  const switchDevice = connection.switch || {};
-  const hops = connection.hops || [];
+  const handleActionClick = (e, action) => {
+    e.stopPropagation(); // Prevent the card from expanding when clicking a button
+    action();
+  };
 
-  const fullPath = [
-    { type: "pc", name: pc.name },
-    ...hops.map((hop) => ({
-      type: "hop",
-      name: hop.patch_panel?.name || "Unknown PP",
-    })),
-    { type: "switch", name: switchDevice.name },
-  ];
+  const handleDetailClick = (e, action) => {
+    e.stopPropagation(); // Prevent the card from expanding when clicking a detail box
+    action();
+  };
 
-  const canEdit = user && (user.role === 'Admin' || user.role === 'Editor');
+  const pcIcon =
+    connection.pc?.type === "Server" ? (
+      <Server size={20} className="text-indigo-500 flex-shrink-0" />
+    ) : (
+      <Laptop size={20} className="text-indigo-500 flex-shrink-0" />
+    );
 
   return (
-    <div className="border border-gray-200 rounded-lg shadow-sm bg-white transition-shadow duration-300 hover:shadow-md">
+    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden border border-gray-200">
+      {/* --- Collapsed View (Clickable to expand/collapse) --- */}
       <div
-        className="p-4 cursor-pointer"
+        className="p-4 flex items-center justify-between cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        {/* Collapsed View */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-sm md:text-base">
-            <Laptop size={18} className="text-indigo-500 flex-shrink-0" />
-            <span className="font-bold text-gray-800">{pc.name}</span>
-            <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
-            {hops.map((hop, index) => (
-              <React.Fragment key={index}>
-                <Split size={18} className="text-green-500 flex-shrink-0" />
-                <span className="font-semibold text-gray-700">
-                  {hop.patch_panel?.name}
+        <div className="flex items-center space-x-2 overflow-hidden min-w-0">
+          {pcIcon}
+          <span
+            className="font-semibold text-gray-800 truncate"
+            title={connection.pc?.name}
+          >
+            {connection.pc?.name || "N/A"}
+          </span>
+          <span className="text-xs text-gray-500 truncate">
+            {connection.pc?.ip_address}
+          </span>
+          <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
+
+          {connection.hops && connection.hops.length > 0 ? (
+            connection.hops.map((hop, index) => (
+              <React.Fragment key={hop.id || index}>
+                <Split size={20} className="text-green-500 flex-shrink-0" />
+                <span
+                  className="font-medium text-gray-700 truncate"
+                  title={`[P:${hop.patch_panel_port}] ${hop.patch_panel?.name} - ${hop.patch_panel?.location_name}`}
+                >
+                  [P:{hop.patch_panel_port}] {hop.patch_panel?.name}
                 </span>
-                <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+                <span className="text-xs text-gray-500 truncate">
+                  {hop.patch_panel?.location_name}
+                </span>
+                <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
               </React.Fragment>
-            ))}
-            <Server size={18} className="text-red-500 flex-shrink-0" />
-            <span className="font-bold text-gray-800">{switchDevice.name}</span>
-            <span className="text-gray-600">(Port: {connection.switch_port})</span>
-          </div>
-          <div className="flex items-center">
-            {connection.is_switch_port_up ? (
-              <Wifi size={20} className="text-green-500" title="Port is Up" />
-            ) : (
-              <WifiOff size={20} className="text-red-500" title="Port is Down" />
-            )}
-            {isExpanded ? (
-              <ChevronUp size={24} className="ml-4 text-gray-500" />
-            ) : (
-              <ChevronDown size={24} className="ml-4 text-gray-500" />
-            )}
-          </div>
+            ))
+          ) : (
+            <span className="text-sm text-gray-400 italic">Direct</span>
+          )}
+
+          <Server size={20} className="text-red-500 flex-shrink-0" />
+          <span
+            className="font-semibold text-gray-800 truncate"
+            title={`[P:${connection.switch_port}] ${connection.switch?.name} - ${connection.switch?.location_name}`}
+          >
+            [P:{connection.switch_port}] {connection.switch?.name}
+          </span>
+          <span className="text-xs text-gray-500 truncate">
+            {connection.switch?.location_name}
+          </span>
+        </div>
+        <div className="flex items-center space-x-2 pl-4">
+          {connection.is_switch_port_up ? (
+            <Wifi size={18} className="text-green-500" title="Port is Up" />
+          ) : (
+            <WifiOff size={18} className="text-red-500" title="Port is Down" />
+          )}
+          <button
+            onClick={(e) => handleActionClick(e, onEdit)}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Edit
+          </button>
+          <button
+            onClick={(e) => handleActionClick(e, onDelete)}
+            className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Delete
+          </button>
+          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </div>
       </div>
 
-      {/* Expanded View */}
+      {/* --- Expanded View --- */}
       {isExpanded && (
-        <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* PC Details Section */}
-            <div className="p-4 border rounded-md bg-white">
-              <h4 className="font-bold text-lg mb-2 flex items-center text-indigo-700">
-                <Laptop size={20} className="mr-2" /> PC Details
-              </h4>
-              <DetailItem icon={<User size={16} />} label="Name" value={pc.name || "N/A"} />
-              <DetailItem icon={<IpIcon size={16} />} label="IP Address" value={pc.ip_address || "N/A"} />
-              <DetailItem icon={<Building2 size={16} />} label="Office" value={pc.office || "N/A"} />
-              <button onClick={(e) => { e.stopPropagation(); onViewPcDetails(pc); }} className="text-sm text-blue-600 hover:underline mt-2">View More Details</button>
-            </div>
-
-            {/* Switch Details Section */}
-            <div className="p-4 border rounded-md bg-white">
-              <h4 className="font-bold text-lg mb-2 flex items-center text-red-700">
-                <Server size={20} className="mr-2" /> Switch Details
-              </h4>
-              <DetailItem icon={<Server size={16} />} label="Name" value={switchDevice.name || "N/A"} />
-              <DetailItem icon={<IpIcon size={16} />} label="IP Address" value={switchDevice.ip_address || "N/A"} />
-              <DetailItem icon={<MapPin size={16} />} label="Location" value={switchDevice.location_name || "N/A"} />
-              <button onClick={(e) => { e.stopPropagation(); onShowPortStatus("switches", switchDevice.id); }} className="text-sm text-blue-600 hover:underline mt-2">View Port Status</button>
+        <div className="bg-gray-50 p-4 border-t border-gray-200 space-y-4">
+          {/* PC Details (Clickable) */}
+          <div
+            className="p-3 rounded-md border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:shadow-inner cursor-pointer"
+            onClick={(e) =>
+              handleDetailClick(e, () => onViewPcDetails(connection.pc))
+            }
+          >
+            <h5 className="font-bold text-indigo-800 flex items-center mb-2">
+              {pcIcon}
+              <span className="ml-2">Start: {connection.pc?.name}</span>
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              <DetailItem
+                icon={<IpIcon size={14} />}
+                label="IP Address"
+                value={connection.pc?.ip_address || "N/A"}
+              />
+              <DetailItem
+                icon={<User size={14} />}
+                label="Username"
+                value={connection.pc?.username || "N/A"}
+              />
+              <DetailItem
+                icon={<Building2 size={14} />}
+                label="Office"
+                value={connection.pc?.office || "N/A"}
+              />
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Wall Point"
+                value={connection.wall_point_label || "N/A"}
+              />
+              <DetailItem
+                icon={<Palette size={14} />}
+                label="Wall Cable Color"
+                value={connection.wall_point_cable_color || "N/A"}
+              />
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Wall Cable Label"
+                value={connection.wall_point_cable_label || "N/A"}
+              />
             </div>
           </div>
 
-          {/* Hops Details Section */}
-          {hops.length > 0 && (
-            <div className="p-4 border rounded-md bg-white">
-              <h4 className="font-bold text-lg mb-2 flex items-center text-green-700">
-                <Split size={20} className="mr-2" /> Patch Panel Hops
-              </h4>
+          {/* Hops Details (Clickable) */}
+          {connection.hops && connection.hops.length > 0 && (
+            <div className="p-3 rounded-md border border-green-200 bg-green-50">
+              <h5 className="font-bold text-green-800 flex items-center mb-2">
+                <Split size={20} className="mr-2" />
+                Path Hops
+              </h5>
               <div className="space-y-3">
-                {hops.map((hop, index) => (
-                  <div key={index} className="p-2 border-l-4 border-green-200">
-                    <p className="font-semibold">Hop {index + 1}: {hop.patch_panel?.name}</p>
-                    <DetailItem icon={<MapPin size={16} />} label="Location" value={hop.patch_panel?.location_name || "N/A"} />
-                    <DetailItem icon={<Tag size={16} />} label="Port" value={hop.patch_panel_port || "N/A"} />
+                {connection.hops.map((hop, index) => (
+                  <div
+                    key={hop.id || index}
+                    className="pl-4 border-l-2 border-green-300 hover:bg-green-100 rounded-r-md cursor-pointer"
+                    onClick={(e) =>
+                      handleDetailClick(e, () =>
+                        onShowPortStatus("patch_panels", hop.patch_panel.id)
+                      )
+                    }
+                  >
+                    <DetailItem
+                      icon={<Split size={14} />}
+                      label={`Hop ${index + 1}`}
+                      value={hop.patch_panel?.name || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<MapPin size={14} />}
+                      label="Location"
+                      value={hop.patch_panel?.location_name || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<HardDrive size={14} />}
+                      label="Port"
+                      value={`${hop.patch_panel_port} (${
+                        hop.is_port_up ? "Up" : "Down"
+                      })`}
+                    />
+                    <DetailItem
+                      icon={<Palette size={14} />}
+                      label="Cable Color"
+                      value={hop.cable_color || "N/A"}
+                    />
+                    <DetailItem
+                      icon={<Tag size={14} />}
+                      label="Cable Label"
+                      value={hop.cable_label || "N/A"}
+                    />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Actions */}
-          {canEdit && (
-            <div className="flex justify-end space-x-3 pt-3 border-t mt-4">
-              <button onClick={(e) => { e.stopPropagation(); onEdit(connection); }} className="flex items-center px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                <Edit size={16} className="mr-2" /> Edit
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(connection.id); }} className="flex items-center px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700">
-                <Trash2 size={16} className="mr-2" /> Delete
-              </button>
+          {/* Switch Details (Clickable) */}
+          <div
+            className="p-3 rounded-md border border-red-200 bg-red-50 hover:bg-red-100 hover:shadow-inner cursor-pointer"
+            onClick={(e) =>
+              handleDetailClick(e, () =>
+                onShowPortStatus("switches", connection.switch.id)
+              )
+            }
+          >
+            <h5 className="font-bold text-red-800 flex items-center mb-2">
+              <Server size={20} className="mr-2" />
+              End: {connection.switch?.name}
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              <DetailItem
+                icon={<IpIcon size={14} />}
+                label="IP Address"
+                value={connection.switch?.ip_address || "N/A"}
+              />
+              <DetailItem
+                icon={<MapPin size={14} />}
+                label="Location"
+                value={connection.switch?.location_name || "N/A"}
+              />
+              <DetailItem
+                icon={<Columns size={14} />}
+                label="Rack"
+                value={connection.switch?.rack_name || "N/A"}
+              />
+              <DetailItem
+                icon={<Activity size={14} />}
+                label="Usage"
+                value={connection.switch?.usage || "N/A"}
+              />
+              <DetailItem
+                icon={<HardDrive size={14} />}
+                label="Port"
+                value={`${connection.switch_port} (${
+                  connection.is_switch_port_up ? "Up" : "Down"
+                })`}
+              />
+              <DetailItem
+                icon={<Info size={14} />}
+                label="Model"
+                value={connection.switch?.model || "N/A"}
+              />
+              <DetailItem
+                icon={<Palette size={14} />}
+                label="Final Cable Color"
+                value={connection.cable_color || "N/A"}
+              />
+              <DetailItem
+                icon={<Tag size={14} />}
+                label="Final Cable Label"
+                value={connection.cable_label || "N/A"}
+              />
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -174,7 +309,6 @@ function ConnectionList({
   onEdit,
   onViewPcDetails,
   onShowPortStatus,
-  user
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredConnections, setFilteredConnections] = useState([]);
@@ -184,21 +318,31 @@ function ConnectionList({
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
     const filtered = connections.filter((connection) => {
-      const pc = connection.pc || {};
-      const switchDevice = connection.switch || {};
-      const hops = connection.hops || [];
-      const searchString = [
-        pc.name,
-        pc.ip_address,
-        switchDevice.name,
-        switchDevice.ip_address,
-        connection.switch_port,
-        ...hops.map((h) => h.patch_panel?.name),
-        ...hops.map((h) => h.patch_panel_port),
-      ]
+      const pcName = (connection.pc?.name || "").toLowerCase();
+      const pcIp = (connection.pc?.ip_address || "").toLowerCase();
+      const switchName = (connection.switch?.name || "").toLowerCase();
+      const switchPort = (connection.switch_port || "").toLowerCase();
+      const wallPoint = (connection.wall_point_label || "").toLowerCase();
+      const wallPointCable = (
+        connection.wall_point_cable_label || ""
+      ).toLowerCase();
+      const hopsText = (connection.hops || [])
+        .map(
+          (hop) =>
+            `${hop.patch_panel?.name || ""} ${hop.patch_panel_port || ""}`
+        )
         .join(" ")
         .toLowerCase();
-      return searchString.includes(lowerCaseSearchTerm);
+
+      return (
+        pcName.includes(lowerCaseSearchTerm) ||
+        pcIp.includes(lowerCaseSearchTerm) ||
+        switchName.includes(lowerCaseSearchTerm) ||
+        switchPort.includes(lowerCaseSearchTerm) ||
+        wallPoint.includes(lowerCaseSearchTerm) ||
+        wallPointCable.includes(lowerCaseSearchTerm) ||
+        hopsText.includes(lowerCaseSearchTerm)
+      );
     });
     setFilteredConnections(filtered);
     setCurrentPage(1);
@@ -211,6 +355,7 @@ function ConnectionList({
     indexOfLastItem
   );
   const totalPages = Math.ceil(filteredConnections.length / itemsPerPage);
+
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
@@ -221,34 +366,58 @@ function ConnectionList({
           <ConnectionCard
             key={connection.id}
             connection={connection}
-            onDelete={onDelete}
-            onEdit={onEdit}
+            onDelete={() => onDelete(connection.id)}
+            onEdit={() => onEdit(connection)}
             onViewPcDetails={onViewPcDetails}
             onShowPortStatus={onShowPortStatus}
-            user={user}
           />
         ))
       ) : (
-        <p className="text-center text-gray-500 mt-8">
-          {searchTerm ? "No connections match your search." : "No connections found."}
+        <p className="text-center text-gray-500 text-lg mt-8">
+          {searchTerm
+            ? "No connections match your search."
+            : "No connections found."}
         </p>
       )}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2 mt-6">
-          <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50">
+        <div className="flex justify-center items-center space-x-2 mt-8">
+          <button
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+          >
             Previous
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map(
             (pageNumber) => (
-              <button key={pageNumber} onClick={() => paginate(pageNumber)} className={`px-4 py-2 rounded-md ${currentPage === pageNumber ? "bg-blue-600 text-white" : "bg-gray-200"}`}>
+              <button
+                key={pageNumber}
+                onClick={() => paginate(pageNumber)}
+                className={`px-4 py-2 rounded-md ${
+                  currentPage === pageNumber
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
                 {pageNumber}
               </button>
             )
           )}
-          <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50">
+          <button
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+          >
             Next
           </button>
-          <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="ml-4 p-2 border rounded-md text-sm">
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="ml-4 p-2 border rounded-md text-sm"
+          >
             <option value={5}>5 per page</option>
             <option value={10}>10 per page</option>
             <option value={20}>20 per page</option>
