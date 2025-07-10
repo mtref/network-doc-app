@@ -1,6 +1,6 @@
 # backend/routes.py
 # This file defines the Flask API endpoints and handles request/response logic.
-# UPDATED: Consolidated route handlers to fix 405 Method Not Allowed errors.
+# UPDATED: Implemented the full CSV import functionality for Connections.
 
 import io
 import csv
@@ -63,7 +63,7 @@ def jwt_required_for_export(fn):
 
 
 def register_routes(app):
-    # --- Authentication Endpoints ---
+    # ... (Authentication, User Management, System Log, and other routes remain the same) ...
     @app.route('/login', methods=['POST'])
     def login():
         data = request.get_json()
@@ -79,7 +79,6 @@ def register_routes(app):
         user = User.query.filter_by(username=get_jwt_identity()).first()
         return jsonify(user.to_dict()) if user else (jsonify({"msg": "User not found"}), 404)
 
-    # --- User Management Endpoints (Admin Only) ---
     @app.route('/users', methods=['GET', 'POST'])
     @admin_required()
     def handle_users():
@@ -136,7 +135,6 @@ def register_routes(app):
             db.session.commit()
             return jsonify(msg="User deleted successfully.")
 
-    # --- Password Manager Endpoints (Admin Only) ---
     @app.route('/passwords', methods=['GET', 'POST'])
     @admin_required()
     def handle_passwords():
@@ -193,7 +191,6 @@ def register_routes(app):
             db.session.commit()
             return jsonify(msg="Password entry deleted successfully.")
 
-    # --- System Log Endpoints ---
     @app.route('/logs', methods=['GET'])
     @jwt_required()
     def handle_logs():
@@ -212,7 +209,6 @@ def register_routes(app):
         message = SystemLogService.revert_log_action(log_id, action_by=get_jwt_identity())
         return jsonify({'message': message})
 
-    # --- Main Data Endpoints ---
     @app.route('/locations', methods=['GET', 'POST'])
     @jwt_required()
     def handle_locations():
@@ -514,10 +510,84 @@ def register_routes(app):
             row_dict = dict(zip(header, row_data))
             db.session.begin_nested()
             try:
-                # ... (rest of the import logic remains the same)
+                row_dict.pop('id', None)
+
+                if entity_type == 'locations':
+                    LocationService.create(row_dict, action_by=current_user)
+                elif entity_type == 'racks':
+                    location_name = row_dict.pop('location_name', None)
+                    row_dict.pop('location_door_number', None)
+                    location = db.session.query(Location).filter_by(name=location_name).first()
+                    if not location: raise ValueError(f"Location '{location_name}' not found.")
+                    rack_data = {'name': row_dict.get('name'), 'location_id': location.id, 'description': row_dict.get('description'), 'total_units': row_dict.get('total_units', 42), 'orientation': row_dict.get('orientation', 'bottom-up')}
+                    RackService.create(rack_data, action_by=current_user)
+                elif entity_type == 'pcs':
+                    rack_name = row_dict.pop('rack_name', None)
+                    pc_data = {key: value for key, value in row_dict.items() if hasattr(PC, key)}
+                    if rack_name:
+                        rack = db.session.query(Rack).filter_by(name=rack_name).first()
+                        if rack: pc_data['rack_id'] = rack.id
+                    pc_data['in_domain'] = pc_data.get('in_domain', 'False').lower() == 'true'
+                    pc_data['multi_port'] = pc_data.get('multi_port', 'False').lower() == 'true'
+                    PCService.create(pc_data, action_by=current_user)
+                elif entity_type == 'patch_panels':
+                    location_name = row_dict.pop('location_name', None)
+                    row_dict.pop('location_door_number', None)
+                    rack_name = row_dict.pop('rack_name', None)
+                    location = db.session.query(Location).filter_by(name=location_name).first()
+                    if not location: raise ValueError(f"Location '{location_name}' not found.")
+                    pp_data = {key: value for key, value in row_dict.items() if hasattr(PatchPanel, key)}
+                    pp_data['location_id'] = location.id
+                    if rack_name:
+                        rack = db.session.query(Rack).filter_by(name=rack_name, location_id=location.id).first()
+                        if rack: pp_data['rack_id'] = rack.id
+                    PatchPanelService.create(pp_data, action_by=current_user)
+                elif entity_type == 'switches':
+                    location_name = row_dict.pop('location_name', None)
+                    row_dict.pop('location_door_number', None)
+                    rack_name = row_dict.pop('rack_name', None)
+                    location = db.session.query(Location).filter_by(name=location_name).first()
+                    if not location: raise ValueError(f"Location '{location_name}' not found.")
+                    switch_data = {key: value for key, value in row_dict.items() if hasattr(Switch, key)}
+                    switch_data['location_id'] = location.id
+                    if rack_name:
+                        rack = db.session.query(Rack).filter_by(name=rack_name, location_id=location.id).first()
+                        if rack: switch_data['rack_id'] = rack.id
+                    SwitchService.create(switch_data, action_by=current_user)
+                elif entity_type == 'connections':
+                    pc = db.session.query(PC).filter_by(name=row_dict.get('pc_name')).first()
+                    _switch = db.session.query(Switch).filter_by(name=row_dict.get('switch_name')).first()
+                    if not pc: raise ValueError(f"PC '{row_dict.get('pc_name')}' not found.")
+                    if not _switch: raise ValueError(f"Switch '{row_dict.get('switch_name')}' not found.")
+                    
+                    connection_data = {
+                        'pc_id': pc.id,
+                        'switch_id': _switch.id,
+                        'switch_port': row_dict.get('switch_port'),
+                        'is_switch_port_up': row_dict.get('is_switch_port_up', 'True').lower() == 'true',
+                        'cable_color': row_dict.get('cable_color'),
+                        'cable_label': row_dict.get('cable_label'),
+                        'hops': []
+                    }
+                    for j in range(MAX_HOPS):
+                        pp_name = row_dict.get(f'hop{j+1}_patch_panel_name')
+                        pp_port = row_dict.get(f'hop{j+1}_patch_panel_port')
+                        if pp_name and pp_port:
+                            patch_panel = db.session.query(PatchPanel).filter_by(name=pp_name).first()
+                            if not patch_panel: raise ValueError(f"Patch Panel '{pp_name}' not found for hop {j+1}.")
+                            connection_data['hops'].append({
+                                'patch_panel_id': patch_panel.id,
+                                'patch_panel_port': pp_port,
+                                'is_port_up': row_dict.get(f'hop{j+1}_is_port_up', 'True').lower() == 'true',
+                                'sequence': j,
+                                'cable_color': row_dict.get(f'hop{j+1}_cable_color'),
+                                'cable_label': row_dict.get(f'hop{j+1}_cable_label')
+                            })
+                    ConnectionService.create(connection_data, action_by=current_user)
+
                 db.session.commit()
                 success_count += 1
-            except (ValueError, IntegrityError) as e:
+            except (ValueError, IntegrityError, TypeError) as e:
                 db.session.rollback()
                 errors.append(f"Row {i+2}: {str(e)}")
                 error_count += 1
