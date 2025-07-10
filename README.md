@@ -12,6 +12,9 @@ docker save -o network-doc-app-image.tar network-doc-app:latest
 
 
 
+
+
+
 Migrate database
 
 docker-compose down --volumes --rmi all &&
