@@ -1,6 +1,6 @@
 # backend/services.py
 # This file contains the business logic and database interaction functions.
-# UPDATED: All create/update/delete methods now accept an `action_by` parameter to log the acting user.
+# UPDATED: Improved logging for Connection updates to show readable hop changes.
 
 import os
 import uuid
@@ -296,11 +296,28 @@ class ConnectionService:
     @staticmethod
     def update(connection, data, is_revert=False, action_by='system'):
         if not is_revert:
-            changes = SystemLogService._get_changed_fields(connection, data)
-            if 'hops' in data: changes['hops'] = {'old': [h.to_dict() for h in connection.hops], 'new': data['hops']}
-            if changes:
+            data_for_comparison = data.copy()
+            hop_changes = {}
+
+            if 'hops' in data:
+                old_hops_simple = sorted([{'pp_id': h.patch_panel_id, 'port': h.patch_panel_port} for h in connection.hops], key=lambda x: (x.get('pp_id', 0) or 0))
+                new_hops_simple = sorted([{'pp_id': int(h.get('patch_panel_id')) if h.get('patch_panel_id') else None, 'port': h.get('patch_panel_port')} for h in data.get('hops', [])], key=lambda x: (x.get('pp_id', 0) or 0))
+
+                if old_hops_simple != new_hops_simple:
+                    old_hops_str = ", ".join([f"{PatchPanel.query.get(h['pp_id']).name} (Port {h['port']})" for h in old_hops_simple if h['pp_id']])
+                    new_hops_str = ", ".join([f"{PatchPanel.query.get(h['pp_id']).name} (Port {h['port']})" for h in new_hops_simple if h['pp_id']])
+                    hop_changes = {'hops': {'old': old_hops_str or "None", 'new': new_hops_str or "None"}}
+            
+            if 'hops' in data_for_comparison:
+                del data_for_comparison['hops']
+            
+            other_changes = SystemLogService._get_changed_fields(connection, data_for_comparison)
+            all_changes = {**other_changes, **hop_changes}
+
+            if all_changes:
                 connection_name = f"Conn {connection.id}"
-                SystemLogService.create_log('UPDATE', 'Connection', connection.id, connection_name, changes, action_by=action_by)
+                SystemLogService.create_log('UPDATE', 'Connection', connection.id, connection_name, all_changes, action_by=action_by)
+
         for key, value in data.items():
             if hasattr(connection, key) and key != 'hops': setattr(connection, key, value)
         if 'hops' in data:
