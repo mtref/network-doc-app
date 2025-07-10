@@ -1,6 +1,6 @@
 # backend/routes.py
 # This file defines the Flask API endpoints and handles request/response logic.
-# UPDATED: Added comprehensive logging for all Password Manager actions (Create, Update, Delete, View).
+# UPDATED: Restored the full CSV export functionality.
 
 import io
 import csv
@@ -63,7 +63,7 @@ def jwt_required_for_export(fn):
 
 
 def register_routes(app):
-    # --- Authentication Endpoints ---
+    # ... (Authentication, User Management, System Log routes remain the same) ...
     @app.route('/login', methods=['POST'])
     def login():
         data = request.get_json()
@@ -79,7 +79,6 @@ def register_routes(app):
         user = User.query.filter_by(username=get_jwt_identity()).first()
         return jsonify(user.to_dict()) if user else (jsonify({"msg": "User not found"}), 404)
 
-    # --- User Management Endpoints (Admin Only) ---
     @app.route('/users', methods=['GET', 'POST'])
     @admin_required()
     def handle_users():
@@ -136,7 +135,6 @@ def register_routes(app):
             db.session.commit()
             return jsonify(msg="User deleted successfully.")
 
-    # --- Password Manager Endpoints (Admin Only) ---
     @app.route('/passwords', methods=['GET', 'POST'])
     @admin_required()
     def handle_passwords():
@@ -145,12 +143,7 @@ def register_routes(app):
             data = request.get_json()
             if not data or not data.get('service') or not data.get('password'):
                 return jsonify({"msg": "Service and password are required"}), 400
-            
-            new_entry = PasswordEntry(
-                service=data['service'],
-                server_or_url=data.get('server_or_url'),
-                username=data.get('username')
-            )
+            new_entry = PasswordEntry(service=data['service'], server_or_url=data.get('server_or_url'), username=data.get('username'))
             new_entry.set_password(data['password'])
             db.session.add(new_entry)
             db.session.flush()
@@ -167,7 +160,6 @@ def register_routes(app):
         current_admin = get_jwt_identity()
         entry = PasswordEntry.query.get_or_404(entry_id)
         if request.method == 'GET':
-            # Log the viewing action
             SystemLogService.create_log('ACCESS', 'Password', entry.id, entry.service, action_by=current_admin)
             db.session.commit()
             return jsonify(entry.to_dict(decrypt=True))
@@ -199,7 +191,6 @@ def register_routes(app):
             db.session.commit()
             return jsonify(msg="Password entry deleted successfully.")
 
-    # --- System Log Endpoints ---
     @app.route('/logs', methods=['GET'])
     @jwt_required()
     def handle_logs():
@@ -218,7 +209,6 @@ def register_routes(app):
         message = SystemLogService.revert_log_action(log_id, action_by=get_jwt_identity())
         return jsonify({'message': message})
 
-    # --- Main Data Endpoints ---
     @app.route('/locations', methods=['GET', 'POST'])
     @jwt_required()
     def handle_locations():
@@ -444,8 +434,55 @@ def register_routes(app):
     @app.route('/export/<entity_type>')
     @jwt_required_for_export
     def export_data(entity_type):
-        # ... (export logic remains the same)
-        return jsonify({"message": "Export not implemented yet"})
+        si = io.StringIO()
+        cw = csv.writer(si)
+        headers = []
+        data_rows = []
+        filename = f'{entity_type}.csv'
+        
+        if entity_type == 'locations':
+            headers = ['id', 'name', 'door_number', 'description']
+            items = LocationService.get_all_locations()
+            data_rows = [[item.id, item.name, item.door_number, item.description] for item in items]
+        elif entity_type == 'racks':
+            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'description', 'total_units', 'orientation']
+            items = RackService.get_all_racks()
+            data_rows = [[r.id, r.name, r.location_id, r.location.name if r.location else '', r.location.door_number if r.location else '', r.description, r.total_units, r.orientation] for r in items]
+        elif entity_type == 'pcs':
+            headers = ['id', 'name', 'ip_address', 'username', 'in_domain', 'operating_system', 'model', 'office', 'description', 'multi_port', 'type', 'usage', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'serial_number', 'pc_specification', 'monitor_model', 'disk_info']
+            items = PCService.get_all_pcs()
+            data_rows = [[pc.id, pc.name, pc.ip_address, pc.username, pc.in_domain, pc.operating_system, pc.model, pc.office, pc.description, pc.multi_port, pc.type, pc.usage, pc.row_in_rack, pc.units_occupied, pc.rack_id, pc.rack.name if pc.rack else '', pc.serial_number, pc.pc_specification, pc.monitor_model, pc.disk_info] for pc in items]
+        elif entity_type == 'patch_panels':
+            headers = ['id', 'name', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'description']
+            items = PatchPanelService.get_all_patch_panels()
+            data_rows = [[pp.id, pp.name, pp.location_id, pp.location.name if pp.location else '', pp.location.door_number if pp.location else '', pp.row_in_rack, pp.units_occupied, pp.rack_id, pp.rack.name if pp.rack else '', pp.total_ports, pp.description] for pp in items]
+        elif entity_type == 'switches':
+            headers = ['id', 'name', 'ip_address', 'location_id', 'location_name', 'location_door_number', 'row_in_rack', 'units_occupied', 'rack_id', 'rack_name', 'total_ports', 'source_port', 'model', 'description', 'usage']
+            items = SwitchService.get_all_switches()
+            data_rows = [[s.id, s.name, s.ip_address, s.location_id, s.location.name if s.location else '', s.location.door_number if s.location else '', s.row_in_rack, s.units_occupied, s.rack_id, s.rack.name if s.rack else '', s.total_ports, s.source_port, s.model, s.description, s.usage] for s in items]
+        elif entity_type == 'connections':
+            headers = ['connection_id', 'pc_id', 'pc_name', 'pc_ip_address', 'cable_color', 'cable_label', 'switch_id', 'switch_name', 'switch_ip_address', 'switch_port', 'is_switch_port_up']
+            for i in range(MAX_HOPS):
+                headers.extend([f'hop{i+1}_patch_panel_id', f'hop{i+1}_patch_panel_name', f'hop{i+1}_patch_panel_port', f'hop{i+1}_is_port_up', f'hop{i+1}_cable_color', f'hop{i+1}_cable_label'])
+            all_connections = ConnectionService.get_all_connections()
+            for conn in all_connections:
+                row = [conn.id, conn.pc.id if conn.pc else '', conn.pc.name if conn.pc else '', conn.pc.ip_address if conn.pc else '', conn.cable_color, conn.cable_label, conn.switch.id if conn.switch else '', conn.switch.name if conn.switch else '', conn.switch.ip_address if conn.switch else '', conn.switch_port, conn.is_switch_port_up]
+                for i in range(MAX_HOPS):
+                    if i < len(conn.hops):
+                        hop = conn.hops[i]
+                        row.extend([hop.patch_panel.id if hop.patch_panel else '', hop.patch_panel.name if hop.patch_panel else '', hop.patch_panel_port, hop.is_port_up, hop.cable_color, hop.cable_label])
+                    else:
+                        row.extend([''] * 6)
+                data_rows.append(row)
+        else:
+            return jsonify({'error': 'Invalid entity type for export.'}), 400
+
+        cw.writerow(headers)
+        cw.writerows(data_rows)
+        output = make_response(si.getvalue())
+        output.headers["Content-Disposition"] = f"attachment; filename={filename}"
+        output.headers["Content-type"] = "text/csv"
+        return output
 
     @app.route('/import/<entity_type>', methods=['POST'])
     @admin_required()
