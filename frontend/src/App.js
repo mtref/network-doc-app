@@ -1,4 +1,5 @@
 // frontend/src/App.js
+<<<<<<< Updated upstream
 // This is the main React component for the frontend application.
 // It manages the state for PCs, Patch Panels, Servers, and Connections,
 // and orchestrates the display of various components.
@@ -14,6 +15,26 @@ import PortStatusModal from './components/PortStatusModal'; // New component for
 const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? '/api' // In production, proxy requests through Nginx or similar
   : 'http://localhost:5004'; // For local development with 'npm start', updated port to 5004
+=======
+// This component has been updated to use 'react-router-dom' for robust and scalable routing.
+
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import LoginPage from './components/LoginPage';
+import MainApp from './components/MainApp';
+import UserManual from './components/UserManual';
+
+/**
+ * A component to guard routes that require authentication.
+ * If the user is authenticated, it renders the requested component.
+ * If not, it redirects them to the login page.
+ */
+const PrivateRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
+>>>>>>> Stashed changes
 
 function App() {
   // State variables to store fetched data
@@ -27,6 +48,7 @@ function App() {
   const [message, setMessage] = useState(''); // General message for success/error
   const [isMessageVisible, setIsMessageVisible] = useState(false); // Controls message visibility
 
+<<<<<<< Updated upstream
   // State for Port Status Modal
   const [showPortStatusModal, setShowPortStatusModal] = useState(false);
   const [portStatusData, setPortStatusData] = useState(null); // Data for the modal
@@ -305,6 +327,40 @@ function App() {
         <p>&copy; 2025 Network Doc App. All rights reserved.</p>
       </footer>
     </div>
+=======
+  // Display a loading spinner while the auth state is being determined from the context.
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        {/* If the user is authenticated and visits /login, redirect them to the main app */}
+        <Route 
+          path="/login" 
+          element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} 
+        />
+        
+        {/* The user manual is a public route */}
+        <Route path="/manual" element={<UserManual />} />
+        
+        {/* All other routes are protected. The PrivateRoute wrapper will handle the auth check. */}
+        <Route
+          path="/*"
+          element={
+            <PrivateRoute>
+              <MainApp />
+            </PrivateRoute>
+          }
+        />
+      </Routes>
+    </Router>
+>>>>>>> Stashed changes
   );
 }
 

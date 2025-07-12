@@ -1,12 +1,17 @@
 # docker-compose.yml
 # This file defines the services for your Dockerized network documentation application.
+<<<<<<< Updated upstream
 # It orchestrates the backend (Python Flask) and frontend (React) services.
 version: '3.8'
+=======
+# UPDATED: Added a healthcheck to the backend and a command override to fix startup issues.
+>>>>>>> Stashed changes
 
 services:
   backend:
     # Build the backend image using the Dockerfile.backend located in the ./backend directory.
     build:
+<<<<<<< Updated upstream
       context: ./backend
       dockerfile: Dockerfile.backend
     # Map port 5004 from the container to port 5000 on the host machine.
@@ -26,10 +31,39 @@ services:
       FLASK_ENV: development # Set to 'production' for deployment
     # Command to run the Flask application.
     command: sh -c "flask db upgrade && flask run --host=0.0.0.0"
+=======
+      context: .
+      dockerfile: ./backend/Dockerfile.backend
+    ports:
+      - "5004:5000"
+    volumes:
+      - ./backend:/app/backend
+      # The start.sh script is mounted for easy editing during development.
+      - ./start.sh:/usr/local/bin/start.sh
+      # The database is stored in a persistent named volume.
+      - network_doc_db:/app/backend/instance
+    env_file:
+      - .env
+    environment:
+      FLASK_ENV: development
+      FLASK_APP: backend.app
+    # NEW: This command ensures the script is executable inside the container
+    # and then runs it, fixing potential host permission issues.
+    command: sh -c "chmod +x /usr/local/bin/start.sh && /usr/local/bin/start.sh"
+    # NEW: This healthcheck ensures the backend is fully running before
+    # other services (like the frontend) try to connect to it.
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+>>>>>>> Stashed changes
 
   frontend:
     # Build the frontend image using the Dockerfile.frontend located in the ./frontend directory.
     build:
+<<<<<<< Updated upstream
       context: ./frontend
       dockerfile: Dockerfile.frontend
     # Map port 3000 from the container to port 3000 on the host machine.
@@ -47,7 +81,17 @@ services:
       - backend
     # Command to start the React development server.
     command: npm start
+=======
+      context: .
+      dockerfile: ./frontend/Dockerfile.frontend
+    ports:
+      - "3005:80"
+    # UPDATED: This now waits for the backend service to be "healthy"
+    # instead of just "started", preventing the Nginx race condition.
+    depends_on:
+      backend:
+        condition: service_healthy
+>>>>>>> Stashed changes
 
-# Define the named volume for persistent database storage.
 volumes:
   network_doc_db:

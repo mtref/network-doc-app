@@ -1,12 +1,69 @@
 /* frontend/src/index.css */
 /* This file includes the Tailwind CSS directives and custom styles. */
+/* UPDATED: Corrected font filenames to match the actual files in /public/fonts/. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+<<<<<<< Updated upstream
 /* Custom font import from Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+=======
+/* --- Local Font Definitions for Offline Use --- */
+/* These rules load the font files from the /public/fonts/ directory. */
+
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 300; /* Light */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-Light.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 400; /* Regular */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 500; /* Medium */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 600; /* SemiBold */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-SemiBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 700; /* Bold */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 800; /* ExtraBold */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-ExtraBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: 'Inter';
+  font-style:  normal;
+  font-weight: 900; /* Black */
+  font-display: swap;
+  src: url("./fonts/Inter_18pt-Black.ttf") format("truetype");
+}
+
+>>>>>>> Stashed changes
 
 /* Apply Inter font family to the entire application */
 body {
@@ -31,7 +88,7 @@ body {
   animation: fadeInDown 0.5s ease-out forwards;
 }
 
-/* New: CSS for collapsible content */
+/* CSS for collapsible content */
 .collapsible-content {
   max-height: 0;
   overflow: hidden;
@@ -47,14 +104,10 @@ body {
 
 /* Print-specific styles */
 @media print {
-  /* Hide elements that are not needed in print view */
-  .no-print {
-    display: none !important;
-  }
-
-  /* Show elements that are only for print view */
+  .no-print { display: none !important; }
   .print-only {
     display: block !important;
+<<<<<<< Updated upstream
   }
 
   /* Adjust modal for print */
@@ -91,6 +144,93 @@ body {
 
   /* Avoid page breaks inside elements where possible */
   .print-container > div {
+=======
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    background-color: #fff;
+    overflow: auto;
+  }
+  body {
+    background-color: #fff !important;
+    color: #000 !important;
+    margin: 0;
+    padding: 0;
+  }
+  h1 { font-size: 24pt !important; margin-bottom: 0.6cm !important; color: #000 !important; }
+  h2 { font-size: 20pt !important; margin-bottom: 0.6cm !important; color: #000 !important; }
+  h3 { font-size: 18pt !important; margin-top: 1cm !important; margin-bottom: 0.6cm !important; color: #000 !important; }
+  h4 { font-size: 16pt !important; margin-bottom: 0.5cm !important; color: #000 !important; }
+  p, ul, li, span, label, input, select, textarea, div.p-2.border {
+    font-size: 14pt !important;
+    line-height: 1.8 !important;
+    color: #000 !important;
+  }
+  .print-text-field {
+    min-height: 1.5em;
+    display: flex;
+    align-items: center;
+    padding: 0.2em 0.5em !important;
+    box-sizing: border-box !important;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .print-text-field-small { min-width: 2em; }
+  .p-8 { padding: 1.5cm !important; }
+  .p-6 { padding: 1cm !important; }
+  .p-5 { padding: 0.8cm !important; }
+  .p-4 { padding: 0.7cm !important; }
+  .p-2 { padding: 0.4cm !important; }
+  .space-y-8 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 1.5cm !important; }
+  .space-y-3 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0.6cm !important; }
+  .mb-8 { margin-bottom: 0.8cm !important; }
+  .mb-6 { margin-bottom: 0.6cm !important; }
+  .mb-4 { margin-bottom: 0.5cm !important; }
+  .mb-3 { margin-bottom: 0.4cm !important; }
+  .mb-2 { margin-bottom: 0.3cm !important; }
+  .mb-1 { margin-bottom: 0.2cm !important; }
+  .mt-1, .mt-2, .mt-3, .mt-4, .mt-6 { margin-top: 0.3cm !important; }
+  .gap-6 { gap: 1.5cm !important; }
+  .gap-4 { gap: 1cm !important; }
+  .gap-y-2 { row-gap: 0.5cm !important; }
+  .gap-x-8 { column-gap: 1.5cm !important; }
+  div.p-2.border { border-color: #000 !important; }
+  .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
+  .rounded-lg, .rounded-md { border-radius: 0 !important; }
+  section.bg-green-50 > div.grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1cm !important;
+  }
+  section.bg-green-50 > div.grid > div {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0.5cm !important;
+    box-sizing: border-box !important;
+>>>>>>> Stashed changes
     page-break-inside: avoid;
   }
+<<<<<<< Updated upstream
+=======
+  section.bg-green-50 h3 { font-size: 16pt !important; }
+  section.bg-green-50 .space-y-2 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0.3cm !important; }
+  section.bg-blue-50, section.bg-green-50, section.bg-indigo-50, section.bg-red-50 {
+    background-color: #fff !important;
+    border-color: #ccc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  label { margin-bottom: 0.2cm !important; }
+  div.p-2.border { margin-bottom: 0.4cm !important; }
+  .flex.items-center.p-2 { margin-bottom: 0.4cm !important; }
+  section.bg-blue-50.rack-print-section {
+    background-color: #fff !important;
+    border-color: #ccc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+>>>>>>> Stashed changes
 }

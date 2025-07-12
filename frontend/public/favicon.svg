@@ -1,0 +1,24 @@
+<svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      path {
+        stroke: #4F46E5; /* This is Tailwind's indigo-600 */
+      }
+      @media (prefers-color-scheme: dark) {
+        path {
+          stroke: #A5B4FC; /* A lighter indigo for dark mode */
+        }
+      }
+    </style>
+  </defs>
+  <path d="M5 12H19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 5L12 19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 12L16 15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 12L16 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M5 12L8 15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M5 12L8 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 5L9 8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 5L15 8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 19L9 16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 19L15 16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

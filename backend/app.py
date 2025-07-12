@@ -1,5 +1,6 @@
 # backend/app.py
 # This is the main Flask application for the network documentation backend.
+<<<<<<< Updated upstream
 # It defines the database models, API endpoints, and handles CRUD operations.
 
 from flask import Flask, request, jsonify
@@ -9,6 +10,13 @@ from flask_cors import CORS # For handling Cross-Origin Resource Sharing
 from sqlalchemy.orm import joinedload # To eager load related data
 
 import os
+=======
+# UPDATED: Refactored to load from a config file and fixed data persistence paths.
+
+import os
+from flask import Flask
+from flask_cors import CORS
+>>>>>>> Stashed changes
 
 app = Flask(__name__)
 CORS(app) # Enable CORS for all routes
@@ -21,6 +29,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+<<<<<<< Updated upstream
 # --- Database Models ---
 # Define the structure of your data tables.
 
@@ -163,6 +172,17 @@ def handle_pcs():
         new_pc = PC(name=data['name'], ip_address=data.get('ip_address'), description=data.get('description'))
         try:
             db.session.add(new_pc)
+=======
+
+def create_admin_user_if_not_exists(app):
+    """Create a default admin user if no users exist in the database."""
+    with app.app_context():
+        if not User.query.first():
+            print("No users found. Creating default admin user...")
+            hashed_password = bcrypt.generate_password_hash('admin').decode('utf-8')
+            admin_user = User(username='admin', password_hash=hashed_password, role='Admin')
+            db.session.add(admin_user)
+>>>>>>> Stashed changes
             db.session.commit()
             return jsonify(new_pc.to_dict()), 201
         except Exception as e:
@@ -172,6 +192,7 @@ def handle_pcs():
         pcs = PC.query.all()
         return jsonify([pc.to_dict() for pc in pcs])
 
+<<<<<<< Updated upstream
 @app.route('/pcs/<int:pc_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_pc_by_id(pc_id):
     pc = PC.query.get_or_404(pc_id)
@@ -547,11 +568,67 @@ def get_server_ports(server_id):
         'ports': port_status
     })
 
+=======
 
+def create_app(config_object='backend.config.Config'):
+    """
+    Factory function to create and configure the Flask application.
+    It loads configuration from a dedicated config object and ensures
+    database and upload paths are correctly set to use the persistent volume.
+    """
+    app = Flask(__name__)
+
+    # --- Configuration ---
+    # Load base configuration from the specified config class
+    app.config.from_object(config_object)
+
+    # Define the persistent data directory path inside the container.
+    # This path MUST match the volume mount in docker-compose.yml.
+    # e.g., `network_doc_db:/app/backend/instance`
+    persistent_data_path = os.path.join('/app', 'backend', 'instance')
+
+    # Ensure the directory for the database and uploads exists
+    pdf_upload_path = os.path.join(persistent_data_path, 'uploads', 'pdf_templates')
+    os.makedirs(pdf_upload_path, exist_ok=True)
+
+    # **Override specific configurations to use the correct persistent paths**
+    # This ensures the SQLite DB and uploads are stored in the docker volume.
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI=f'sqlite:///{os.path.join(persistent_data_path, "network_doc.db")}',
+        UPLOAD_FOLDER=pdf_upload_path
+    )
+
+    # --- Initialize Extensions ---
+    CORS(app, supports_credentials=True)
+    db.init_app(app)
+    migrate.init_app(app, db)
+    bcrypt.init_app(app)
+    jwt.init_app(app)
+
+    # --- Register Blueprints/Routes ---
+    register_routes(app)
+
+    # --- Register Custom CLI Commands ---
+    @app.cli.command("seed")
+    def seed_db():
+        """Seeds the database with initial data (e.g., admin user)."""
+        create_admin_user_if_not_exists(app)
+
+    return app
+
+>>>>>>> Stashed changes
+
+# This conditional is for running the app directly (e.g., `python -m backend.app`)
+# Gunicorn will call the `create_app` factory directly.
 if __name__ == '__main__':
+<<<<<<< Updated upstream
     # Ensure the instance directory exists for SQLite database
     instance_path = os.path.join(app.root_path, 'instance')
     os.makedirs(instance_path, exist_ok=True)
     # The 'flask db upgrade' command in docker-compose handles initial migration
     # and database creation.
     app.run(debug=True, host='0.0.0.0')
+=======
+    app = create_app()
+    app.run(debug=True, host='0.0.0.0')
+>>>>>>> Stashed changes
